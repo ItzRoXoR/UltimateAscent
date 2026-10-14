@@ -9,8 +9,9 @@ namespace UltimateAscent.Features;
 /// Ascent 18 (13DDA): weather is more extreme, including the lava in the Caldera.
 /// <list type="bullet">
 /// <item>Wind storms blow 2x (Roots: over 3x) harder; rain makes the ground and walls very slippery
-/// and pushes you down while airborne under open sky; snowstorms chill 20% more in the Alpine
-/// segment and at night, and scorch you by day elsewhere.</item>
+/// and, while you are airborne under open sky, pulls you down harder (an extra 40 m/s², 60 in the
+/// Tropics: about twice, in the Tropics three times, the pull of a normal jump); snowstorms chill 20%
+/// more in the Alpine segment and at night, and scorch you by day elsewhere.</item>
 /// <item>Tornadoes spawn every 20-120 s and pull four times as hard (in the Mesa they also make you drowsy).</item>
 /// <item>The Caldera's lava river rises and falls like a tide, synchronised for everyone.</item>
 /// <item>The fog becomes poisonous and three times as strong (see <see cref="FogSphereRules"/>).</item>
@@ -21,6 +22,15 @@ namespace UltimateAscent.Features;
 internal static class A18_ExtremeWeather
 {
     private const float NightColdMultiplier = 1.5f;
+
+    /// <summary>
+    /// How much harder rain pulls a scout who is in the air under open sky (m/s² on the hips). The game's
+    /// own pull starts as a slight lift when a jump begins and builds up the longer a scout is in the
+    /// air (to 500 after about 3 s of falling); over a normal jump it is about 30, so rain roughly
+    /// doubles a jump's pull, triples it in the Tropics.
+    /// </summary>
+    internal const float RainPull = 40f;
+    internal const float TropicsRainPull = 60f;
 
     private static bool On => Rules.Enabled(Lvl.ExtremeWeather);
 
@@ -156,8 +166,8 @@ internal static class A18_ExtremeWeather
                     RaycastHit hit = HelperFunctions.LineCheck(character.Center + new Vector3(0f, 500f, 0f), character.Center, HelperFunctions.LayerType.AllPhysical);
                     if (hit.transform == null || hit.transform.root == character.transform.root)
                     {
-                        float push = segment == Segment.Tropics ? 400f : 200f;
-                        character.GetBodypart(BodypartType.Hip).rig.linearVelocity -= new Vector3(0f, push * Time.deltaTime, 0f);
+                        float pull = segment == Segment.Tropics ? TropicsRainPull : RainPull;
+                        character.GetBodypart(BodypartType.Hip).rig.linearVelocity -= new Vector3(0f, pull * Time.deltaTime, 0f);
                     }
                 }
             }

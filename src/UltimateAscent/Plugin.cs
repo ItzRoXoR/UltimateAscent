@@ -23,7 +23,7 @@ public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "UltimateAscent";
     public const string Name = "Ultimate Ascent";
-    public const string Version = "1.1.1";
+    public const string Version = "1.1.2";
 
     internal static ManualLogSource Log;
     internal static Plugin Instance;
@@ -37,6 +37,12 @@ public sealed class Plugin : BaseUnityPlugin
 
     /// <summary>One switch per ascent 9-25 (indexed by the ascent): off leaves that ascent's own rule out.</summary>
     internal static ConfigEntry<bool>[] AscentSwitches;
+
+    /// <summary>Off: the night itself no longer makes anyone cold (the game's rule from ascent 5).</summary>
+    internal static ConfigEntry<bool> ColdNights;
+
+    /// <summary>Off: the mod's new items (Climbing Chalk, Lightweight Parasol) do not spawn in regular runs.</summary>
+    internal static ConfigEntry<bool> NewItems;
 
     private Harmony harmony;
 
@@ -105,6 +111,12 @@ public sealed class Plugin : BaseUnityPlugin
                 AscentCatalog.Description(level) + " Off: this ascent's own rule is left out; the other ascents keep theirs (ascent 25 with Ascent 20 off plays without Bing Bong's rule). Only the host's settings count.");
             AscentSwitches[level].SettingChanged += (_, _) => HostOptions.Invalidate();
         }
+        ColdNights = Config.Bind("Ascents", "Cold Nights", true,
+            "Nights make you cold: the game's rule from ascent 5, until the third part of the climb (harsher from ascent 18, and longer in the Alpine). Off: the night itself no longer makes you cold, on every ascent; cold from anything else (storms, snow, water, the Alpine) stays. Custom runs keep their own Cold Night setting. Only the host's settings count.");
+        ColdNights.SettingChanged += (_, _) => HostOptions.Invalidate();
+        NewItems = Config.Bind("Items", "New Items", true,
+            "The mod's new items, the Climbing Chalk and the Lightweight Parasol (the Roots parasol from ascent 9), spawn in regular runs from ascent 9. Off: in regular runs the Climbing Chalk does not spawn, and the regular Parasol spawns wherever the Roots parasol would (custom runs keep their own switches). Only the host's settings count.");
+        NewItems.SettingChanged += (_, _) => HostOptions.Invalidate();
         VerboseLogging = Config.Bind("Debug", "Verbose Logging", false, "Writes extra diagnostic lines to the BepInEx log.");
         RemoveRetiredEntries();
     }

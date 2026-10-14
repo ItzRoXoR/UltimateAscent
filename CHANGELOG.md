@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.1.2
+
+For PEAK 2.6.b.
+
+* Config: "Cold Nights" (section "Ascents") switches off the night's own cold, the game's rule from
+  ascent 5 (with ascent 18's harsher and longer Alpine nights), on every ascent; cold from anything
+  else stays, and custom runs keep their own Cold Night setting. The host's switch applies to everyone.
+* Config: "New Items" (section "Items") keeps the mod's new items out of regular runs: the Climbing
+  Chalk does not spawn, and the regular Parasol spawns wherever the Lightweight Parasol (the Roots
+  parasol from ascent 9) would. Custom runs keep their own switches. The host's switch applies to
+  everyone.
+* Ascent 14: thrown Shelf and Cloud Fungus fly as if 1.5 times as heavy, the Warp Fungus as if 1.35
+  times (all three were twice as heavy).
+* Ascent 17: a Mandrake's scream also makes players drowsy who can't hear it (sound-effects or master
+  volume at 0), at half strength: up to 37.5 per scream (was none, as in the game).
+* Ascent 18: rain pulls you down much less while you are in the air under open sky: an extra 40 m/s²
+  (60 in the Tropics) instead of 200 (400), about twice (three times) the pull of a normal jump, so
+  jumps in the rain get off the ground again.
+* Climbing Chalk: the bag is drawn with the game's own item shader, like every other item, instead of
+  the plain material of the placeholder cube it replaces. It keeps its shape in the shade (it turned
+  into a flat cut-out there), keeps its colours, and lights up when you look at it.
+* Fixed: ascent 17's Mandrake scream gave only about 55 drowsiness instead of 75. The game lands 8
+  hits per scream, not the 11 the mod counted on.
+* Fixed, with True Final Ascent: ascent 17's rules for the Mandrake did not apply. TFA gives every
+  Mandrake its own voice lines, and the mod took that for one of TFA's event spawns, which keep TFA's
+  numbers. TFA's voice lines stay as they are.
+
 ## 1.1.1
 
 For PEAK 2.6.b.

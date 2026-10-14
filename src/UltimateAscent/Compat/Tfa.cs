@@ -34,6 +34,12 @@ internal static class Tfa
     /// <summary>What TFA puts in the network data of the things its events spawn ("FA_BloodMoon", "FA_CactusRain", "FA_SUPPLY").</summary>
     private const string SpawnTag = "FA_";
 
+    /// <summary>
+    /// TFA components that TFA adds to the game's own objects, not to what its events spawn: the
+    /// voice lines it gives every Mandrake. They do not make an object TFA's.
+    /// </summary>
+    private static readonly string[] OnGameObjects = { Ns + "FinalAscentMandrakeLine" };
+
     private static bool? present;
     private static bool broken;
 
@@ -216,8 +222,9 @@ internal static class Tfa
 
     /// <summary>
     /// Spawned by one of TFA's events, on every player's game: TFA tags what its events spawn over the
-    /// network ("FA_..."), or builds it with components of its own. Looked up the object and its
-    /// parents, never past a scout (TFA equips the scouts too); remembered per object.
+    /// network ("FA_..."), or builds it with components of its own (other than those it adds to the
+    /// game's own objects, <see cref="OnGameObjects"/>). Looked up the object and its parents, never
+    /// past a scout (TFA equips the scouts too); remembered per object.
     /// </summary>
     internal static bool Spawned(Component component)
     {
@@ -248,7 +255,7 @@ internal static class Tfa
                     result = true;
                     break;
                 }
-                if (behaviour.GetType().Assembly == assembly)
+                if (behaviour.GetType().Assembly == assembly && Array.IndexOf(OnGameObjects, behaviour.GetType().FullName) < 0)
                 {
                     result = true;
                     break;

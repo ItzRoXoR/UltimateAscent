@@ -5,12 +5,22 @@ using UnityEngine;
 namespace UltimateAscent.Core;
 
 /// <summary>
-/// Options that must be identical for everyone: the switches of ascents 9-25 (config section
-/// "Ascents"). The host's config wins and is published as a room property; clients read it.
+/// Options that must be identical for everyone: the switches of ascents 9-25 and of the cold nights
+/// (config section "Ascents") and the new items (section "Items"). The host's config wins and is
+/// published as a room property; clients read it.
 /// </summary>
 internal static class HostOptions
 {
     private const string RoomKey = Net.Prefix + "asc";
+
+    /// <summary>
+    /// Set when the cold nights are switched off. It follows the ascents' bits and means "off" when
+    /// set, so a mask without it (an older host's) keeps the game's cold nights.
+    /// </summary>
+    private const int ColdNightsOff = 1 << (Lvl.Last - Lvl.First + 1);
+
+    /// <summary>Set when the mod's new items are switched off for regular runs (missing: they spawn).</summary>
+    private const int NewItemsOff = ColdNightsOff << 1;
 
     private static int cachedMask;
     private static int cachedFrame = -1;
@@ -24,6 +34,12 @@ internal static class HostOptions
         }
         return (Mask & Bit(level)) != 0;
     }
+
+    /// <summary>The night itself makes you cold, as in the game, unless the host switched it off.</summary>
+    internal static bool ColdNightsOn => (Mask & ColdNightsOff) == 0;
+
+    /// <summary>The mod's new items spawn in regular runs, unless the host switched them off.</summary>
+    internal static bool NewItemsOn => (Mask & NewItemsOff) == 0;
 
     /// <summary>A switch changed: read them again.</summary>
     internal static void Invalidate()
@@ -65,6 +81,14 @@ internal static class HostOptions
                 {
                     mask |= Bit(level);
                 }
+            }
+            if (Plugin.ColdNights != null && !Plugin.ColdNights.Value)
+            {
+                mask |= ColdNightsOff;
+            }
+            if (Plugin.NewItems != null && !Plugin.NewItems.Value)
+            {
+                mask |= NewItemsOff;
             }
             return mask;
         }

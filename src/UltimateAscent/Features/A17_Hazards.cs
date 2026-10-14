@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
+using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using HarmonyLib;
 using Peak.Afflictions;
@@ -1259,18 +1261,22 @@ internal static class A17_Hazards
     private const float GhostBlindSeconds = 80f;
 
     /// <summary>
-    /// A Mandrake's scream: up to 75 drowsiness per scream, falloff included (the game: 5 every tick, 55 up close).
-    /// A 3 s scream ticks 11 times: the game's 0.25 s timer only fires once more than 0.25 s has passed.
+    /// A Mandrake's scream: up to 75 drowsiness per scream, falloff included (the game: 5 a hit, 40 up close).
+    /// A whole scream lands 8 hits (measured in the game; its 0.25 s timer fires about every 0.5 s).
     /// </summary>
     private const float MandrakeScream = 0.75f;
-    private const float MandrakeScreamTicks = 11f;
+    private const float MandrakeScreamTicks = 8f;
+
+    /// <summary>A player who cannot hear the scream still gets this share of it (the game: nothing).</summary>
+    internal const float MutedScreamShare = 0.5f;
 
     /// <summary>The game counts a volume at or below this as switched off.</summary>
     private const float MutedVolume = 0.01f;
 
     /// <summary>
-    /// The game's own rule: a Mandrake's scream only makes players drowsy who can hear it, with both
-    /// their sound-effects and their master volume above 1%. Read afresh for every tick of the scream.
+    /// Whether this player hears a Mandrake: both their sound-effects and their master volume above 1%,
+    /// the game's own test (in the game a player who does not hear it gets no drowsiness). Read
+    /// afresh for every tick of the scream.
     /// </summary>
     internal static bool HearsMandrakes()
     {
@@ -1278,6 +1284,38 @@ internal static class A17_Hazards
         SFXVolumeSetting effects = settings?.GetSetting<SFXVolumeSetting>();
         MasterVolumeSetting master = settings?.GetSetting<MasterVolumeSetting>();
         return effects == null || master == null || (effects.Value > MutedVolume && master.Value > MutedVolume);
+    }
+
+    /// <summary>
+    /// The game runs a scream's drowsiness ticks only for players who hear it: every frame
+    /// <see cref="Mandrake.CheckScream"/> switches them on while the Mandrake screams and the player's
+    /// sound is on. From ascent 17 that one switch keeps them running for muted players too, who get
+    /// <see cref="MutedScreamShare"/> of the scream (see <see cref="Retune"/>).
+    /// </summary>
+    [HarmonyPatch(typeof(Mandrake), nameof(Mandrake.CheckScream))]
+    private static class MutedScream
+    {
+        private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        {
+            MethodInfo setEnabled = AccessTools.PropertySetter(typeof(Behaviour), nameof(Behaviour.enabled));
+            List<CodeInstruction> code = new List<CodeInstruction>(instructions);
+            int at = code.FindIndex(instruction => instruction.Calls(setEnabled));
+            if (at < 0 || code.FindIndex(at + 1, instruction => instruction.Calls(setEnabled)) >= 0)
+            {
+                throw new InvalidOperationException("The Mandrake's scream switch was not found once; muted players get no scream.");
+            }
+            // timeEvent.enabled = heard  ->  SwitchScreamTicks(timeEvent, heard, this)
+            CodeInstruction self = new CodeInstruction(OpCodes.Ldarg_0).MoveLabelsFrom(code[at]);
+            code[at].opcode = OpCodes.Call;
+            code[at].operand = AccessTools.Method(typeof(A17_Hazards), nameof(SwitchScreamTicks));
+            code.Insert(at, self);
+            return code;
+        }
+    }
+
+    private static void SwitchScreamTicks(Behaviour ticks, bool heard, Mandrake mandrake)
+    {
+        ticks.enabled = heard || (mandrake.screaming && OnFor(mandrake));
     }
 
     private static bool IsMineBurst(AOE aoe) =>
@@ -1322,8 +1360,8 @@ internal static class A17_Hazards
         }
         if (aoe.statusType == CharacterAfflictions.STATUSTYPE.Drowsy && aoe.GetComponentInParent<Mandrake>() != null)
         {
-            // Only the local scout can be made drowsy here, and only if this player hears the scream.
-            aoe.statusAmount = HearsMandrakes() ? MandrakeScream / MandrakeScreamTicks : 0f;
+            // Only the local scout can be made drowsy here: in full if this player hears the scream, else half.
+            aoe.statusAmount = (HearsMandrakes() ? MandrakeScream : MandrakeScream * MutedScreamShare) / MandrakeScreamTicks;
             return true;
         }
         return false;

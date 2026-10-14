@@ -576,11 +576,16 @@ internal sealed class Runner : MonoBehaviour
             ("burned items (17)", BurnedItemHeat),
             ("burned backpack (17)", BackpackHeat),
             ("Climbing Chalk (9, 14)", ClimbingChalk),
+            ("Climbing Chalk look in sun and shade", ChalkLook),
             ("custom run: chalk and Lightweight Parasol switches", () => Now(() => Step("custom-run switches", CustomRunSwitches))),
             ("custom run: suitcases follow the switches", CustomRunSuitcases),
             ("Lightweight Parasol look (9)", ParasolLook),
             ("lanterns (14)", Lanterns),
             ("ascent switches (config)", AscentSwitches),
+            ("cold nights switch (config)", ColdNightsSwitch),
+            ("new items switch (config)", NewItemsSwitch),
+            ("Magic Bean vine length (14)", BeanVineLength),
+            ("thrown fungi (14)", ThrownFungi),
             ("checkpoint flag (14, 15, 24)", CheckpointFlagSave),
             ("Mandrake heard (17)", MandrakeHeard),
             ("TFA's Apocalypse events stay TFA's", TfaEvents),
@@ -591,6 +596,7 @@ internal sealed class Runner : MonoBehaviour
             ("bee moments (17)", BeeMoments),
             ("jellyfish (17)", Jellyfish),
             ("first campfire and the fog after it (18)", FirstCampfire),
+            ("rain pull (18)", RainPull),
             ("second segment (17)", SecondSegment),
             ("Alpine (18, 23)", Alpine),
             ("after the Alps (18)", AfterAlps),
@@ -957,6 +963,464 @@ internal sealed class Runner : MonoBehaviour
         {
             PhotonNetwork.Destroy(spawned);
         }
+    }
+
+    /// <summary>
+    /// The config's Cold Nights switch, on the beach with the clock put at night: switched on, the night
+    /// itself makes the scout cold (the game's rule from ascent 5); switched off (in memory, then back),
+    /// nothing does. The clock goes back afterwards.
+    /// </summary>
+    private IEnumerator ColdNightsSwitch()
+    {
+        DayNightManager clock = DayNightManager.instance;
+        BepInEx.Configuration.ConfigEntry<bool> entry = UltimateAscent.Plugin.ColdNights;
+        string file = UltimateAscent.Plugin.Instance.Config.ConfigFilePath;
+        bool inFile = File.Exists(file) && File.ReadAllText(file).Contains("Cold Nights = ");
+        Check("the config has the Cold Nights switch", entry != null && inFile, $"bound {entry != null}, in the file {inFile}");
+        if (clock == null || entry == null)
+        {
+            yield break;
+        }
+        float original = clock.timeOfDay;
+        bool saved = entry.Value;
+        bool coldOn = false;
+        bool coldOff = true;
+        Meter on = null;
+        Meter off = null;
+        Shield(true);
+        try
+        {
+            clock.timeOfDay = Mathf.Repeat(clock.dayEnd + 2f, 24f);
+            entry.Value = true;
+            yield return null;
+            coldOn = Ascents.isNightCold;
+            on = new Meter(Status.Cold);
+            yield return new WaitForSeconds(6f);
+            on.Stop();
+            entry.Value = false;
+            yield return null;
+            coldOff = Ascents.isNightCold;
+            off = new Meter(Status.Cold);
+            yield return new WaitForSeconds(6f);
+            off.Stop();
+        }
+        finally
+        {
+            entry.Value = saved;
+            clock.timeOfDay = original;
+        }
+        Check("with Cold Nights on, the night itself makes the scout cold (the game's rule from ascent 5)", coldOn && on.Total > 0f,
+            $"night cold {coldOn}: {on.Total * 100f:0.##} cold in {on.Seconds:0.#} s at {clock.FloatToTimeString(Mathf.Repeat(clock.dayEnd + 2f, 24f))}");
+        Check("with Cold Nights off, the night itself makes nobody cold", !coldOff && off.Total == 0f,
+            $"night cold {coldOff}: {off.Total * 100f:0.##} cold in {off.Seconds:0.#} s");
+        Check("the Cold Nights switch set back applies again", Ascents.isNightCold == saved, $"switch {entry.Value}, night cold {Ascents.isNightCold}");
+        Protect(true);
+    }
+
+    /// <summary>
+    /// A Magic Bean's vine (14), two side by side 5 m apart in the shallow sea behind the scouts' spawn
+    /// point, where nothing stands. Each is grown the way a bean that took root there grows it (the
+    /// bean's own vine length, then the game's vine): the first with Ascent 14 switched off (in
+    /// memory), so it is the game's vine, the second under ascent 14's rule. Once both have grown each is
+    /// measured against what the game grows on its spot, and the scout watches both tops standing in the
+    /// water 18 m closer to the shore, looking out to sea (and is put back afterwards).
+    /// </summary>
+    private IEnumerator BeanVineLength()
+    {
+        Item prefab = ItemByName("MagicBean");
+        MagicBean bean = prefab != null ? prefab.GetComponent<MagicBean>() : null;
+        MagicBeanVine vinePrefab = bean != null ? bean.plantPrefab : null;
+        if (vinePrefab == null)
+        {
+            Fail("a Magic Bean and its vine are in the item database");
+            yield break;
+        }
+        if (!Rules.Enabled(Lvl.WorseItems))
+        {
+            Info("the Magic Bean check is skipped", $"testing ascent {target}");
+            yield break;
+        }
+        Character local = Local;
+        float longest = vinePrefab.maxLength;
+        const float Apart = 5f;
+        const float Back = 18f;
+        // In the sea behind the scouts' spawn point, where nothing stands: the scout watches from the
+        // first water deep enough to stand in, looking out to sea at two spots 5 m apart 18 m further out.
+        SpawnPoint spawn = SpawnPoint.allSpawnPoints.FirstOrDefault(p => p != null);
+        if (spawn == null || !Ground(spawn.transform.position, out RaycastHit beach))
+        {
+            Info("the Magic Bean check is skipped", "no spawn point to plant behind");
+            yield break;
+        }
+        Vector3 back = Vector3.ProjectOnPlane(-spawn.transform.forward, Vector3.up).normalized;
+        float? sea = SeaLevel(spawn.transform.position + back * 60f);
+        float under = sea ?? beach.point.y - 2f;
+        Vector3 wade = Vector3.zero;
+        for (float d = 3f; d <= 80f; d += 0.5f)
+        {
+            if (Ground(beach.point + back * d, out RaycastHit floor) && floor.point.y < under - 0.6f)
+            {
+                wade = floor.point + back * 1f;
+                break;
+            }
+        }
+        Vector3 side = Vector3.Cross(Vector3.up, back).normalized;
+        Vector3 row = wade + back * Back;
+        if (wade == Vector3.zero || !Ground(row - side * Apart * 0.5f, out RaycastHit a) || !Ground(row + side * Apart * 0.5f, out RaycastHit b)
+            || !Ground(wade, out RaycastHit w))
+        {
+            Info("the Magic Bean check is skipped", $"no shallow sea found behind the spawn point (sea level {(sea.HasValue ? sea.Value.ToString("0.0") : "unknown")})");
+            yield break;
+        }
+        Vector3 gameSpot = a.point;
+        Vector3 modSpot = b.point;
+        Vector3 watch = w.point;
+        Info("Magic Bean vines in the sea", $"sea level {(sea.HasValue ? sea.Value.ToString("0.0") : $"unknown (beach - 2 m: {under:0.0})")}, sea floor {a.point.y:0.0} and {b.point.y:0.0} under the vines, {w.point.y:0.0} where the scout watches from, {Vector3.Distance(watch, row):0} m away");
+        Vector3 home = local.Center;
+        Vector2 look = local.data.lookValues;
+        BepInEx.Configuration.ConfigEntry<bool> rule = UltimateAscent.Plugin.AscentSwitches[Lvl.WorseItems];
+        bool ruleSaved = rule.Value;
+        MagicBeanVine gameVine = null;
+        MagicBeanVine modVine = null;
+        try
+        {
+            rule.Value = false;
+            gameVine = GrowVine(bean, gameSpot, a.normal);
+            rule.Value = ruleSaved;
+            modVine = GrowVine(bean, modSpot, b.normal);
+        }
+        finally
+        {
+            rule.Value = ruleSaved;
+        }
+        if (gameVine == null || modVine == null)
+        {
+            Fail("both Magic Bean vines grow in the sea", $"the game's vine {gameVine != null}, the mod's {modVine != null}");
+            foreach (MagicBeanVine vine in new[] { gameVine, modVine }.Where(v => v != null))
+            {
+                PhotonNetwork.Destroy(vine.gameObject);
+            }
+            yield break;
+        }
+        for (float until = Time.time + 15f; Time.time < until && (gameVine._isGrowing || modVine._isGrowing);)
+        {
+            yield return null;
+        }
+        // Stepped back to see both tops; long enough for the area's title, which the move brings up, to fade.
+        local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, watch + Vector3.up * 1.5f, false);
+        yield return new WaitForSeconds(7f);
+        Vector3 between = (gameVine.transform.position + modVine.transform.position) * 0.5f;
+        Vector3 toward = Vector3.ProjectOnPlane(between - local.Head, Vector3.up);
+        float aim = Mathf.Atan2(longest * 0.5f - (local.Head.y - between.y), toward.magnitude) * Mathf.Rad2Deg;
+        local.data.lookValues = new Vector2(Quaternion.LookRotation(toward).eulerAngles.y, aim);
+        yield return new WaitForSeconds(1.5f);
+        Screenshot("magic-bean-vines");
+        // The screenshot is written a few frames later; the vines stay until then.
+        yield return new WaitForSeconds(1.5f);
+        foreach ((string name, MagicBeanVine vine, float expected) in new[]
+        {
+            ("with Ascent 14 off (the game's)", gameVine, VineReach(gameVine.transform.position, gameVine.transform.up, longest)),
+            ("under ascent 14's rule", modVine, Mathf.Min(VineReach(modVine.transform.position, modVine.transform.up, longest), longest * 0.75f)),
+        })
+        {
+            float grown = vine.vineOriginTransform.lossyScale.y;
+            Check($"a Magic Bean's vine {name} grows {expected:0.#} m (14: at most {longest * 0.75f:0.#} m, the game: {longest:0.#} m)",
+                !vine._isGrowing && Mathf.Abs(vine.maxLength - expected) < 0.01f && Mathf.Abs(grown - expected) < 0.05f,
+                $"vine {vine.maxLength:0.##} m long, grown to {grown:0.##} m (still growing {vine._isGrowing}), {Vector3.Distance(local.Head, vine.transform.position):0.#} m from the camera");
+        }
+        Info("the Magic Bean vines stand", $"{Vector3.Distance(gameVine.transform.position, modVine.transform.position):0.#} m apart");
+        PhotonNetwork.Destroy(gameVine.gameObject);
+        PhotonNetwork.Destroy(modVine.gameObject);
+        local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, home, false);
+        yield return new WaitForSeconds(1f);
+        local.data.lookValues = look;
+    }
+
+    /// <summary>
+    /// What a Magic Bean does on the host once it has taken root here: the game's vine length for this
+    /// spot (its own GetVineDistance, with the mod's rule on it), then the game's vine grown to it. In
+    /// the sea a dropped bean does not take root, so the step runs here directly.
+    /// </summary>
+    private static MagicBeanVine GrowVine(MagicBean bean, Vector3 spot, Vector3 normal)
+    {
+        float length = bean.GetVineDistance(spot, normal);
+        Quaternion rotation = Quaternion.LookRotation(Vector3.Cross(normal, Vector3.right), normal);
+        GameObject vine = PhotonNetwork.InstantiateRoomObject(bean.plantPrefab.name, spot, rotation, 0);
+        vine.GetComponent<PhotonView>().RPC("RPC_GrowVine", RpcTarget.All, length, (float)PhotonNetwork.Time);
+        return vine.GetComponent<MagicBeanVine>();
+    }
+
+    /// <summary>The sea's surface under this point: the highest water collider found from 50 m above it, if any.</summary>
+    private static float? SeaLevel(Vector3 point)
+    {
+        RaycastHit[] hits = Physics.RaycastAll(point + Vector3.up * 50f, Vector3.down, 150f, Physics.AllLayers, QueryTriggerInteraction.Collide);
+        float? level = null;
+        foreach (RaycastHit hit in hits)
+        {
+            string name = hit.collider != null ? hit.collider.gameObject.name : "";
+            bool water = hit.collider != null && (hit.collider.gameObject.layer == LayerMask.NameToLayer("Water")
+                || name.IndexOf("water", StringComparison.OrdinalIgnoreCase) >= 0 || name.IndexOf("ocean", StringComparison.OrdinalIgnoreCase) >= 0);
+            if (water && (level == null || hit.point.y > level.Value))
+            {
+                level = hit.point.y;
+            }
+        }
+        return level;
+    }
+
+    /// <summary>The ground under a point (the terrain or the map), looked for from 10 m above it.</summary>
+    private static bool Ground(Vector3 point, out RaycastHit hit)
+    {
+        hit = HelperFunctions.LineCheck(point + Vector3.up * 10f, point - Vector3.up * 20f, HelperFunctions.LayerType.TerrainMap);
+        return hit.collider != null;
+    }
+
+    /// <summary>
+    /// Rain (18): a scout in the air under open sky in a rainstorm is pulled down an extra 40 m/s², 60 in
+    /// the Tropics. One tick of a rainstorm (the game's per-frame storm effect, on a rain zone made for
+    /// the check) on the scout falling over the sea behind the spawn point, then in the Tropics, is
+    /// measured on the hips: the upward speed it takes off within that frame.
+    /// </summary>
+    private IEnumerator RainPull()
+    {
+        if (!Rules.Enabled(Lvl.ExtremeWeather))
+        {
+            Info("the rain checks are skipped", $"testing ascent {target}");
+            yield break;
+        }
+        GameObject storm = new GameObject("RainStorm");
+        storm.SetActive(false);
+        WindChillZone rain = storm.AddComponent<WindChillZone>();
+        try
+        {
+            SpawnPoint spawn = SpawnPoint.allSpawnPoints.FirstOrDefault(p => p != null);
+            Vector3 sea = spawn != null ? spawn.transform.position - Vector3.ProjectOnPlane(spawn.transform.forward, Vector3.up).normalized * 40f : Local.Center;
+            yield return RainTick(rain, sea, A18_ExtremeWeather.RainPull, "over the sea at the beach");
+            MapHandler.JumpToSegment(Segment.Tropics);
+            yield return new WaitForSeconds(4f);
+            Vector3? open = OpenSky(Local.Center);
+            if (open == null)
+            {
+                Info("the Tropics rain check is skipped", "no open sky near the scout");
+            }
+            else
+            {
+                yield return RainTick(rain, open.Value, A18_ExtremeWeather.TropicsRainPull, "in the Tropics");
+            }
+        }
+        finally
+        {
+            Destroy(storm);
+        }
+    }
+
+    /// <summary>One rain tick on the scout falling 12 m above this spot, measured on the hips.</summary>
+    private IEnumerator RainTick(WindChillZone rain, Vector3 spot, float expected, string where)
+    {
+        Character local = Local;
+        Vector3 ground = Ground(spot, out RaycastHit hit) ? hit.point : spot;
+        local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, ground + Vector3.up * 12f, false);
+        yield return new WaitForSeconds(0.4f);
+        bool airborne = local.data.groundedFor <= 0.5f && !local.data.isClimbing;
+        Rigidbody hip = local.GetBodypart(BodypartType.Hip).rig;
+        float before = hip.linearVelocity.y;
+        rain.ApplyStatus(local);
+        float pull = (before - hip.linearVelocity.y) / Time.deltaTime;
+        Check($"rain pulls a scout in the air {where} down an extra {expected:0} m/s² (18)",
+            airborne && Mathf.Abs(pull - expected) < 0.05f, $"{pull:0.##} m/s² on the hips (in the air {airborne}, segment {Map.CurrentSegment})");
+        yield return new WaitForSeconds(2.5f);
+    }
+
+    /// <summary>A spot near this point with nothing above it (open sky over the ground), if there is one.</summary>
+    private static Vector3? OpenSky(Vector3 near)
+    {
+        foreach (float distance in new[] { 0f, 5f, 10f, 15f, 20f, 30f })
+        {
+            for (int i = 0; i < 16; i++)
+            {
+                Vector3 point = near + Quaternion.Euler(0f, i * 22.5f, 0f) * Vector3.forward * distance;
+                if (Ground(point, out RaycastHit hit) && HelperFunctions.LineCheck(hit.point + Vector3.up * 500f, hit.point + Vector3.up * 12f, HelperFunctions.LayerType.AllPhysical).transform == null)
+                {
+                    return hit.point;
+                }
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Thrown fungi (14): the Shelf, Cloud and Warp Fungus are each thrown the game's way, level and at
+    /// full charge, and the speed they leave the hand with is measured against the game's throw:
+    /// divided by how many times as heavy each flies (1.5, 1.5, 1.35). Each is taken away right after,
+    /// before it lands (a Warp Fungus would warp the scout).
+    /// </summary>
+    private IEnumerator ThrownFungi()
+    {
+        if (!Rules.Enabled(Lvl.WorseItems))
+        {
+            Info("the thrown fungi checks are skipped", $"testing ascent {target}");
+            yield break;
+        }
+        Character local = Local;
+        Vector2 look = local.data.lookValues;
+        foreach ((string prefabName, float heavier) in new[] { ("ShelfShroom", 1.5f), ("CloudFungus", 1.5f), ("WarpFungus", 1.35f) })
+        {
+            Item prefab = ItemByName(prefabName);
+            if (prefab == null)
+            {
+                Fail(prefabName + " is in the item database");
+                continue;
+            }
+            yield return SpawnIntoHand(prefab);
+            if (held == null)
+            {
+                continue;
+            }
+            local.data.lookValues = new Vector2(look.x, 0f);
+            yield return new WaitForSeconds(0.5f);
+            string name = Plain(prefab.GetItemName());
+            float game = local.refs.items.maxThrowForce * 0.5f * prefab.throwForceMultiplier;
+            HashSet<Item> before = new HashSet<Item>(Item.ALL_ITEMS);
+            Step("throw a " + name, () =>
+            {
+                byte slot = local.refs.items.currentSelectedSlot.Value;
+                local.refs.items.photonView.RPC("DropItemRpc", RpcTarget.All, 1f, slot, held.transform.position, Vector3.zero, held.transform.rotation, local.player.GetItemSlot(slot).data, false);
+            });
+            Item thrown = null;
+            for (float until = Time.time + 2f; Time.time < until && thrown == null;)
+            {
+                thrown = Item.ALL_ITEMS.FirstOrDefault(i => i != null && !before.Contains(i) && i.itemID == prefab.itemID && i.rig != null);
+                if (thrown == null)
+                {
+                    yield return null;
+                }
+            }
+            float speed = thrown != null ? Vector3.ProjectOnPlane(thrown.rig.linearVelocity, Vector3.up).magnitude : -1f;
+            if (thrown != null && thrown.photonView != null)
+            {
+                PhotonNetwork.Destroy(thrown.gameObject);
+            }
+            Check($"a thrown {name} leaves the hand as if {heavier:0.##} times as heavy (14)", speed > 0f && Mathf.Abs(speed - game / heavier) < game * 0.02f,
+                $"{speed:0.##} m/s (the game: {game:0.##} m/s; {game / heavier:0.##} expected)");
+            yield return new WaitForSeconds(0.5f);
+        }
+        local.data.lookValues = look;
+    }
+
+    /// <summary>
+    /// The config's New Items switch in a regular run: on, the Climbing Chalk and the Lightweight
+    /// Parasol may spawn; off (in memory, then back), the nearest suitcase, given a pool with only the
+    /// chalk in it for one opening, gives something else, and the next one, given only the Roots
+    /// parasol, gives the regular Parasol instead.
+    /// </summary>
+    private IEnumerator NewItemsSwitch()
+    {
+        BepInEx.Configuration.ConfigEntry<bool> entry = UltimateAscent.Plugin.NewItems;
+        string file = UltimateAscent.Plugin.Instance.Config.ConfigFilePath;
+        bool inFile = File.Exists(file) && File.ReadAllText(file).Contains("New Items = ");
+        Check("the config has the New Items switch", entry != null && inFile, $"bound {entry != null}, in the file {inFile}");
+        Item chalk = ItemByName(ClimbingChalkItem.PrefabName);
+        Item roots = ItemByName(A14_Items.RootsParasolPrefab);
+        if (entry == null || chalk == null || roots == null || !Rules.InExtraAscent)
+        {
+            Info("the New Items checks are skipped", $"switch {entry != null}, chalk {chalk != null}, Roots parasol {roots != null}, ascent {Ascents._currentAscent}");
+            yield break;
+        }
+        bool saved = entry.Value;
+        entry.Value = true;
+        bool chalkOn = chalk.IsValidToSpawn();
+        bool rootsOn = roots.IsValidToSpawn();
+        List<Item> withChalk = null;
+        List<Item> withRoots = null;
+        try
+        {
+            entry.Value = false;
+            yield return OpenWithOnly(chalk, "the chalk", items => withChalk = items);
+            yield return OpenWithOnly(roots, "the Roots parasol", items => withRoots = items);
+        }
+        finally
+        {
+            entry.Value = saved;
+        }
+        Check("with New Items on, the Climbing Chalk and the Lightweight Parasol may spawn in a regular run (9)", chalkOn && rootsOn,
+            $"chalk {chalkOn}, Lightweight Parasol {rootsOn}");
+        if (withChalk != null)
+        {
+            Check("with New Items off, a suitcase that could only give the chalk gives something else", withChalk.Count > 0 && !withChalk.Any(ClimbingChalkItem.IsChalk),
+                Names(withChalk));
+        }
+        if (withRoots != null)
+        {
+            Check("with New Items off, a suitcase that could only give the Lightweight Parasol gives the regular Parasol",
+                withRoots.Count > 0 && withRoots.All(i => i.gameObject.name.StartsWith("Parasol", StringComparison.Ordinal) && !A14_Items.IsRootsParasol(i)),
+                string.Join(", ", withRoots.Select(i => $"{Plain(i.GetItemName())} ({i.gameObject.name.Replace("(Clone)", "")})")));
+        }
+        foreach (Item item in (withChalk ?? new List<Item>()).Concat(withRoots ?? new List<Item>()).Where(i => i != null && i.photonView != null))
+        {
+            PhotonNetwork.Destroy(item.gameObject);
+        }
+        Check("the New Items switch set back applies again", chalk.IsValidToSpawn() == saved, $"switch {entry.Value}");
+    }
+
+    /// <summary>
+    /// The nearest closed suitcase, opened the game's way with only this item in its pool for one opening
+    /// (the pool is put back as soon as its items are out); hands over what it gave.
+    /// </summary>
+    private IEnumerator OpenWithOnly(Item only, string what, Action<List<Item>> done)
+    {
+        Character local = Local;
+        Luggage luggage = Luggage.ALL_LUGGAGE
+            .Where(l => l != null && !(l is RespawnChest) && !l.CompareTag("ClownLuggage") && l.state == Luggage.LuggageState.Closed && l.gameObject.activeInHierarchy)
+            .OrderBy(l => Vector3.Distance(l.transform.position, local.Center))
+            .FirstOrDefault();
+        if (luggage == null)
+        {
+            Info("no closed suitcase near the scout for " + what);
+            yield break;
+        }
+        SpawnPool pool = luggage.GetSpawnPool();
+        LootData.PopulateLootData();
+        Dictionary<ushort, int> own = LootData.AllSpawnWeightData.TryGetValue(pool, out Dictionary<ushort, int> weights) ? weights : null;
+        HashSet<Item> before = new HashSet<Item>(Item.ALL_ITEMS);
+        List<Item> Spawned() => Item.ALL_ITEMS.Where(i => i != null && !before.Contains(i) && Vector3.Distance(i.transform.position, luggage.transform.position) < 5f).ToList();
+        LootData.AllSpawnWeightData[pool] = new Dictionary<ushort, int> { [only.itemID] = 15 };
+        try
+        {
+            Step("open a suitcase that could only give " + what, () => luggage.Interact_CastFinished(local));
+            for (float until = Time.realtimeSinceStartup + 3f; Time.realtimeSinceStartup < until && Spawned().Count == 0;)
+            {
+                yield return null;
+            }
+        }
+        finally
+        {
+            if (own != null)
+            {
+                LootData.AllSpawnWeightData[pool] = own;
+            }
+            else
+            {
+                LootData.AllSpawnWeightData.Remove(pool);
+            }
+        }
+        yield return new WaitForSeconds(0.5f);
+        done(Spawned());
+    }
+
+    /// <summary>How far the game lets a Magic Bean's vine grow from this spot: up to its longest, or to the first rock beyond 0.7 m.</summary>
+    private static float VineReach(Vector3 start, Vector3 direction, float longest)
+    {
+        RaycastHit[] hits = new RaycastHit[128];
+        int count = HelperFunctions.LineCheckAll(start, start + direction * longest, HelperFunctions.LayerType.TerrainMap, hits);
+        float reach = longest;
+        for (int i = 0; i < count; i++)
+        {
+            if (hits[i].collider != null && hits[i].distance > 0.7f && hits[i].distance < reach)
+            {
+                reach = hits[i].distance;
+            }
+        }
+        return reach;
     }
 
     private static string Names(List<Item> items) => items.Count == 0 ? "nothing" : string.Join(", ", items.Select(i => Plain(i.GetItemName())));
@@ -2110,6 +2574,166 @@ internal sealed class Runner : MonoBehaviour
         yield return ChalkCooked(prefab);
     }
 
+    /// <summary>
+    /// The chalk bag in the game's item shader. A chalk put on the ground has the material and lights
+    /// up when looked at, as the game does it for every item. Then the bag stands in a row in front of
+    /// the scout between how it looked before (Unity's Lit, the cube's material) and the Backpack, in
+    /// the sun (from the scout's side, so the scout's own shadow falls beside the row) and in shade (a
+    /// sheet put between the sun and the row that only casts a shadow). Screenshots of each for the eye.
+    /// </summary>
+    private IEnumerator ChalkLook()
+    {
+        Item prefab = ItemByName(ClimbingChalkItem.PrefabName);
+        Item backpackPrefab = ItemByName("Backpack");
+        Light sun = DayNightManager.instance != null ? DayNightManager.instance.sun : null;
+        MeshRenderer backpackRenderer = backpackPrefab != null ? backpackPrefab.GetComponentsInChildren<MeshRenderer>(true)
+            .FirstOrDefault(r => r.sharedMaterial != null && r.sharedMaterial.shader != null && r.sharedMaterial.shader.name == ClimbingChalkModel.ItemShader) : null;
+        if (prefab == null || backpackRenderer == null || sun == null || !sun.isActiveAndEnabled)
+        {
+            Fail("the chalk, the Backpack and the sun are there", $"chalk {prefab != null}, Backpack {backpackRenderer != null}, sun {(sun != null ? sun.isActiveAndEnabled.ToString() : "none")}");
+            yield break;
+        }
+        Character local = Local;
+        Vector2 look = local.data.lookValues;
+        // The sun from the scout's side: a quarter turn from the way its light goes.
+        Vector3 away = Vector3.ProjectOnPlane(sun.transform.forward, Vector3.up);
+        float yaw = Quaternion.LookRotation(away.sqrMagnitude > 0.001f ? away.normalized : local.transform.forward).eulerAngles.y + 90f;
+        local.data.lookValues = new Vector2(yaw, -35f);
+        yield return new WaitForSeconds(0.5f);
+
+        GameObject spawned = SpawnInFront(prefab, 1.2f);
+        Item chalk = spawned != null ? spawned.GetComponent<Item>() : null;
+        if (chalk == null)
+        {
+            Fail("put a Climbing Chalk on the ground for its look");
+            local.data.lookValues = look;
+            yield break;
+        }
+        // Long enough for the screen to have faded in when this step runs right after waking up.
+        yield return new WaitForSeconds(4f);
+        Transform cube = chalk.transform.Find("Cube");
+        MeshRenderer bag = cube != null ? cube.GetComponent<MeshRenderer>() : null;
+        Material own = bag != null ? bag.sharedMaterial : null;
+        Texture2D palette = own != null && own.HasProperty("_BaseTexture") ? own.GetTexture("_BaseTexture") as Texture2D : null;
+        Check("the chalk bag is drawn with the game's item shader, coloured by its palette read as linear",
+            HasBag(chalk) && own != null && own.shader != null && own.shader.name == ClimbingChalkModel.ItemShader && palette != null && palette.name == "ClimbingChalk_palette" && !palette.isDataSRGB,
+            $"material {(own != null ? own.name : "none")}, shader {(own != null && own.shader != null ? own.shader.name : "none")}, base texture {(palette != null ? $"{palette.name} (sRGB {palette.isDataSRGB})" : "none")}");
+        if (own == null || palette == null)
+        {
+            PhotonNetwork.Destroy(spawned);
+            local.data.lookValues = look;
+            yield break;
+        }
+        chalk.HoverEnter();
+        yield return new WaitForSeconds(0.3f);
+        MaterialPropertyBlock block = new MaterialPropertyBlock();
+        bag.GetPropertyBlock(block);
+        Screenshot("chalk-look-highlight");
+        Check("a chalk looked at lights up like any item (the game's highlight reaches the bag)",
+            chalk.mainRenderer == bag && Mathf.Approximately(block.GetFloat("_Interactable"), 1f) && own.IsKeywordEnabled("_INTERACTABLE_ON"),
+            $"highlighted renderer {(chalk.mainRenderer != null ? chalk.mainRenderer.name : "none")}, its _Interactable {block.GetFloat("_Interactable")}, highlight in the material {own.IsKeywordEnabled("_INTERACTABLE_ON")}");
+        chalk.HoverExit();
+        yield return new WaitForSeconds(0.2f);
+        // The row gets a copy of the bag's mesh and material; the chalk itself goes.
+        Mesh bagMesh = cube.GetComponent<MeshFilter>().sharedMesh;
+        List<UnityEngine.Object> made = new List<UnityEngine.Object>();
+        Material bagMaterial = new Material(own) { name = "ClimbingChalk (now)" };
+        made.Add(bagMaterial);
+        PhotonNetwork.Destroy(spawned);
+        spawned = null;
+
+        GameObject sheet = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        sheet.name = "UltimateAscent.SmokeTest shade";
+        DestroyImmediate(sheet.GetComponent<Collider>());
+        MeshRenderer sheetRenderer = sheet.GetComponent<MeshRenderer>();
+        sheetRenderer.sharedMaterial = bagMaterial;
+        sheetRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
+        sheet.SetActive(false);
+        List<GameObject> row = new List<GameObject>();
+        try
+        {
+            local.data.lookValues = new Vector2(yaw, -12f);
+            yield return new WaitForSeconds(1f);
+            Transform view = Camera.main != null ? Camera.main.transform : null;
+            if (view == null)
+            {
+                Fail("the camera is there for the chalk bag's row");
+                yield break;
+            }
+            Vector3 centre = view.position + view.forward * 1.8f;
+            Vector3 across = Vector3.ProjectOnPlane(view.right, Vector3.up).normalized;
+            Quaternion facing = Quaternion.LookRotation(-Vector3.ProjectOnPlane(view.forward, Vector3.up).normalized);
+            // Before: the cube's own material with the palette read as sRGB (the same pixels, copied).
+            Texture2D srgbPalette = new Texture2D(palette.width, palette.height, palette.format, palette.mipmapCount > 1, false) { name = "ClimbingChalk_palette (sRGB)", wrapMode = TextureWrapMode.Clamp };
+            Graphics.CopyTexture(palette, srgbPalette);
+            Material before = new Material(prefab.transform.Find("Cube").GetComponent<MeshRenderer>().sharedMaterial) { name = "ClimbingChalk (Unity's Lit, before)" };
+            before.SetTexture("_BaseMap", srgbPalette);
+            before.SetColor("_BaseColor", Color.white);
+            before.SetFloat("_Smoothness", 0.12f);
+            made.Add(srgbPalette);
+            made.Add(before);
+            (string name, Mesh mesh, Material material, Quaternion rotation)[] shown =
+            {
+                ("before", bagMesh, before, Quaternion.identity),
+                ("now", bagMesh, bagMaterial, Quaternion.identity),
+                ("the Backpack", backpackRenderer.GetComponent<MeshFilter>().sharedMesh, backpackRenderer.sharedMaterial, backpackRenderer.transform.localRotation),
+            };
+            for (int i = 0; i < shown.Length; i++)
+            {
+                GameObject shownObject = new GameObject("UltimateAscent.SmokeTest " + shown[i].name, typeof(MeshFilter), typeof(MeshRenderer));
+                shownObject.GetComponent<MeshFilter>().sharedMesh = shown[i].mesh;
+                shownObject.GetComponent<MeshRenderer>().sharedMaterial = shown[i].material;
+                Quaternion rotation = facing * shown[i].rotation;
+                shownObject.transform.SetPositionAndRotation(centre + across * ((i - (shown.Length - 1) / 2f) * 0.42f), rotation);
+                shownObject.transform.localScale = Vector3.one * (0.24f / Mathf.Max(0.001f, Height(shown[i].mesh, shown[i].rotation)));
+                row.Add(shownObject);
+            }
+            Info("chalk bag row, left to right", string.Join(", ", shown.Select(s => s.name)));
+            yield return new WaitForSeconds(0.5f);
+            Screenshot("chalk-look-row-sun");
+            yield return new WaitForSeconds(0.2f);
+            Shade(sheet, centre, sun);
+            yield return new WaitForSeconds(0.5f);
+            Screenshot("chalk-look-row-shade");
+            yield return new WaitForSeconds(0.2f);
+        }
+        finally
+        {
+            local.data.lookValues = look;
+            row.ForEach(Destroy);
+            made.ForEach(Destroy);
+            Destroy(sheet);
+            if (spawned != null)
+            {
+                PhotonNetwork.Destroy(spawned);
+            }
+        }
+    }
+
+    /// <summary>Puts the shade sheet 3 m toward the sun from a point, across the sunlight and big enough for the scout too.</summary>
+    private static void Shade(GameObject sheet, Vector3 point, Light sun)
+    {
+        sheet.transform.SetPositionAndRotation(point - sun.transform.forward * 3f, Quaternion.LookRotation(sun.transform.forward));
+        sheet.transform.localScale = new Vector3(4f, 4f, 0.05f);
+        sheet.SetActive(true);
+    }
+
+    /// <summary>How tall a mesh stands when turned this way.</summary>
+    private static float Height(Mesh mesh, Quaternion rotation)
+    {
+        Bounds bounds = mesh.bounds;
+        float low = float.MaxValue;
+        float high = float.MinValue;
+        for (int corner = 0; corner < 8; corner++)
+        {
+            Vector3 point = bounds.center + Vector3.Scale(bounds.extents, new Vector3((corner & 1) == 0 ? -1 : 1, (corner & 2) == 0 ? -1 : 1, (corner & 4) == 0 ? -1 : 1));
+            float y = (rotation * point).y;
+            low = Mathf.Min(low, y);
+            high = Mathf.Max(high, y);
+        }
+        return high - low;
+    }
+
     private static Item ItemByName(string prefabName)
     {
         return SingletonAsset<ItemDatabase>.Instance.itemLookup.Values.FirstOrDefault(i => i != null && i.gameObject.name == prefabName);
@@ -2356,7 +2980,7 @@ internal sealed class Runner : MonoBehaviour
         {
             Transform cube = chalk != null ? chalk.transform.Find("Cube") : null;
             MeshRenderer renderer = cube != null ? cube.GetComponent<MeshRenderer>() : null;
-            return renderer != null ? renderer.material.GetColor("_BaseColor") : Color.clear;
+            return renderer != null ? renderer.material.GetColor("_Tint") : Color.clear;
         }
         bool Near(Color a, Color b) => Mathf.Abs(a.r - b.r) < 0.01f && Mathf.Abs(a.g - b.g) < 0.01f && Mathf.Abs(a.b - b.b) < 0.01f;
         Color fresh = BagColour();
@@ -2373,8 +2997,9 @@ internal sealed class Runner : MonoBehaviour
         Screenshot("chalk-4-burned");
         Color burned = BagColour();
         int times = chalk != null ? chalk.GetData<IntItemData>(DataEntryKey.CookedAmount).Value : -1;
-        Check("cooking darkens the chalk bag like any item: brown once cooked, almost black when burned",
-            Near(fresh, Color.white) && Near(cooked, ItemCooking.GetCookColor(1)) && Near(burned, ItemCooking.GetCookColor(4)) && times == 4,
+        Color tint = ClimbingChalkModel.BagTint;
+        Check("cooking darkens the chalk bag like any item (its tint): brown once cooked, almost black when burned",
+            Near(fresh, tint) && Near(cooked, tint * ItemCooking.GetCookColor(1)) && Near(burned, tint * ItemCooking.GetCookColor(4)) && times == 4,
             $"fresh {fresh}, cooked once {cooked}, cooked {times} times {burned}");
         int poisons = chalk != null ? chalk.GetComponents<Action_ModifyStatus>().Count(a => a.statusType == CharacterAfflictions.STATUSTYPE.Poison) : -1;
         int stamina = chalk != null ? chalk.GetComponents<Action_GiveExtraStamina>().Length : -1;
@@ -3954,9 +4579,9 @@ internal sealed class Runner : MonoBehaviour
     }
 
     /// <summary>
-    /// A Mandrake's scream (17) makes drowsy only players who can hear it, as in the game: held in the
-    /// hand it screams, but with the master volume at 0 (set in memory for the test, never saved) it
-    /// gives no drowsiness; with the volume back it does.
+    /// A Mandrake's scream (17) held in the hand: one whole scream with the master volume at 0 (set in
+    /// memory for the test, never saved), then one with the volume back. With the sound on a scream
+    /// gives up to 75 drowsiness; with it off half of that (the game: nothing).
     /// </summary>
     private IEnumerator MandrakeHeard()
     {
@@ -3981,52 +4606,35 @@ internal sealed class Runner : MonoBehaviour
             Fail("hold a Mandrake", item == null ? "nothing in the hand" : item.gameObject.name);
             yield break;
         }
+        if (Compat.Tfa.Present)
+        {
+            bool voice = mandrake.GetComponents<MonoBehaviour>().Any(behaviour => behaviour != null && behaviour.GetType().FullName == "TrueFinalAscent.FinalAscentMandrakeLine");
+            Check("with True Final Ascent the Mandrake keeps TFA's voice lines and still counts as the game's (its rules apply)",
+                voice && !Compat.Tfa.Spawned(mandrake), $"TFA's voice lines on it {voice}, counted as one of TFA's {Compat.Tfa.Spawned(mandrake)}");
+        }
         Shield(true);
-        int mutedScreams = 0;
-        int loudScreams = 0;
-        Meter muted;
-        Meter loud;
+        Meter muted = null;
+        Meter loud = null;
         mutedMasterVolume = master.Value;
         master.Value = 0f;
         master.ApplyValue();
         Info("master volume set to 0 for the Mandrake check", $"it was {mutedMasterVolume:0.00}; nothing is saved");
-        muted = new Meter(Status.Drowsy);
         try
         {
-            bool screaming = false;
-            for (float until = Time.time + 8f; Time.time < until && item != null;)
-            {
-                mutedScreams += mandrake.screaming && !screaming ? 1 : 0;
-                screaming = mandrake.screaming;
-                yield return null;
-            }
+            yield return OneScream(mandrake, meter => muted = meter);
         }
         finally
         {
-            muted.Stop();
             RestoreMasterVolume();
         }
-        // The scream ends before the sound comes back on.
-        yield return new WaitForSeconds(0.2f);
-        loud = new Meter(Status.Drowsy);
-        try
-        {
-            bool screaming = mandrake.screaming;
-            for (float until = Time.time + 8f; Time.time < until && item != null;)
-            {
-                loudScreams += mandrake.screaming && !screaming ? 1 : 0;
-                screaming = mandrake.screaming;
-                yield return null;
-            }
-        }
-        finally
-        {
-            loud.Stop();
-        }
-        Check("a Mandrake's scream gives no drowsiness with the sound off (17; as in the game)", mutedScreams > 0 && muted.Total == 0f,
-            $"{mutedScreams} screams in {muted.Seconds:0.#} s with the master volume at 0: {muted.Total * 100f:0.#} drowsiness in {muted.Count} additions");
-        Check("with the sound on, the same Mandrake's screams make the scout drowsy (17)", loudScreams > 0 && loud.Total > 0.1f,
-            $"{loudScreams} screams in {loud.Seconds:0.#} s: {loud.Total * 100f:0.#} drowsiness in {loud.Count} additions");
+        yield return OneScream(mandrake, meter => loud = meter);
+        float share = A17_Hazards.MutedScreamShare;
+        Check("with the sound on, a whole scream of a Mandrake in the hand gives up to 75 drowsiness (17)",
+            loud != null && loud.Total > 0.68f && loud.Total < 0.775f,
+            loud == null ? "no whole scream" : $"{loud.Total * 100f:0.#} drowsiness in {loud.Count} additions over {loud.Seconds:0.#} s");
+        Check($"with the sound off, the same scream still makes the scout drowsy, at {share:0%} of that (17; the game: nothing)",
+            muted != null && loud != null && muted.Total > 0.2f && Mathf.Abs(muted.Total - loud.Total * share) <= 0.05f,
+            muted == null ? "no whole scream" : $"{muted.Total * 100f:0.#} drowsiness in {muted.Count} additions over {muted.Seconds:0.#} s with the master volume at 0 (sound on: {(loud != null ? loud.Total * 100f : 0f):0.#})");
         if (item != null)
         {
             Local.refs.items.EquipSlot(Optionable<byte>.None);
@@ -4042,6 +4650,37 @@ internal sealed class Runner : MonoBehaviour
         Shield(false);
         ClearStatuses(Afflictions);
         Protect(true);
+    }
+
+    /// <summary>The drowsiness the Mandrake's next whole scream adds (the one under way, if any, ends first).</summary>
+    private IEnumerator OneScream(Mandrake mandrake, Action<Meter> done)
+    {
+        for (float until = Time.time + 5f; Time.time < until && mandrake != null && mandrake.screaming;)
+        {
+            yield return null;
+        }
+        for (float until = Time.time + 10f; Time.time < until && mandrake != null && !mandrake.screaming;)
+        {
+            yield return null;
+        }
+        if (mandrake == null || !mandrake.screaming)
+        {
+            yield break;
+        }
+        Meter meter = new Meter(Status.Drowsy);
+        int frames = 0;
+        int ticking = 0;
+        int active = 0;
+        for (float until = Time.time + 5f; Time.time < until && mandrake != null && mandrake.screaming;)
+        {
+            frames++;
+            ticking += mandrake.timeEvent != null && mandrake.timeEvent.enabled ? 1 : 0;
+            active += mandrake.timeEvent != null && mandrake.timeEvent.gameObject.activeInHierarchy ? 1 : 0;
+            yield return null;
+        }
+        yield return null;
+        Info("scream ticks", $"{frames} frames screaming: drowsiness timer on in {ticking}, its object active in {active}; hears it {A17_Hazards.HearsMandrakes()}");
+        done(meter.Stop());
     }
 
     private void RestoreMasterVolume()

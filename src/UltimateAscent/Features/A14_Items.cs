@@ -28,7 +28,8 @@ namespace UltimateAscent.Features;
 /// ascent 15 its crash brings 50 drowsiness. The Big Lollipop's drowsiness comes over 12 s and adds up
 /// to 85 (the game: 33 over 10 s).</item>
 /// <item>Rope spools hold half the rope: 25 segments, at most 20 in one rope (the game: 50 and 40).</item>
-/// <item>Thrown Shelf, Cloud and Warp Fungus fly as if twice as heavy (half the throw speed).</item>
+/// <item>Thrown Shelf and Cloud Fungus fly as if 1.5 times as heavy, a Warp Fungus as if 1.35 times
+/// (the throw speed divided by that).</item>
 /// <item>A Magic Bean's vine grows at most 15 m (the game: 20 m); standing on it sticks 2.5 thorns a
 /// second into you, and each 2.5 works its way out again 30 s later.</item>
 /// <item>Placed pitons are the Alps' cracking pitons, 30% sturdier: they hold for 1.3-6.5 s of hanging
@@ -116,7 +117,8 @@ internal static class A14_Items
     private const float SpoolRope = 25f;
     private const float LongestRope = 20f;
 
-    private static readonly string[] FungusPrefabs = { "ShelfShroom", "CloudFungus", "WarpFungus" };
+    /// <summary>How many times as heavy each fungus flies when thrown: its throw speed is divided by this.</summary>
+    private static readonly (string prefab, float heavier)[] HeavyFungus = { ("ShelfShroom", 1.5f), ("CloudFungus", 1.5f), ("WarpFungus", 1.35f) };
 
     /// <summary>A Magic Bean's vine: share of the game's longest vine, thorns per second while standing on it, and how long each 2.5 of them stays in.</summary>
     private const float BeanVineLength = 0.75f;
@@ -321,7 +323,7 @@ internal static class A14_Items
         }
     }
 
-    /// <summary>The host launches thrown items; a heavy fungus leaves the hand at half the speed.</summary>
+    /// <summary>The host launches thrown items; a heavy fungus leaves the hand slower, by how much heavier it flies.</summary>
     [HarmonyPatch(typeof(CharacterItems), nameof(CharacterItems.DropItemRpc))]
     private static class HeavyFungi
     {
@@ -329,13 +331,14 @@ internal static class A14_Items
         {
             __state = null;
             Item held = __instance.character != null ? __instance.character.data.currentItem : null;
-            if (!On || held == null || Array.FindIndex(FungusPrefabs, name => held.gameObject.name.StartsWith(name, StringComparison.Ordinal)) < 0)
+            int fungus = held == null ? -1 : Array.FindIndex(HeavyFungus, entry => held.gameObject.name.StartsWith(entry.prefab, StringComparison.Ordinal));
+            if (!On || fungus < 0)
             {
                 return;
             }
             __state = new Vector2(__instance.minThrowForce, __instance.maxThrowForce);
-            __instance.minThrowForce *= 0.5f;
-            __instance.maxThrowForce *= 0.5f;
+            __instance.minThrowForce /= HeavyFungus[fungus].heavier;
+            __instance.maxThrowForce /= HeavyFungus[fungus].heavier;
         }
 
         private static Exception Finalizer(CharacterItems __instance, Vector2? __state, Exception __exception)
