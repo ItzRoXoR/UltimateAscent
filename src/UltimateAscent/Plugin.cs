@@ -13,13 +13,15 @@ namespace UltimateAscent;
 
 [BepInPlugin(Guid, Name, Version)]
 [BepInDependency(Compat.Tfa.Guid, BepInDependency.DependencyFlags.SoftDependency)]
+[BepInDependency(Compat.ItemStats.Guid, BepInDependency.DependencyFlags.SoftDependency)]
+[BepInDependency(Compat.EffectPreview.Guid, BepInDependency.DependencyFlags.SoftDependency)]
 [BepInIncompatibility("MoreAscents")]
 [BepInIncompatibility("13dastardlyascents")]
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "UltimateAscent";
     public const string Name = "Ultimate Ascent";
-    public const string Version = "1.0.0";
+    public const string Version = "1.1.0";
 
     internal static ManualLogSource Log;
     internal static Plugin Instance;
@@ -31,7 +33,6 @@ public sealed class Plugin : BaseUnityPlugin
     internal static ConfigEntry<bool> WrapAround;
     internal static ConfigEntry<bool> NerfedRevives;
     internal static ConfigEntry<bool> CursePunishment;
-    internal static ConfigEntry<bool> TfaDoubleApocalypse;
     internal static ConfigEntry<bool> VerboseLogging;
 
     private Harmony harmony;
@@ -95,11 +96,9 @@ public sealed class Plugin : BaseUnityPlugin
             new ConfigDescription("Progress through ascents 9-25, saved by the mod (the game's own Steam stat stops at ascent 8). Beating ascent N unlocks N+1. 0 means only the vanilla progress counts.",
                 new AcceptableValueRange<int>(0, Lvl.Last + 1)));
         NerfedRevives = Config.Bind("Big Lobbies", "Nerfed Revives", true,
-            "Ascent 14+: reviving and status clearing keep 25% of the cleared statuses, and revives that would add no status add curse and hunger instead. Only the host's setting counts.");
+            "Ascent 14+: reviving and status clearing keep 25% of the cleared statuses (the Cursed Skull's clear 10%), and revives that would add no status add curse and hunger instead. Only the host's setting counts.");
         CursePunishment = Config.Bind("Big Lobbies", "Curse On Teammate Death", true,
             "Ascent 11+: when a scout dies, every survivor gets curse (less in bigger lobbies). Only the host's setting counts.");
-        TfaDoubleApocalypse = Config.Bind("Compatibility", "Double Apocalypse Weather", true,
-            "Ascent 25 with True Final Ascent's Apocalypse mode: two Apocalypse weather events run at the same time. Only the host's setting counts.");
         VerboseLogging = Config.Bind("Debug", "Verbose Logging", false, "Writes extra diagnostic lines to the BepInEx log.");
     }
 

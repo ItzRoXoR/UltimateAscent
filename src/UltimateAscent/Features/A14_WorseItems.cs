@@ -13,13 +13,49 @@ namespace UltimateAscent.Features;
 /// Ascent 14 (13DDA): items are worse.
 /// Food and stamina items give half, healing gives 60%, cure-alls only partly cure, consumables
 /// lose two uses at a time, ropes are shorter, chain/balloons weaker, energy drinks slower,
-/// lollipops make you three times as drowsy, poisonous food is much worse and cooking no longer
-/// removes poison, parasols make you fall faster, gliders drain more stamina, rescue hooks drop
-/// you, the cannon burns, skeletons are fragile and invincibility only blocks 75%.
+/// the lollipop's crash is 85 drowsiness, cooking no longer removes poison or spores, eating a scorpion
+/// poisons you, parasols make you fall faster, gliders drain more stamina, letting go of a rescue
+/// hook makes you fall, the cannon burns, skeletons are fragile and invincibility only blocks 75%. The gems
+/// (<see cref="A14_Gems"/>) and Shroomberries (<see cref="A14_Shroomberries"/>) are worse too;
+/// poisonous food gets far worse from ascent 15 on (<see cref="A15_FoodPoison"/>).
 /// </summary>
 internal static class A14_WorseItems
 {
     private static bool On => Rules.Enabled(Lvl.WorseItems);
+
+    /// <summary>The share of hunger food restores, and of the extra stamina items give.</summary>
+    internal const float FoodShare = 0.5f;
+    internal const float ExtraStaminaShare = 0.5f;
+
+    /// <summary>The share of a status an item cures; the Gloom's Early Worm wakes you only half as much.</summary>
+    internal const float CureShare = 0.6f;
+    internal const float EarlyWormShare = 0.5f;
+
+    /// <summary>A cure-all removes at most this much of each status up to webs (Arrow, Petrify and FlyTrap: all of it).</summary>
+    internal const float CureAllCap = 0.5f;
+
+    /// <summary>What a cure-all takes off of one status (the game: 5, i.e. all of it).</summary>
+    internal static float CureAllAmount(CharacterAfflictions.STATUSTYPE type)
+    {
+        return type <= CharacterAfflictions.STATUSTYPE.Web ? CureAllCap : 5f;
+    }
+
+    /// <summary>How much of what an item's status change takes off lands, from ascent 14 (1 for what it adds, and for petrification).</summary>
+    internal static float CureScale(Action_ModifyStatus action)
+    {
+        if (!On || action == null || action.changeAmount >= 0f || action.statusType == CharacterAfflictions.STATUSTYPE.Petrify)
+        {
+            return 1f;
+        }
+        bool earlyWorm = action.statusType == CharacterAfflictions.STATUSTYPE.Drowsy && action.item != null &&
+                         action.item.GetComponent<global::Peak.EarlyWorm>() != null;
+        if (earlyWorm && Compat.Tfa.Weather == "sleepfog")
+        {
+            // True Final Ascent hands the worms out as its Sleep Fog's cure; they work as TFA meant.
+            return 1f;
+        }
+        return earlyWorm ? EarlyWormShare : CureShare;
+    }
 
     [HarmonyPatch(typeof(Action_RestoreHunger), nameof(Action_RestoreHunger.RunAction))]
     private static class HalfFood
@@ -33,7 +69,7 @@ internal static class A14_WorseItems
             // Ticks are no food any more.
             if (!Ticks.IsTick(__instance.item))
             {
-                __instance.character.refs.afflictions.SubtractStatus(CharacterAfflictions.STATUSTYPE.Hunger, __instance.restorationAmount * 0.5f);
+                __instance.character.refs.afflictions.SubtractStatus(CharacterAfflictions.STATUSTYPE.Hunger, __instance.restorationAmount * FoodShare);
             }
             return false;
         }
@@ -93,22 +129,27 @@ internal static class A14_WorseItems
             {
                 return true;
             }
-            __instance.character.AddExtraStamina(__instance.amount * 0.5f);
+            __instance.character.AddExtraStamina(__instance.amount * ExtraStaminaShare);
             return false;
         }
     }
 
-    /// <summary>Healing and other status items work at 60% (big heals are capped at 0.7 first).</summary>
+    /// <summary>
+    /// What items cure works at 60%; the Gloom's Early Worm wakes you only half as much (50 of the
+    /// game's 100 drowsiness). What items cost you (a Napberry's sleep, a Scorchberry's heat, the Book
+    /// of Bones' curse) stays the game's, so ascent 14 is never easier than 13 there.
+    /// </summary>
     [HarmonyPatch(typeof(Action_ModifyStatus), nameof(Action_ModifyStatus.RunAction))]
     private static class WeakerMedicine
     {
         private static void Prefix(Action_ModifyStatus __instance, out float? __state)
         {
             __state = null;
-            if (On && __instance.statusType != CharacterAfflictions.STATUSTYPE.Petrify)
+            float scale = CureScale(__instance);
+            if (scale != 1f)
             {
                 __state = __instance.changeAmount;
-                __instance.changeAmount = (__instance.changeAmount > 1f ? 0.7f : __instance.changeAmount) * 0.6f;
+                __instance.changeAmount *= scale;
             }
         }
 
@@ -140,26 +181,35 @@ internal static class A14_WorseItems
                 {
                     continue;
                 }
-                __instance.character.refs.afflictions.SubtractStatus(type, i <= 11 ? 0.5f : 5f);
+                __instance.character.refs.afflictions.SubtractStatus(type, CureAllAmount(type));
             }
             return false;
         }
     }
 
-    /// <summary>Poisonous food poisons for twice as long and much harder.</summary>
-    [HarmonyPatch(typeof(Action_InflictPoison), nameof(Action_InflictPoison.RunAction))]
-    private static class WorsePoisonFood
+    /// <summary>A scorpion is poisonous to eat: 15 poison at once from ascent 15, 8.6 at 14 without that ascent's boost (the game: none).</summary>
+    internal const float ScorpionPoison = 0.15f;
+
+
+    [HarmonyPatch(typeof(Action_RestoreHunger), nameof(Action_RestoreHunger.RunAction))]
+    private static class PoisonousScorpion
     {
-        private static void Prefix(Action_InflictPoison __instance)
+        private static void Postfix(Action_RestoreHunger __instance)
         {
-            if (On && __instance.character != null)
+            Character character = __instance.character;
+            if (On && character != null && character.IsLocal && __instance.item != null && __instance.item.GetComponent<Scorpion>() != null)
             {
-                __instance.character.refs.afflictions.AddAffliction(new Affliction_PoisonOverTime(__instance.inflictionTime * 2f, __instance.delay * 3f, __instance.poisonPerSecond * 50f));
+                CharacterAfflictions.STATUSTYPE poison = CharacterAfflictions.STATUSTYPE.Poison;
+                ExactStatus.Add(character.refs.afflictions, poison, A15_StrongerAilments.FromAscent15(poison, ScorpionPoison), "scorpion");
             }
         }
     }
 
-    /// <summary>Cooking no longer removes poison from food.</summary>
+
+    /// <summary>
+    /// Cooking no longer removes poison or spores from food. Whatever else cooking switches off (a
+    /// Mandrake's numbness, a Prickleberry's thorns, a lollipop's raw rush) stays off, as in the game.
+    /// </summary>
     [HarmonyPatch(typeof(CookingBehavior_DisableScripts), nameof(CookingBehavior_DisableScripts.TriggerBehaviour))]
     private static class CookingKeepsPoison
     {
@@ -171,7 +221,7 @@ internal static class A14_WorseItems
             }
             foreach (MonoBehaviour script in __instance.scriptsToDisable)
             {
-                if (script != null)
+                if (script != null && Poisonous(script))
                 {
                     script.enabled = true;
                 }
@@ -179,6 +229,19 @@ internal static class A14_WorseItems
         }
     }
 
+    /// <summary>A script that poisons or gives spores: cooking leaves it on from ascent 14.</summary>
+    internal static bool Poisonous(MonoBehaviour script)
+    {
+        return script is Action_InflictPoison ||
+               (script is Action_ModifyStatus status && status.changeAmount > 0f &&
+                (status.statusType == CharacterAfflictions.STATUSTYPE.Poison || status.statusType == CharacterAfflictions.STATUSTYPE.Spores));
+    }
+
+    /// <summary>
+    /// The lollipop's crash: what <see cref="A14_Items"/> sets (85 over 12 s) lands exactly from ascent
+    /// 15 on, and without ascent 15's boost at 14 (65). 13DDA's three times the game's 33 at 14 was
+    /// more than 15 gave.
+    /// </summary>
     [HarmonyPatch(typeof(Affliction_AdjustDrowsyOverTime), nameof(Affliction_AdjustDrowsyOverTime.UpdateEffect))]
     private static class SleepierLollipop
     {
@@ -188,7 +251,11 @@ internal static class A14_WorseItems
             {
                 return true;
             }
-            __instance.character.refs.afflictions.AdjustStatus(CharacterAfflictions.STATUSTYPE.Drowsy, __instance.statusPerSecond * Time.deltaTime * 3f);
+            if (__instance.character != null && __instance.character.IsLocal && __instance.statusPerSecond > 0f)
+            {
+                CharacterAfflictions.STATUSTYPE drowsy = CharacterAfflictions.STATUSTYPE.Drowsy;
+                ExactStatus.Add(__instance.character.refs.afflictions, drowsy, A15_StrongerAilments.FromAscent15(drowsy, __instance.statusPerSecond * Time.deltaTime), "lollipop");
+            }
             return false;
         }
     }
@@ -200,8 +267,17 @@ internal static class A14_WorseItems
         {
             if (On)
             {
-                Overrides.Set(__instance, nameof(Affliction_FasterBoi.moveSpeedMod), 0.6f);
-                Overrides.Set(__instance, nameof(Affliction_FasterBoi.climbSpeedMod), 0.7f);
+                // The Energy Drink itself: walking only +30%, and from ascent 15 a crash of exactly 50 drowsiness.
+                // Other speed boosts keep at most 13DDA's +60% walking (the game's are +50% now) and +70% climbing.
+                bool energyDrink = A14_Items.InEnergyDrink;
+                float walk = Overrides.Original(__instance, "walk", __instance.moveSpeedMod);
+                float climb = Overrides.Original(__instance, "climb", __instance.climbSpeedMod);
+                Overrides.Set(__instance, nameof(Affliction_FasterBoi.moveSpeedMod), energyDrink ? A14_Items.EnergyDrinkWalking : Mathf.Min(walk, 0.6f));
+                Overrides.Set(__instance, nameof(Affliction_FasterBoi.climbSpeedMod), Mathf.Min(climb, 0.7f));
+                if (energyDrink && Rules.Enabled(Lvl.StrongerAilments))
+                {
+                    Overrides.Set(__instance, nameof(Affliction_FasterBoi.drowsyOnEnd), A15_StrongerAilments.Raw(CharacterAfflictions.STATUSTYPE.Drowsy, A14_Items.EnergyDrinkCrash));
+                }
             }
         }
     }
@@ -309,7 +385,7 @@ internal static class A14_WorseItems
         }
     }
 
-    /// <summary>An open parasol pulls you down instead of slowing your fall.</summary>
+    /// <summary>An open parasol pulls you down instead of slowing your fall (not the Lightweight Parasol, see <see cref="A14_Items"/>).</summary>
     [HarmonyPatch(typeof(CharacterMovement), nameof(CharacterMovement.ApplyParasolDrag))]
     private static class ParasolScope
     {
@@ -332,7 +408,7 @@ internal static class A14_WorseItems
     {
         private static bool Prefix(Bodypart __instance)
         {
-            if (!On || ParasolScope.Depth <= 0 || !Rules.Owns(__instance.character))
+            if (!On || ParasolScope.Depth <= 0 || !Rules.Owns(__instance.character) || A14_Items.IsLightweightParasol(__instance.character.data.currentItem))
             {
                 return true;
             }
@@ -348,7 +424,7 @@ internal static class A14_WorseItems
         }
     }
 
-    /// <summary>Letting go of a rescue hook makes you fall and drop everything.</summary>
+    /// <summary>Letting go of a rescue hook makes you fall (you keep your items).</summary>
     [HarmonyPatch(typeof(RescueHook), nameof(RescueHook.RPCA_LetGo))]
     private static class RoughRescueHook
     {
@@ -370,7 +446,6 @@ internal static class A14_WorseItems
             if (victim != null)
             {
                 victim.Fall(2f);
-                victim.refs.items.DropAllItems(includeBackpack: true);
             }
         }
     }
@@ -440,24 +515,28 @@ internal static class A14_WorseItems
         }
     }
 
-    /// <summary>Reviving keeps 25% of the cleared statuses (host option "Nerfed Revives").</summary>
+    /// <summary>
+    /// Reviving keeps 25% of the cleared statuses, the Cursed Skull's clear 10% (host option
+    /// "Nerfed Revives"; the skull's crab is left to <see cref="A14_Items"/>).
+    /// </summary>
     [HarmonyPatch(typeof(CharacterAfflictions), nameof(CharacterAfflictions.ClearAllStatus))]
     private static class ClearLeavesResidue
     {
         private static void Prefix(CharacterAfflictions __instance, bool excludeCurse, bool excludePetrify, out float[] __state)
         {
             __state = null;
-            if (!On || !HostOptions.NerfedRevives || CheckpointScope.Depth > 0 || !Rules.Owns(__instance.character))
+            if (!On || !HostOptions.NerfedRevives || CheckpointScope.Depth > 0 || !Rules.Owns(__instance.character) || Compat.Tfa.Causing)
             {
                 return;
             }
+            float share = A14_Items.InCursedSkull ? A14_Items.CursedSkullResidue : 0.25f;
             __state = new float[12];
             for (int i = 0; i < __state.Length; i++)
             {
                 CharacterAfflictions.STATUSTYPE type = (CharacterAfflictions.STATUSTYPE)i;
                 if (__instance.StatusIsCurable(type, !excludeCurse, !excludePetrify))
                 {
-                    __state[i] = __instance.GetCurrentStatus(type) * 0.25f;
+                    __state[i] = __instance.GetCurrentStatus(type) * share;
                 }
             }
         }
@@ -544,6 +623,12 @@ internal static class A14_WorseItems
                 return;
             }
             Character character = __instance.character;
+            bool shielded = !ignoreInvincibility && character.data.isInvincible && statusType != CharacterAfflictions.STATUSTYPE.Curse;
+            if ((!character.data.isSkeleton && !shielded) || Compat.Tfa.Causing)
+            {
+                // True Final Ascent's events keep its own rules for skeletons and invincibility.
+                return;
+            }
             if (character.data.isSkeleton)
             {
                 if (!__instance.StatusAffectsSkeleton(statusType))
@@ -557,7 +642,7 @@ internal static class A14_WorseItems
                 skeletonScope++;
                 __state = true;
             }
-            if (!ignoreInvincibility && character.data.isInvincible && statusType != CharacterAfflictions.STATUSTYPE.Curse)
+            if (shielded)
             {
                 amount *= 0.25f;
                 ignoreInvincibility = true;

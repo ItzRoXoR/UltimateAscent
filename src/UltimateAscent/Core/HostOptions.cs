@@ -12,13 +12,10 @@ internal static class HostOptions
 
     private const int NerfedRevivesBit = 1;
     private const int CursePunishmentBit = 2;
-    private const int DoubleApocalypseBit = 4;
 
     internal static bool NerfedRevives => Has(NerfedRevivesBit);
 
     internal static bool CursePunishment => Has(CursePunishmentBit);
-
-    internal static bool DoubleApocalypse => Has(DoubleApocalypseBit);
 
     private static int Local
     {
@@ -32,10 +29,6 @@ internal static class HostOptions
             if (Plugin.CursePunishment.Value)
             {
                 mask |= CursePunishmentBit;
-            }
-            if (Plugin.TfaDoubleApocalypse.Value)
-            {
-                mask |= DoubleApocalypseBit;
             }
             return mask;
         }

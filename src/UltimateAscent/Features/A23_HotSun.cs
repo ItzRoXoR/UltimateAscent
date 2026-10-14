@@ -9,30 +9,49 @@ namespace UltimateAscent.Features;
 
 /// <summary>
 /// Ascent 23 (13DDA + More Ascents, plus a new rule): the sun is hot everywhere except the Alpine,
-/// and whatever you hold up to shield yourself from it is slowly roasted.
+/// and whatever you hold up to shield yourself from it is roasted.
 /// <list type="bullet">
 /// <item>Standing in direct sunlight adds heat (the Mesa keeps its own, stronger sun). Sunscreen
-/// still protects. In the Alpine the sun does nothing at all; its nights are long instead
+/// still protects, though from ascent 14 a quarter of the heat gets through (<see cref="A14_Items"/>).
+/// In the Alpine the sun does nothing at all; its nights are long instead
 /// (<see cref="A18_AlpineNights"/>).</item>
 /// <item>Whatever you shield yourself with against direct sunlight protects you, but takes the sun
 /// instead: an open parasol, a glider held overhead, or any held item that blocks the sun. Only
-/// items in that use roast; anything else you carry is safe. A parasol roasts 1.5 times slower than
-/// other items, because it is made for the sun.</item>
-/// <item>A roasting item smokes, like a backpack on hot rock, and when its time is up it is fully
-/// burned at once, skipping the cooking stages in between: after 30 seconds of sunshine, 45 for a
-/// parasol. The Mesa's sun roasts twice as fast (15 s, parasols 22.5 s). In the shade it stops
-/// smoking and cools down again at a third of the speed it roasted at. A burned item stays in
-/// your hands.</item>
+/// items in that use roast; anything else you carry is safe. From ascent 18 this happens in the
+/// Mesa's intense midday sun (the game's own hot sun there); from 23 wherever the sun is
+/// scorching.</item>
+/// <item>A roasting item first stays clean for 5 s, then smokes heavily for 15 s, and is then
+/// fully burned at once, skipping the cooking stages in between. A parasol, made for the sun, takes
+/// 1.5 times as long; the Mesa's sun roasts twice as fast. In the shade it stops smoking and cools
+/// down again at a third of the speed it roasted at. A burned item stays in your hands.</item>
 /// </list>
-/// Burned items burn your hands from ascent 17 on (<see cref="BurnedItems"/>).
+/// Burned items burn your hands from ascent 17 on (<see cref="BurnedItems"/>). While True Final
+/// Ascent runs an Apocalypse weather the sun rules rest, heat and roasting alike, the way TFA rests
+/// More Ascents' sun: its weather, its own sun events included, is TFA's to tune.
 /// </summary>
 internal static class A23_HotSun
 {
     private const float HeatPerSecond = 0.005f;
-    private const float BurnSeconds = 30f;
+
+    /// <summary>How long an item takes to burn in the sun, and the share of it before it starts smoking (5 of 20 s).</summary>
+    private const float BurnSeconds = 20f;
+    private const float SmokeFrom = 0.25f;
+
     private const float ParasolSlowdown = 1.5f;
     private const float MesaSpeedup = 2f;
     private const float CoolingRate = 1f / 3f;
+
+    /// <summary>The game's own Mesa sun burns from this sun intensity on (its HotSun).</summary>
+    private const float MesaSunIntensity = 5f;
+
+    /// <summary>
+    /// Sun smoke on and off, sent as the game's cooking-state message so every client shows it. The
+    /// game knows states 0-3; ascent 16 uses 85.
+    /// </summary>
+    private const ItemCooking.NetworkedCooking SunSmokeOn = (ItemCooking.NetworkedCooking)86;
+    private const ItemCooking.NetworkedCooking SunSmokeOff = (ItemCooking.NetworkedCooking)87;
+
+    internal const string SunSmokeName = "UltimateAscent Sun Smoke";
 
     private sealed class Exposure
     {
@@ -56,10 +75,16 @@ internal static class A23_HotSun
     {
         Character local = Character.localCharacter;
         Item roasted = null;
-        if (Rules.Enabled(Lvl.HotSun) && local != null && local.data != null && !local.data.dead && !local.inAirport && Map.Ready && !Map.InAlpine &&
-            DayNightManager.instance != null && DayNightManager.instance.sun != null && DayNightManager.instance.sun.intensity > 1f)
+        if (local != null && local.data != null && !local.data.dead && !local.inAirport && Map.Ready && !Map.InAlpine &&
+            DayNightManager.instance != null && DayNightManager.instance.sun != null && !Compat.Tfa.WeatherRunning)
         {
-            roasted = Sunbathe(local);
+            float intensity = DayNightManager.instance.sun.intensity;
+            bool scorching = Rules.Enabled(Lvl.HotSun) && intensity > 1f;
+            bool mesaSun = Rules.Enabled(Lvl.ExtremeWeather) && Map.InMesa && intensity >= MesaSunIntensity;
+            if (scorching || mesaSun)
+            {
+                roasted = Sunbathe(local, scorching);
+            }
         }
         if (exposures.Count == 0)
         {
@@ -81,8 +106,11 @@ internal static class A23_HotSun
         }
     }
 
-    /// <summary>Applies the sun to the local scout; returns the held item that is roasting, if any.</summary>
-    private static Item Sunbathe(Character local)
+    /// <summary>
+    /// Applies the sun to the local scout; returns the held item that is roasting, if any. The scout
+    /// is only heated by ascent 23's scorching sun (the Mesa's own sun heats by itself).
+    /// </summary>
+    private static Item Sunbathe(Character local, bool heats)
     {
         Transform sun = DayNightManager.instance.sun.transform;
         Item held = local.data.currentItem;
@@ -103,11 +131,13 @@ internal static class A23_HotSun
             Roast(held, Map.InMesa ? burnSeconds / MesaSpeedup : burnSeconds);
             roasting = held;
         }
-        if (shields || Map.InMesa || local.data.wearingSunscreen || (RunSettings.IsCustomRun && RunSettings.GetValue(RunSettings.SETTINGTYPE.Hazard_Heat) == 0))
+        if (!heats || shields || Map.InMesa || (local.data.wearingSunscreen && !A14_Items.SunscreenLeaks) || (RunSettings.IsCustomRun && RunSettings.GetValue(RunSettings.SETTINGTYPE.Hazard_Heat) == 0))
         {
             return roasting;
         }
-        local.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Hot, HeatPerSecond * Time.deltaTime);
+        // Ascent 14: sunscreen keeps off only three quarters of the heat.
+        float share = local.data.wearingSunscreen ? A14_Items.SunscreenLeak : 1f;
+        local.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Hot, HeatPerSecond * share * Time.deltaTime);
         return roasting;
     }
 
@@ -131,9 +161,10 @@ internal static class A23_HotSun
         }
         exposure.burnSeconds = burnSeconds;
         exposure.progress += Time.deltaTime / burnSeconds;
-        SetSmoke(item, exposure, true);
+        SetSmoke(item, exposure, exposure.progress >= SmokeFrom);
         if (exposure.progress >= 1f)
         {
+            SetSmoke(item, exposure, false);
             BurnNow(item);
         }
     }
@@ -145,7 +176,7 @@ internal static class A23_HotSun
             return;
         }
         exposure.smoking = on;
-        item.photonView.RPC("SyncCookingStateRPC", RpcTarget.All, on ? ItemCooking.NetworkedCooking.StartSmoking : ItemCooking.NetworkedCooking.StopSmoking);
+        item.photonView.RPC("SyncCookingStateRPC", RpcTarget.All, on ? SunSmokeOn : SunSmokeOff);
     }
 
     /// <summary>Cools an item that is out of the sun; returns true once it has fully cooled down.</summary>
@@ -158,7 +189,7 @@ internal static class A23_HotSun
 
     /// <summary>
     /// Fully burned in one go: the cooking steps it still lacks all happen in the same frame, so the
-    /// item goes straight from smoking to burned for everyone (each step stops the smoke as well).
+    /// item goes straight from smoking to burned for everyone.
     /// </summary>
     private static void BurnNow(Item item)
     {
@@ -175,34 +206,75 @@ internal static class A23_HotSun
     }
 
     /// <summary>
-    /// Items the game gave no smoke of their own (a parasol, for one) borrow a backpack's, so a
-    /// roasting shield smokes for everybody like a backpack on hot rock.
+    /// The sun's smoke is a heavier copy of the item's own cooking smoke (or a backpack's, for items
+    /// the game gave none, a parasol for one), so a campfire's cooking smoke stays as in the game.
     /// </summary>
     [HarmonyPatch(typeof(ItemCooking), nameof(ItemCooking.SyncCookingStateRPC))]
-    private static class BorrowedSmoke
+    private static class SunSmoke
     {
-        private static void Prefix(ItemCooking __instance, ItemCooking.NetworkedCooking newState)
+        private static bool Prefix(ItemCooking __instance, ItemCooking.NetworkedCooking newState)
         {
-            if (newState != ItemCooking.NetworkedCooking.StartSmoking || !Rules.Enabled(Lvl.HotSun))
+            if (newState != SunSmokeOn && newState != SunSmokeOff)
             {
-                return;
+                return true;
             }
-            ItemParticles particles = __instance.item != null ? __instance.item.particles : null;
-            if (particles == null || particles.smoke != null)
+            ParticleSystem smoke = SmokeOf(__instance, newState == SunSmokeOn);
+            if (smoke != null)
             {
-                return;
+                if (newState == SunSmokeOn)
+                {
+                    smoke.Play(true);
+                }
+                else
+                {
+                    smoke.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+                }
             }
-            ParticleSystem template = SmokeTemplate();
-            if (template == null)
-            {
-                return;
-            }
-            ParticleSystem smoke = Object.Instantiate(template, __instance.transform);
+            return false;
+        }
+    }
+
+    private static ParticleSystem SmokeOf(ItemCooking cooking, bool create)
+    {
+        Transform existing = cooking.transform.Find(SunSmokeName);
+        if (existing != null || !create)
+        {
+            return existing != null ? existing.GetComponent<ParticleSystem>() : null;
+        }
+        ItemParticles particles = cooking.item != null ? cooking.item.particles : null;
+        ParticleSystem template = particles != null && particles.smoke != null ? particles.smoke : SmokeTemplate();
+        if (template == null)
+        {
+            return null;
+        }
+        ParticleSystem smoke = Object.Instantiate(template, cooking.transform);
+        smoke.name = SunSmokeName;
+        if (template.transform.IsChildOf(cooking.transform))
+        {
+            // The item's own smoke: same spot.
+            smoke.transform.SetPositionAndRotation(template.transform.position, template.transform.rotation);
+        }
+        else
+        {
+            // A backpack's: where it sits on the backpack.
             smoke.transform.localPosition = template.transform.localPosition;
             smoke.transform.localRotation = template.transform.localRotation;
-            smoke.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-            particles.smoke = smoke;
         }
+        smoke.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        Thicken(smoke);
+        return smoke;
+    }
+
+    /// <summary>Three times the particles, bigger, longer-lived and darker than cooking smoke.</summary>
+    private static void Thicken(ParticleSystem smoke)
+    {
+        ParticleSystem.MainModule main = smoke.main;
+        main.startSizeMultiplier *= 1.6f;
+        main.startLifetimeMultiplier *= 1.3f;
+        main.maxParticles = Mathf.Max(main.maxParticles, 2000);
+        main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.32f, 0.3f, 0.3f, 1f), new Color(0.48f, 0.47f, 0.47f, 1f));
+        ParticleSystem.EmissionModule emission = smoke.emission;
+        emission.rateOverTimeMultiplier *= 3f;
     }
 
     private static ParticleSystem smokeTemplate;

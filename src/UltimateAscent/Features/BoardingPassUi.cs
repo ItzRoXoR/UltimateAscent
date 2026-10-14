@@ -16,7 +16,7 @@ namespace UltimateAscent.Features;
 /// <item>The arrows wrap around: left from Tenderfoot jumps to the highest unlocked ascent, right
 /// from the end of the list goes back to Tenderfoot.</item>
 /// <item>The boarding pass opens on the ascent chosen in the config ("Default Ascent").</item>
-/// <item>The reward line shows the next extended ascent to beat.</item>
+/// <item>Ascents 9-25 give no reward, so their reward line stays hidden.</item>
 /// <item>Ascents 9-25 can only be started when every player has this mod in the same version.</item>
 /// </list>
 /// </summary>
@@ -170,17 +170,10 @@ internal static class BoardingPassUi
                     __instance.decrementAscentButton.interactable = true;
                 }
             }
-            if (!custom && IsRegular(index) && index >= 0 && __instance.ascentData != null && index + 2 < __instance.ascentData.ascents.Count)
+            if (!custom && IsRegular(index) && index >= Lvl.First)
             {
-                // The reward line belongs to the next ascent to beat (the game hides it past ascent 8).
-                bool nextToBeat = index == Progress.Earned;
-                __instance.reward.gameObject.SetActive(nextToBeat);
-                if (nextToBeat)
-                {
-                    AscentData.AscentInstanceData data = __instance.ascentData.ascents[index + 2];
-                    __instance.rewardText.text = data.localizedReward;
-                    __instance.rewardImage.color = data.color;
-                }
+                // Ascents 9-25 have no reward, so no reward line.
+                __instance.reward.gameObject.SetActive(false);
             }
             RefreshStart(__instance);
         }

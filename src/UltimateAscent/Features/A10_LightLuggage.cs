@@ -5,7 +5,10 @@ using UnityEngine;
 
 namespace UltimateAscent.Features;
 
-/// <summary>Ascent 10 (More Ascents): big and Explorer's luggage have a 50% chance to contain a single item.</summary>
+/// <summary>
+/// Ascent 10 (More Ascents): big and Explorer's luggage have a 50% chance to contain a single item
+/// (not True Final Ascent's supply drops, which are its own).
+/// </summary>
 [HarmonyPatch(typeof(Spawner), nameof(Spawner.SpawnItems))]
 internal static class A10_LightLuggage
 {
@@ -16,7 +19,7 @@ internal static class A10_LightLuggage
             return;
         }
         string name = __instance.gameObject.name;
-        if (__instance is RespawnChest || !(__instance is Luggage) || !(name.StartsWith("LuggageBig") || name.StartsWith("LuggageEpic")))
+        if (__instance is RespawnChest || !(__instance is Luggage) || !(name.StartsWith("LuggageBig") || name.StartsWith("LuggageEpic")) || Compat.Tfa.Spawned(__instance))
         {
             return;
         }

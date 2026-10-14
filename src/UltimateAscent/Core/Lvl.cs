@@ -48,6 +48,6 @@ internal static class Lvl
     internal const int HotSun = 23;
     // More Ascents: going unconscious is instant death.
     internal const int NoUnconscious = 24;
-    // 13DDA: all weather everywhere (TFA Apocalypse: two weathers at once, plus tornadoes).
+    // 13DDA: all weather everywhere (TFA Apocalypse: TFA's own weather, plus tornadoes).
     internal const int AllWeather = 25;
 }

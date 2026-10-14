@@ -21,37 +21,57 @@ internal static class A21_PainfulLuggage
 
     private static void Prefix(Luggage __instance, Character interactor)
     {
-        if (!Rules.Enabled(Lvl.PainfulLuggage) || !Rules.Owns(interactor) || __instance.state != Luggage.LuggageState.Closed)
+        if (!Rules.Enabled(Lvl.PainfulLuggage) || !Rules.Owns(interactor) || __instance.state != Luggage.LuggageState.Closed || Compat.Tfa.Spawned(__instance))
         {
             return;
         }
         CharacterAfflictions afflictions = interactor.refs.afflictions;
-        string name = __instance.gameObject.name;
         if (__instance.CompareTag("ClownLuggage"))
         {
             ClownTrick(afflictions);
         }
-        else if (name.StartsWith("LuggageSmall"))
+        else if (Pain(__instance, out float injury, out float curse))
         {
-            afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Injury, 0.06f);
+            afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Injury, injury);
+            if (curse > 0f)
+            {
+                afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Curse, curse);
+            }
+        }
+    }
+
+    /// <summary>What opening this luggage costs (not the clown chest, whose trick is random).</summary>
+    internal static bool Pain(Luggage luggage, out float injury, out float curse)
+    {
+        injury = 0f;
+        curse = 0f;
+        if (luggage == null || luggage.CompareTag("ClownLuggage"))
+        {
+            return false;
+        }
+        string name = luggage.gameObject.name;
+        if (name.StartsWith("LuggageSmall"))
+        {
+            injury = 0.06f;
         }
         else if (name.StartsWith("LuggageBig"))
         {
-            afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Injury, 0.1f);
+            injury = 0.1f;
         }
         else if (name.StartsWith("LuggageEpic"))
         {
-            afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Injury, 0.16f);
+            injury = 0.16f;
         }
-        else if (__instance is RespawnChest || name.StartsWith("scout statue"))
+        else if (luggage is RespawnChest || name.StartsWith("scout statue"))
         {
-            afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Injury, 0.2f);
-            afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Curse, 0.06f);
+            injury = 0.2f;
+            curse = 0.06f;
         }
         else
         {
-            afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Injury, 0.1f);
+            injury = 0.1f;
         }
+        return true;
     }
 
     /// <summary>Six tricks with weight 2 each, blindness with weight 1.</summary>

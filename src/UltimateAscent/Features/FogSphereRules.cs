@@ -82,7 +82,11 @@ internal static class FogSphereRules
         }
     }
 
-    /// <summary>Colours the fog purple once it is poisonous.</summary>
+    /// <summary>
+    /// Colours the fog purple once it is poisonous (its tint is its material's one colour; its swirls
+    /// are textures). True Final Ascent's Ice Fog borrows the same sphere for its own fog (ice blue,
+    /// chilling, never the game's fog damage); it keeps its own colour.
+    /// </summary>
     [HarmonyPatch(typeof(FogSphere), nameof(FogSphere.SetSharderVars))]
     private static class Tint
     {
@@ -94,6 +98,7 @@ internal static class FogSphereRules
 
         private static ConditionalWeakTable<FogSphere, State> states = new ConditionalWeakTable<FogSphere, State>();
         private static readonly int TintColor = Shader.PropertyToID("_FogtintColor");
+        private static readonly Color Purple = new Color(0.5f, 0.05f, 0.5f, 0f);
 
         private static void Prefix(FogSphere __instance)
         {
@@ -106,18 +111,17 @@ internal static class FogSphereRules
 
         private static void Postfix(FogSphere __instance)
         {
-            if (__instance.rend == null || __instance.mpb == null || !Map.Ready || !Rules.InRun || !Rules.Enabled(Lvl.ExtremeWeather))
+            if (__instance.rend == null || __instance.mpb == null || !Map.Ready || !Rules.InRun || !Rules.Enabled(Lvl.ExtremeWeather) || Compat.Tfa.IceFogDrawing)
             {
                 return;
             }
-            Color color = new Color(0.5f, 0.05f, 0.5f, 0f);
             if (!states.TryGetValue(__instance, out State state))
             {
                 state = new State();
                 states.Add(__instance, state);
             }
             __instance.rend.GetPropertyBlock(state.original);
-            __instance.mpb.SetColor(TintColor, color);
+            __instance.mpb.SetColor(TintColor, Purple);
             __instance.rend.SetPropertyBlock(__instance.mpb);
             state.applied = true;
         }

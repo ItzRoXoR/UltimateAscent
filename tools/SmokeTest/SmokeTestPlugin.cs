@@ -14,6 +14,7 @@ using UltimateAscent.Core;
 using UltimateAscent.Features;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 using Zorro.Core;
 using Status = CharacterAfflictions.STATUSTYPE;
 
@@ -24,7 +25,8 @@ namespace UltimateAscent.SmokeTest;
 /// inside the game: title screen, airport and boarding pass, then a run on today's map (the beach,
 /// then a jump to the Alpine segment). Only active when PEAK is started with "--ua-smoketest";
 /// "--ua-smoketest-ascent=N" picks the ascent (default 25) and "--ua-smoketest-noapocalypse" switches
-/// True Final Ascent's Apocalypse mode off for this session (in memory only).
+/// True Final Ascent's Apocalypse mode off for this session (in memory only); "--ua-smoketest-only=a,b"
+/// runs only the run steps whose names contain one of the words (for quick checks of one rule).
 /// Results go to the BepInEx log and to BepInEx/UltimateAscent.SmokeTest.txt; the game quits at the end.
 /// </summary>
 [BepInPlugin(Guid, "Ultimate Ascent Smoke Test", "1.0.0")]
@@ -35,6 +37,8 @@ public sealed class SmokeTestPlugin : BaseUnityPlugin
     public const string Switch = "--ua-smoketest";
     private const string AscentSwitch = Switch + "-ascent=";
     private const string NoApocalypseSwitch = Switch + "-noapocalypse";
+    private const string ApocalypseSwitch = Switch + "-apocalypse";
+    private const string OnlySwitch = Switch + "-only=";
 
     private void Awake()
     {
@@ -45,17 +49,22 @@ public sealed class SmokeTestPlugin : BaseUnityPlugin
             return;
         }
         int ascent = Lvl.Last;
+        string[] only = null;
         foreach (string arg in args)
         {
             if (arg.StartsWith(AscentSwitch) && int.TryParse(arg.Substring(AscentSwitch.Length), out int parsed))
             {
                 ascent = Mathf.Clamp(parsed, Lvl.First, Lvl.Last);
             }
+            else if (arg.StartsWith(OnlySwitch))
+            {
+                only = arg.Substring(OnlySwitch.Length).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+            }
         }
         GameObject host = new GameObject("UltimateAscentSmokeTest");
         DontDestroyOnLoad(host);
         host.hideFlags = HideFlags.HideAndDontSave;
-        host.AddComponent<Runner>().Begin(Logger, ascent, args.Contains(NoApocalypseSwitch));
+        host.AddComponent<Runner>().Begin(Logger, ascent, args.Contains(NoApocalypseSwitch), args.Contains(ApocalypseSwitch), only);
     }
 }
 
@@ -71,6 +80,9 @@ internal sealed class Runner : MonoBehaviour
     private ManualLogSource log;
     private int target;
     private bool noApocalypse;
+
+    /// <summary>Switch TFA's Apocalypse mode on for the test (in memory only), whatever the player last chose.</summary>
+    private bool apocalypseOn;
     private string resultPath;
     private int passed;
     private int failed;
@@ -89,7 +101,6 @@ internal sealed class Runner : MonoBehaviour
     /// <summary>TFA's Apocalypse mode runs the weather of this climb.</summary>
     private bool apocalypse;
     private bool expectingDeath;
-    private string secondWeatherSeen;
 
     private Item held;
 
@@ -103,17 +114,26 @@ internal sealed class Runner : MonoBehaviour
     private bool apocalypseChanged;
     private bool savedApocalypse;
 
-    internal void Begin(ManualLogSource log, int target, bool noApocalypse)
+    /// <summary>Only the run steps whose names contain one of these words (null: all).</summary>
+    private string[] only;
+
+    internal void Begin(ManualLogSource log, int target, bool noApocalypse, bool apocalypseOn, string[] only)
     {
         this.log = log;
         this.target = target;
         this.noApocalypse = noApocalypse;
+        this.apocalypseOn = apocalypseOn;
+        this.only = only;
         resultPath = Path.Combine(Paths.BepInExRootPath, "UltimateAscent.SmokeTest.txt");
         File.WriteAllText(resultPath, $"Ultimate Ascent smoke test, ascent {target}{(noApocalypse ? ", Apocalypse off" : "")}, {DateTime.Now:yyyy-MM-dd HH:mm:ss}{Environment.NewLine}");
         startedAt = Time.realtimeSinceStartup;
         Harmony harmony = new Harmony(SmokeTestPlugin.Guid);
         harmony.CreateClassProcessor(typeof(ShakeCounter)).Patch();
         harmony.CreateClassProcessor(typeof(PoisonFxCounter)).Patch();
+        harmony.CreateClassProcessor(typeof(NoSteamStats)).Patch();
+        harmony.CreateClassProcessor(typeof(NoAchievements)).Patch();
+        harmony.CreateClassProcessor(typeof(NoRunSave)).Patch();
+        harmony.CreateClassProcessor(typeof(FogCalls)).Patch();
         log.LogInfo($"Smoke test started (ascent {target}).");
         StartCoroutine(Guard("smoke test", Main()));
     }
@@ -274,7 +294,10 @@ internal sealed class Runner : MonoBehaviour
         return total;
     }
 
-    /// <summary>Collects status additions over time (optionally only matching ones); <see cref="Stop"/> ends it.</summary>
+    /// <summary>
+    /// Collects status additions over time (optionally only matching ones); <see cref="Stop"/> ends it.
+    /// Without a filter it leaves out what the rising fog adds, which can reach the scout during any check.
+    /// </summary>
     private sealed class Meter
     {
         private readonly CharacterAfflictions afflictions;
@@ -299,7 +322,7 @@ internal sealed class Runner : MonoBehaviour
 
         private void OnAdded(Status added, float amount)
         {
-            if (added == type && (filter == null || filter(amount)))
+            if (added == type && (filter == null ? FogCalls.Depth == 0 : filter(amount)))
             {
                 Total += amount;
                 Count++;
@@ -377,8 +400,35 @@ internal sealed class Runner : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// The frame rate the test runs at, at most: PEAK is known to crash now and then at very high frame
+    /// rates (its developers advise a cap). Set in memory only; the player's setting stays as it is.
+    /// </summary>
+    private const int TestFrameRate = 120;
+
+    private int savedFrameRate = int.MinValue;
+
+    private void CapFrameRate()
+    {
+        int current = Application.targetFrameRate;
+        if (current > 0 && current <= TestFrameRate)
+        {
+            return;
+        }
+        if (savedFrameRate == int.MinValue)
+        {
+            savedFrameRate = current;
+            Info("frame rate capped for the test", $"{TestFrameRate} fps (the game's setting: {(current > 0 ? current.ToString() : "uncapped")}; PEAK is known to crash at very high frame rates)");
+        }
+        Application.targetFrameRate = TestFrameRate;
+    }
+
     private void Update()
     {
+        if (!finished)
+        {
+            CapFrameRate();
+        }
         if (!finished && Time.realtimeSinceStartup - startedAt > WatchdogSeconds)
         {
             Fail("watchdog", $"the test took longer than {WatchdogSeconds:F0} s");
@@ -426,6 +476,10 @@ internal sealed class Runner : MonoBehaviour
         finished = true;
         care = false;
         shielded = false;
+        if (savedFrameRate != int.MinValue)
+        {
+            Application.targetFrameRate = savedFrameRate;
+        }
         if (configChanged)
         {
             // The test settings were never written to the config file; put the old values back.
@@ -476,13 +530,15 @@ internal sealed class Runner : MonoBehaviour
         yield return new WaitForSecondsRealtime(3f);
         Check("solo session is offline", PhotonNetwork.OfflineMode && PhotonNetwork.InRoom, $"offline {PhotonNetwork.OfflineMode}, in room {PhotonNetwork.InRoom}");
 
-        bool departed = false;
-        Step("boarding pass", () => departed = BoardingPassChecks());
-        if (!departed)
+        bool ready = false;
+        Step("boarding pass", () => ready = BoardingPassChecks());
+        if (!ready)
         {
             Finish();
             yield break;
         }
+        yield return CustomRunScreen();
+        Step("departure", Depart);
 
         yield return Until("the island", 300f, () => Rules.InRun && !LoadingScreenHandler.loading && MapHandler.ExistsAndInitialized && Local != null && Local.data != null);
         if (aborted)
@@ -497,10 +553,6 @@ internal sealed class Runner : MonoBehaviour
         }
         float wake = Time.time;
         Protect(true);
-        if (apocalypse)
-        {
-            StartCoroutine(WatchSecondWeather(wake));
-        }
         yield return new WaitForSeconds(2f);
 
         (string name, Func<IEnumerator> run)[] steps =
@@ -518,12 +570,16 @@ internal sealed class Runner : MonoBehaviour
             ("eating ticks (14)", EatTick),
             ("burned items (17)", BurnedItemHeat),
             ("burned backpack (17)", BackpackHeat),
+            ("Climbing Chalk (9, 14)", ClimbingChalk),
+            ("custom run: chalk and Lightweight Parasol switches", () => Now(() => Step("custom-run switches", CustomRunSwitches))),
+            ("TFA's Apocalypse events stay TFA's", TfaEvents),
             ("Bing Bong (20)", () => BingBong(wake)),
-            ("fog (9)", Fog),
+            ("fog (9, 18)", Fog),
             ("weather (25)", () => Weather(wake)),
             ("bee ambush (17)", BeeAmbush),
             ("bee moments (17)", BeeMoments),
             ("jellyfish (17)", Jellyfish),
+            ("first campfire and the fog after it (18)", FirstCampfire),
             ("second segment (16, 17)", SecondSegment),
             ("Alpine (18, 23)", Alpine),
             ("after the Alps (18)", AfterAlps),
@@ -533,6 +589,10 @@ internal sealed class Runner : MonoBehaviour
         };
         foreach ((string name, Func<IEnumerator> run) in steps)
         {
+            if (only != null && !only.Any(word => name.IndexOf(word, StringComparison.OrdinalIgnoreCase) >= 0))
+            {
+                continue;
+            }
             if (ScoutLost)
             {
                 Info("the remaining checks are skipped", "True Final Ascent's Apocalypse weather knocked the scout out");
@@ -549,17 +609,49 @@ internal sealed class Runner : MonoBehaviour
         yield break;
     }
 
-    /// <summary>With TFA's Apocalypse mode, ascent 25 adds a second Apocalypse weather to each of TFA's.</summary>
-    private IEnumerator WatchSecondWeather(float wake)
+    /// <summary>
+    /// What the Custom Run switches decide in a custom run, checked within one frame of this run: the
+    /// game's custom-run flag and the two switches are set in memory (nothing is saved) and put back.
+    /// </summary>
+    private void CustomRunSwitches()
     {
-        while (!finished && Time.time < wake + 120f && secondWeatherSeen == null)
+        Item chalk = ItemByName(ClimbingChalkItem.PrefabName);
+        Item roots = ItemByName(A14_Items.RootsParasolPrefab);
+        Item parasol = ItemByName("Parasol");
+        if (chalk == null || roots == null || parasol == null)
         {
-            string second = Compat.Tfa.CurrentSecondary;
-            if (!string.IsNullOrEmpty(second))
+            Fail("custom-run switches", "an item is missing from the item database");
+            return;
+        }
+        Check("in this run (ascent 9+) the chalk may spawn and the Roots parasol is the Lightweight Parasol", chalk.IsValidToSpawn() && Plain(roots.GetName()) == "LIGHTWEIGHT PARASOL",
+            $"chalk may spawn {chalk.IsValidToSpawn()}, Roots parasol '{Plain(roots.GetName())}'");
+        string[] names = { chalk.gameObject.name, roots.gameObject.name, parasol.gameObject.name };
+        int[] saved = names.Select(n => RunSettings.GetItemValue(n, forceGetCustomValue: true)).ToArray();
+        bool wasCustom = RunSettings.IsCustomRun;
+        try
+        {
+            RunSettings.IsCustomRun = true;
+            bool Spawns(Item item, int chalkOn, int rootsOn, int parasolOn)
             {
-                secondWeatherSeen = $"\"{second}\" next to TFA's \"{Net.GetRoom("APOW") as string}\" after {Time.time - wake:F0} s";
+                RunSettings.SetItemValue(names[0], chalkOn);
+                RunSettings.SetItemValue(names[1], rootsOn);
+                RunSettings.SetItemValue(names[2], parasolOn);
+                return item.IsValidToSpawn();
             }
-            yield return new WaitForSeconds(0.5f);
+            Check("custom run: the chalk spawns when its switch is on, not when it is off", Spawns(chalk, 1, 1, 1) && !Spawns(chalk, 0, 1, 1),
+                $"on {Spawns(chalk, 1, 1, 1)}, off {Spawns(chalk, 0, 1, 1)}");
+            Check("custom run: the Lightweight Parasol follows its own switch, not the Parasol's", Spawns(roots, 1, 1, 0) && !Spawns(roots, 1, 0, 1) && Spawns(parasol, 1, 0, 1),
+                $"own on + Parasol off {Spawns(roots, 1, 1, 0)}, own off + Parasol on {Spawns(roots, 1, 0, 1)}, the Parasol itself {Spawns(parasol, 1, 0, 1)}");
+            Check("custom run: the Roots parasol is the Lightweight Parasol (its name, no weight)", Plain(roots.GetName()) == "LIGHTWEIGHT PARASOL" && roots.CarryWeight == 0,
+                $"'{Plain(roots.GetName())}', weight {roots.CarryWeight}");
+        }
+        finally
+        {
+            for (int i = 0; i < names.Length; i++)
+            {
+                RunSettings.SetItemValue(names[i], saved[i]);
+            }
+            RunSettings.IsCustomRun = wasCustom;
         }
     }
 
@@ -576,12 +668,9 @@ internal sealed class Runner : MonoBehaviour
             CheckWeatherPhases();
             yield break;
         }
-        float end = Time.time + 30f;
-        while (secondWeatherSeen == null && Time.time < end && !ScoutLost)
-        {
-            yield return null;
-        }
-        Check("a second Apocalypse weather joins TFA's (25)", secondWeatherSeen != null, secondWeatherSeen ?? "none within 66 s of waking up");
+        // With Apocalypse mode the weather is TFA's: ascent 25 adds no weather of its own (only its tornadoes).
+        Check("the weather is left to TFA's Apocalypse (25)", !A25_AllWeather.DrivesVanillaWeather,
+            $"vanilla weather driven {A25_AllWeather.DrivesVanillaWeather}, TFA's weather now '{Compat.Tfa.Weather}'");
     }
 
     private void CheckCatalog()
@@ -599,7 +688,6 @@ internal sealed class Runner : MonoBehaviour
             }
             string title = entry.localizedTitle;
             string description = entry.localizedDescription;
-            string reward = entry.localizedReward;
             if (string.IsNullOrEmpty(title) || !title.Contains(level.ToString()))
             {
                 problems.Add($"{level}: title '{title}'");
@@ -608,11 +696,11 @@ internal sealed class Runner : MonoBehaviour
             {
                 problems.Add($"{level}: description '{description}'");
             }
-            if (string.IsNullOrEmpty(reward) || reward.IndexOf("ULTIMATEASCENT", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (!string.IsNullOrEmpty(entry.titleReward))
             {
-                problems.Add($"{level}: reward '{reward}'");
+                problems.Add($"{level}: has a reward '{entry.titleReward}'");
             }
-            foreach (string key in new[] { AscentCatalog.TitleKey(level), LocalizedText.GetDescriptionIndex(AscentCatalog.TitleKey(level)), AscentCatalog.RewardKey(level) })
+            foreach (string key in new[] { AscentCatalog.TitleKey(level), LocalizedText.GetDescriptionIndex(AscentCatalog.TitleKey(level)) })
             {
                 if (!LocalizedText.mainTable.TryGetValue(key.ToUpperInvariant(), out List<string> texts) || texts.Count < languages || texts.Any(string.IsNullOrEmpty))
                 {
@@ -620,9 +708,103 @@ internal sealed class Runner : MonoBehaviour
                 }
             }
         }
-        Check("every ascent has a title, description and reward in every language", problems.Count == 0,
+        Check("every ascent has a title and description in every language, and no reward", problems.Count == 0,
             problems.Count == 0 ? $"{Lvl.Count} ascents, {languages} languages" : string.Join("; ", problems.Take(8)));
         Info("current language", LocalizedText.CURRENT_LANGUAGE.ToString());
+    }
+
+    /// <summary>
+    /// The Custom Run screen, opened as a player does: the boarding pass's custom-run button, then its
+    /// edit button. The Climbing Chalk and the Lightweight Parasol have switches of their own; each is
+    /// clicked off and on again (the game saves the switches), and the boarding pass is left as it was.
+    /// </summary>
+    private IEnumerator CustomRunScreen()
+    {
+        BoardingPass pass = GUIManager.instance.boardingPass;
+        AirportCheckInKiosk kiosk = FindAnyObjectByType<AirportCheckInKiosk>();
+        CustomOptionsWindow window = pass != null ? pass.customOptionsWindow : null;
+        if (kiosk == null || window == null)
+        {
+            Fail("the Custom Run screen can be opened", $"kiosk {kiosk != null}, screen {window != null}");
+            yield break;
+        }
+        bool wasCustom = RunSettings.IsCustomRun;
+        Step("open the Custom Run screen", () =>
+        {
+            pass.kiosk = kiosk;
+            if (!pass.isOpen)
+            {
+                pass.Open();
+            }
+            if (!RunSettings.IsCustomRun)
+            {
+                pass.customRunButton.onClick.Invoke();
+            }
+            pass.customOptionsButton.onClick.Invoke();
+        });
+        yield return new WaitForSecondsRealtime(1.5f);
+
+        (string prefab, string after, string label)[] ours =
+        {
+            (ClimbingChalkItem.PrefabName, ClimbingChalkItem.EnergyDrinkPrefab, "CLIMBING CHALK"),
+            (A14_Items.RootsParasolPrefab, "Parasol", "LIGHTWEIGHT PARASOL"),
+        };
+        foreach ((string prefab, string after, string label) in ours)
+        {
+            CustomOptionItemToggle toggle = null;
+            Step("Custom Run switch: " + label, () =>
+            {
+                List<CustomOptionItemToggle> listed = window.spawnPoolList.GetComponentsInChildren<CustomOptionItemToggle>(true).ToList();
+                bool mystical = window.mysticalSpawnPoolList.GetComponentsInChildren<CustomOptionItemToggle>(true).Any(t => t.item != null && t.item.gameObject.name == prefab);
+                int index = listed.FindIndex(t => t.item != null && t.item.gameObject.name == prefab);
+                int previous = listed.FindIndex(t => t.item != null && t.item.gameObject.name == after);
+                toggle = index >= 0 ? listed[index] : null;
+                string shown = toggle != null && toggle.text != null && toggle.text.tmp != null ? Plain(toggle.text.tmp.text) : "";
+                Check($"the Custom Run screen lists the {label.ToLowerInvariant()} (after the {after.ToLowerInvariant()})",
+                    toggle != null && toggle.gameObject.activeInHierarchy && shown == label && index == previous + 1 && !mystical,
+                    $"listed at {index} of {listed.Count} (the {after} at {previous}), named '{shown}', among the mystical items {mystical}");
+                if (toggle == null)
+                {
+                    return;
+                }
+                ScrollRect scroll = toggle.GetComponentInParent<ScrollRect>();
+                if (scroll != null && listed.Count > 1)
+                {
+                    scroll.verticalNormalizedPosition = Mathf.Clamp01(1f - (float)index / (listed.Count - 1));
+                }
+            });
+            if (toggle == null)
+            {
+                continue;
+            }
+            yield return new WaitForSecondsRealtime(0.5f);
+            Screenshot("custom-run-" + label.ToLowerInvariant().Replace(' ', '-'));
+            // The picture is taken at the end of the frame: the click waits for it.
+            yield return new WaitForSecondsRealtime(0.5f);
+            int before = RunSettings.GetItemValue(toggle.item, forceGetCustomValue: true);
+            Step("Custom Run switch clicked: " + label, () => toggle.OnClick());
+            yield return new WaitForSecondsRealtime(0.75f);
+            int clicked = RunSettings.GetItemValue(toggle.item, forceGetCustomValue: true);
+            bool shownOn = toggle.toggle.isOn;
+            Step("Custom Run switch clicked back: " + label, () => toggle.OnClick());
+            yield return new WaitForSecondsRealtime(0.5f);
+            int back = RunSettings.GetItemValue(toggle.item, forceGetCustomValue: true);
+            Check($"the {label.ToLowerInvariant()}'s switch turns it off and on", before != clicked && shownOn == (clicked == 1) && back == before && toggle.toggle.isOn == (back == 1),
+                $"{before} -> {clicked} (shown {(shownOn ? "on" : "off")}) -> {back}");
+        }
+
+        Step("close the Custom Run screen", () =>
+        {
+            // Back on the boarding pass, which the screen reopens, as a normal run again.
+            window.closeButtonCustom.onClick.Invoke();
+            if (RunSettings.IsCustomRun != wasCustom)
+            {
+                pass.customRunButton.onClick.Invoke();
+            }
+        });
+        yield return new WaitForSecondsRealtime(1f);
+        Check("closing the Custom Run screen goes back to the boarding pass", pass.isOpen && !window.isOpen && RunSettings.IsCustomRun == wasCustom,
+            $"boarding pass open {pass.isOpen}, screen open {window.isOpen}, custom run {RunSettings.IsCustomRun}");
     }
 
     private bool BoardingPassChecks()
@@ -677,17 +859,36 @@ internal sealed class Runner : MonoBehaviour
         pass.ascentIndex = target;
         pass.UpdateAscent();
         Check("the start button can be used", pass.startGameButton.interactable);
-        if (noApocalypse)
-        {
-            Step("switch TFA's Apocalypse off", ApocalypseOff);
-        }
-        pass.StartGame();
-        Info("departure", $"ascent {target} started from the boarding pass");
         return true;
     }
 
-    /// <summary>TFA's Apocalypse mode replaces the vanilla weather; switched off in memory to test the storms of ascent 25.</summary>
-    private void ApocalypseOff()
+    private void Depart()
+    {
+        BoardingPass pass = GUIManager.instance.boardingPass;
+        if (RunSettings.IsCustomRun)
+        {
+            Fail("the boarding pass is back on a normal run before departure");
+            RunSettings.IsCustomRun = false;
+        }
+        pass.ascentIndex = target;
+        pass.UpdateAscent();
+        if (noApocalypse)
+        {
+            Step("switch TFA's Apocalypse off", () => SetApocalypse(false));
+        }
+        else if (apocalypseOn)
+        {
+            Step("switch TFA's Apocalypse on", () => SetApocalypse(true));
+        }
+        pass.StartGame();
+        Info("departure", $"ascent {target} started from the boarding pass");
+    }
+
+    /// <summary>
+    /// TFA's Apocalypse mode replaces the vanilla weather: switched off in memory to test the storms of
+    /// ascent 25, or on to test TFA's events; put back afterwards.
+    /// </summary>
+    private void SetApocalypse(bool on)
     {
         if (!Compat.Tfa.Present)
         {
@@ -702,13 +903,13 @@ internal sealed class Runner : MonoBehaviour
             return;
         }
         savedApocalypse = (bool)wanted.GetValue(null);
-        apocalypseRestore.Invoke(null, new object[] { false });
+        apocalypseRestore.Invoke(null, new object[] { on });
         apocalypseChanged = true;
         if (PhotonNetwork.InRoom)
         {
-            PhotonNetwork.CurrentRoom.SetCustomProperties(new ExitGames.Client.Photon.Hashtable { { "APO", false } });
+            PhotonNetwork.CurrentRoom.SetCustomProperties(new ExitGames.Client.Photon.Hashtable { { "APO", on } });
         }
-        Info("TFA's Apocalypse mode is off for this test", $"it was {(savedApocalypse ? "on" : "off")}; nothing is saved");
+        Info($"TFA's Apocalypse mode is {(on ? "on" : "off")} for this test", $"it was {(savedApocalypse ? "on" : "off")}; nothing is saved");
     }
 
     private void RunBasics()
@@ -872,8 +1073,8 @@ internal sealed class Runner : MonoBehaviour
 
     /// <summary>
     /// Only what shields the scout from the sun roasts: a closed parasol in the sun stays cool, an open
-    /// one keeps the sun's heat off and smokes while it roasts (45 s), then is fully burned in one go
-    /// and stays in the hand.
+    /// one keeps the sun's heat off, roasts clean for its first quarter, then smokes heavily (30 s in
+    /// all for a parasol, half in the Mesa), is fully burned in one go and stays in the hand.
     /// </summary>
     private IEnumerator Roasting()
     {
@@ -920,16 +1121,26 @@ internal sealed class Runner : MonoBehaviour
         }
         float seconds = Time.time - start;
         float progress = Roasted(item);
-        float expected = seconds / 45f;
-        Check("an open parasol in the sun roasts in 45 s (23)", Mathf.Abs(progress - expected) < expected * 0.15f, $"{progress:0.000} roasted in {seconds:F1} s (expected {expected:0.000})");
+        float total = Map.InMesa ? 15f : 30f;
+        float expected = seconds / total;
+        Check($"an open parasol in the sun roasts in {total:F0} s (23)", Mathf.Abs(progress - expected) < expected * 0.15f, $"{progress:0.000} roasted in {seconds:F1} s (expected {expected:0.000})");
         Check("the open parasol keeps the sun's heat off (23)", sunHeat.Total < 0.001f, $"{sunHeat.Total:0.0000} heat in {seconds:F1} s");
         if (!A23_HotSun.exposures.TryGetValue(item, out A23_HotSun.Exposure exposure))
         {
             yield break;
         }
-        ParticleSystem smoke = item.particles != null ? item.particles.smoke : null;
-        Check("the roasting parasol smokes, still uncooked (23)", exposure.smoking && smoke != null && smoke.isEmitting && BurnedItems.CookedLevel(item) == 0,
-            $"smoking {exposure.smoking}, smoke {(smoke == null ? "none" : smoke.isEmitting ? "rising" : "off")}, cooked {BurnedItems.CookedLevel(item)}");
+        ParticleSystem SunSmoke() => item != null && item.transform.Find(A23_HotSun.SunSmokeName) is Transform t ? t.GetComponent<ParticleSystem>() : null;
+        if (!Map.InMesa)
+        {
+            Check("no smoke for the first quarter of its time (23)", !exposure.smoking && (SunSmoke() == null || !SunSmoke().isEmitting),
+                $"smoking {exposure.smoking} after {seconds:F1} s");
+        }
+        // Past the clean quarter: it smokes from here on.
+        exposure.progress = Mathf.Max(exposure.progress, 0.3f);
+        yield return new WaitForSeconds(0.5f);
+        ParticleSystem smoke = SunSmoke();
+        Check("the roasting parasol then smokes heavily, still uncooked (23)", exposure.smoking && smoke != null && smoke.isEmitting && BurnedItems.CookedLevel(item) == 0,
+            $"smoking {exposure.smoking}, smoke {(smoke == null ? "none" : smoke.isEmitting ? $"rising, {smoke.emission.rateOverTimeMultiplier:F0}/s" : "off")}, cooked {BurnedItems.CookedLevel(item)}");
         // Close to the end of its time: from here it burns in the sun as usual.
         exposure.progress = Mathf.Max(exposure.progress, 0.97f);
         float end = Time.realtimeSinceStartup + 5f;
@@ -974,9 +1185,13 @@ internal sealed class Runner : MonoBehaviour
     private IEnumerator SecondSegment()
     {
         Character local = Local;
-        MapHandler.JumpToSegment(Segment.Tropics);
-        yield return new WaitForSeconds(4f);
-        Info("jumped to the second segment", $"place {Map.CurrentPlace}, biome {Map.CurrentBiome}");
+        // The first campfire, when lit, has already brought the scouts here.
+        if (Singleton<MapHandler>.Instance.currentSegment != (int)Segment.Tropics)
+        {
+            MapHandler.JumpToSegment(Segment.Tropics);
+            yield return new WaitForSeconds(4f);
+        }
+        Info("in the second segment", $"place {Map.CurrentPlace}, biome {Map.CurrentBiome}");
         Step("Tropics only in the second segment (17)", CheckTropicsOnly);
         if (Map.CurrentPlace != Place.Tropics)
         {
@@ -1149,6 +1364,8 @@ internal sealed class Runner : MonoBehaviour
         Item food = SingletonAsset<ItemDatabase>.Instance.itemLookup.Values
             .Where(i => i != null && (tick == null || i.itemID != tick.itemID) && i.UIData != null && i.UIData.canPocket)
             .Where(i => i.GetComponent<Action_RestoreHunger>() is Action_RestoreHunger restore && restore.restorationAmount >= 0.05f && restore.restorationAmount <= 0.6f)
+            // Plain food only: no poison, no random mushroom effect, no status of its own.
+            .Where(i => i.GetComponent<Action_InflictPoison>() == null && i.GetComponent<Action_RandomMushroomEffect>() == null && !i.GetComponents<Action_ModifyStatus>().Any(m => m.changeAmount > 0f))
             .OrderBy(i => i.itemID)
             .FirstOrDefault();
         if (food == null)
@@ -1217,6 +1434,515 @@ internal sealed class Runner : MonoBehaviour
             Check("control: below ascent 14 a tick still feeds", hungerActions.Count > 0 && below < 0.499f, $"hunger 0.500 -> {below:0.000} at ascent {Lvl.WorseItems - 1}");
             Afflictions.SetStatus(Status.Hunger, 0f);
         });
+    }
+
+    /// <summary>
+    /// The Climbing Chalk as a player meets it: it comes out of a suitcase, goes into a backpack and a
+    /// fanny pack and back into the hand, a use is started and let go (the rub stops), then held for
+    /// its 2 s (the rub plays all along, dust, used up), its effect on the climbing lunge, the white
+    /// hands and the HUD icon, everything going away again when the effect runs out, and a chalk
+    /// burned as Jetpack fuel.
+    /// </summary>
+    private IEnumerator ClimbingChalk()
+    {
+        Item prefab = ItemByName(ClimbingChalkItem.PrefabName);
+        Item drink = ItemByName("Energy Drink");
+        if (prefab == null || drink == null)
+        {
+            Fail("the Climbing Chalk and the Energy Drink are in the item database");
+            yield break;
+        }
+        Step("chalk spawning", () =>
+        {
+            LootData.PopulateLootData();
+            int pools = 0;
+            int matching = 0;
+            bool elsewhere = false;
+            foreach (KeyValuePair<SpawnPool, Dictionary<ushort, int>> pool in LootData.AllSpawnWeightData)
+            {
+                bool hasDrink = pool.Value.TryGetValue(drink.itemID, out int weight);
+                bool hasChalk = pool.Value.TryGetValue(prefab.itemID, out int chalkWeight);
+                pools += hasDrink ? 1 : 0;
+                matching += hasDrink && hasChalk && chalkWeight == weight ? 1 : 0;
+                elsewhere |= hasChalk && !hasDrink;
+            }
+            Check("the chalk spawns where and as often as the Energy Drink (9)", pools > 0 && matching == pools && !elsewhere && prefab.IsValidToSpawn(),
+                $"{matching} of the Energy Drink's {pools} pools, in other pools {elsewhere}, may spawn {prefab.IsValidToSpawn()}");
+        });
+
+        yield return ChalkFromSuitcase(prefab);
+
+        yield return SpawnIntoHand(prefab);
+        if (held == null)
+        {
+            yield break;
+        }
+        Step("chalk item", () =>
+        {
+            Item chalkItem = held;
+            Action_ApplyAffliction effect = chalkItem.GetComponent<Action_ApplyAffliction>();
+            Action_Consume consume = chalkItem.GetComponent<Action_Consume>();
+            Check("the chalk has its bag, icon, name and prompt", HasBag(chalkItem) && prefab.UIData.icon != null && chalkItem.UIData.icon != null
+                && chalkItem.GetItemName() == "CLIMBING CHALK" && chalkItem.UIData.mainInteractPrompt == "use" && (chalkItem.itemTags & Item.ItemTags.Mystical) == 0 && chalkItem.totalUses == -1,
+                $"bag {HasBag(chalkItem)}, icon {(prefab.UIData.icon != null ? prefab.UIData.icon.name : "none")}, name '{chalkItem.GetItemName()}', prompt '{chalkItem.UIData.mainInteractPrompt}', tags {chalkItem.itemTags}, uses {chalkItem.totalUses}");
+            Check("using the chalk applies its effect and uses it up", effect != null && effect.OnCastFinished && consume != null && consume.OnCastFinished,
+                $"effect {(effect != null ? effect.OnCastFinished.ToString() : "missing")}, consume {(consume != null ? consume.OnCastFinished.ToString() : "missing")}");
+        });
+        yield return ChalkInBackpack(prefab, BackpackSlot.BackpackType.Backpack, "backpack");
+        yield return ChalkInBackpack(prefab, BackpackSlot.BackpackType.Fannypack, "fanny pack");
+        if (held == null || !ClimbingChalkItem.IsChalk(held) || Local.data.currentItem != held)
+        {
+            yield return SpawnIntoHand(prefab);
+            if (held == null)
+            {
+                yield break;
+            }
+        }
+        Item chalk = held;
+
+        // A use started and let go half way: the rub stops, nothing else happens.
+        chalk.StartUsePrimary();
+        for (float t = 0f; t < 1f; t += Time.deltaTime)
+        {
+            chalk.ContinueUsePrimary();
+            yield return null;
+        }
+        Step("chalk let go", () =>
+        {
+            chalk.CancelUsePrimary();
+            Check("letting go early stops the rub, and the chalk stays", ClimbingChalkItem.rubbing == null && Local.data.currentItem == chalk
+                && !Afflictions.HasAfflictionType(Peak.Afflictions.Affliction.AfflictionType.ClimbingChalk, out _));
+        });
+        yield return new WaitForSeconds(0.5f);
+
+        // The climbing lunge's stamina without chalk, for comparison.
+        float lunge = 0f;
+        Step("lunge without chalk", () => lunge = LungeCost());
+
+        // The real use: held for its whole 2 s; the rub is sampled every frame of it, and what the
+        // scout hears is recorded (0.5 s before the use until 0.5 s after it).
+        ListenerRecorder recorder = ListenerRecorder.Attach();
+        recorder?.Begin();
+        yield return new WaitForSeconds(0.5f);
+        chalk.StartUsePrimary();
+        float started = Time.realtimeSinceStartup;
+        float end = started + 4f;
+        float playing = 0f;
+        float volume = 0f;
+        float farthest = 0f;
+        bool shot = false;
+        while (Time.realtimeSinceStartup < end && chalk != null && !chalk.finishedCast)
+        {
+            SFX_Player.SoundEffectHandle rub = ClimbingChalkItem.rubbing;
+            AudioSource source = rub != null && rub.source != null ? rub.source.source : null;
+            if (source != null && source.isPlaying && source.clip != null && source.clip.name == "ClimbingChalk_rub")
+            {
+                playing += Time.deltaTime;
+                volume = source.volume;
+                farthest = Mathf.Max(farthest, Vector3.Distance(source.transform.position, Local.Center));
+            }
+            chalk.ContinueUsePrimary();
+            if (!shot && Time.realtimeSinceStartup > started + 1f)
+            {
+                shot = true;
+                Screenshot("chalk-1-using");
+            }
+            yield return null;
+        }
+        float useSeconds = Time.realtimeSinceStartup - started;
+        float used = Time.realtimeSinceStartup;
+        if (recorder != null)
+        {
+            // For comparison in the same recording: the game's own eating sound, played the same way (at the hands).
+            StartCoroutine(ReferenceSound(1f));
+            StartCoroutine(StopRecording(recorder, 3f, "chalk-use"));
+        }
+        GameObject dust = null;
+        while (Time.realtimeSinceStartup < used + 3f && ((dust = GameObject.Find("UltimateAscent Chalk Dust(Clone)")) == null || !UsedUp(chalk, prefab)))
+        {
+            yield return null;
+        }
+        bool gone = UsedUp(chalk, prefab);
+        if (dust != null)
+        {
+            StartCoroutine(WatchDust(dust));
+        }
+        float expectedShare = Rules.Enabled(Lvl.WorseItems) ? 0.85f : 0.75f;
+        float expectedSeconds = Rules.Enabled(Lvl.WorseItems) ? 12f : 16f;
+        Step("chalk used", () =>
+        {
+            Check("the hand-rub sound plays while the chalk is used", playing >= useSeconds * 0.9f && Mathf.Abs(volume - 0.25f) < 0.026f && farthest < 2f,
+                $"playing {playing:0.00} s of the {useSeconds:0.00} s use, volume {volume:0.000}, at most {farthest:0.0} m from the scout");
+            Afflictions.HasAfflictionType(Peak.Afflictions.Affliction.AfflictionType.ClimbingChalk, out Peak.Afflictions.Affliction applied);
+            Peak.Afflictions.Affliction_ClimbingChalk chalked = applied as Peak.Afflictions.Affliction_ClimbingChalk;
+            Check("a 2 s use uses the chalk up and chalks the scout", gone && chalked != null, $"used up {gone}, effect {(chalked != null ? "on" : "missing")}");
+            Check("chalk: climbing costs " + Mathf.RoundToInt(expectedShare * 100f) + "% stamina for " + expectedSeconds + " s (9, 14)",
+                chalked != null && Mathf.Abs(chalked.climbStaminaMultiplier - expectedShare) < 0.0001f && Mathf.Abs(chalked.totalTime - expectedSeconds) < 0.0001f,
+                chalked == null ? "no chalk effect" : $"{chalked.climbStaminaMultiplier:0.00} for {chalked.totalTime:0.#} s");
+            ParticleSystem particles = dust != null ? dust.GetComponent<ParticleSystem>() : null;
+            Check("used up, the chalk puffs dust around the scout, silently and without sun protection",
+                particles != null && particles.isPlaying && dust.GetComponentInChildren<AOE>(true) == null && dust.GetComponentInChildren<SFX_PlayOneShot>(true) == null
+                && Vector3.Distance(dust.transform.position, Local.Center) < 3f && !Local.data.wearingSunscreen,
+                dust == null ? "no dust within 3 s" : $"playing {particles != null && particles.isPlaying}, {Vector3.Distance(dust.transform.position, Local.Center):0.0} m from the scout, sunscreen {Local.data.wearingSunscreen}");
+            float chalkedLunge = LungeCost();
+            Check("chalk: the climbing lunge costs " + Mathf.RoundToInt(expectedShare * 100f) + "% of its stamina", lunge > 0f && Mathf.Abs(chalkedLunge / lunge - expectedShare) < 0.01f,
+                $"{chalkedLunge * 100f:0.0} instead of {lunge * 100f:0.0}");
+        });
+
+        // Something in the hand again, so the hands show in first person.
+        yield return EquipAnything();
+        yield return new WaitForSeconds(WhitenCheckDelay);
+        Screenshot("chalk-2-chalked");
+        Step("chalked hands", () =>
+        {
+            SkinnedMeshRenderer hands = WhiteHands();
+            Material white = hands != null ? hands.sharedMaterial : null;
+            Color skin = white != null && white.HasProperty("_SkinColor") ? white.GetColor("_SkinColor") : Color.clear;
+            int triangles = hands != null && hands.sharedMesh != null ? hands.sharedMesh.triangles.Length / 3 : 0;
+            Check("the chalked scout's hands are white (a white copy of the hands over them)", hands != null && hands.enabled && triangles > 500 && skin.r > 0.9f && skin.g > 0.9f && skin.b > 0.85f
+                && hands.bones.Length == Local.refs.customization.refs.mainRenderer.bones.Length,
+                hands == null ? "no white hands" : $"{triangles} triangles, colour {skin}, shown {hands.enabled}");
+            GameObject icon = ClimbingChalkItem.statusIcon;
+            Check("the chalked hand shows above the stamina bar", icon != null && icon.activeInHierarchy && icon.transform.parent == GUIManager.instance.bar.transform,
+                icon == null ? "no icon" : $"active {icon.activeInHierarchy}, parent {icon.transform.parent?.name}");
+        });
+
+        // The effect runs out by itself.
+        float until = Time.realtimeSinceStartup + expectedSeconds + 5f;
+        while (Time.realtimeSinceStartup < until && Afflictions.HasAfflictionType(Peak.Afflictions.Affliction.AfflictionType.ClimbingChalk, out _))
+        {
+            yield return null;
+        }
+        yield return new WaitForSeconds(2f);
+        Screenshot("chalk-3-ran-out");
+        Step("chalk ran out", () =>
+        {
+            bool over = !Afflictions.HasAfflictionType(Peak.Afflictions.Affliction.AfflictionType.ClimbingChalk, out _);
+            bool overridden = WhiteHands() != null;
+            GameObject icon = ClimbingChalkItem.statusIcon;
+            Check("when the chalk runs out, the hands get their own colour back and the icon goes", over && !overridden && (icon == null || !icon.activeSelf),
+                $"effect over {over}, white hands still there {overridden}, icon shown {(icon != null && icon.activeSelf)}");
+            float plain = LungeCost();
+            Check("without chalk the lunge costs its full stamina again", lunge > 0f && Mathf.Abs(plain - lunge) < 0.001f, $"{plain * 100f:0.0} (before: {lunge * 100f:0.0})");
+        });
+
+        yield return ChalkAsFuel(prefab);
+    }
+
+    private static Item ItemByName(string prefabName)
+    {
+        return SingletonAsset<ItemDatabase>.Instance.itemLookup.Values.FirstOrDefault(i => i != null && i.gameObject.name == prefabName);
+    }
+
+    private static bool HasBag(Item item)
+    {
+        Transform cube = item != null ? item.transform.Find("Cube") : null;
+        return cube != null && cube.TryGetComponent(out MeshFilter filter) && filter.sharedMesh != null && filter.sharedMesh.name == "ClimbingChalk";
+    }
+
+    /// <summary>
+    /// The nearest closed suitcase is opened the game's way, with only the chalk left in its loot pool
+    /// for this one opening (the pool is put back as soon as its items are out).
+    /// </summary>
+    private IEnumerator ChalkFromSuitcase(Item prefab)
+    {
+        Character local = Local;
+        Luggage luggage = Luggage.ALL_LUGGAGE
+            .Where(l => l != null && !(l is RespawnChest) && !l.CompareTag("ClownLuggage") && l.state == Luggage.LuggageState.Closed && l.gameObject.activeInHierarchy)
+            .OrderBy(l => Vector3.Distance(l.transform.position, local.Center))
+            .FirstOrDefault();
+        if (luggage == null)
+        {
+            Info("no closed suitcase found for the chalk");
+            yield break;
+        }
+        SpawnPool pool = luggage.GetSpawnPool();
+        LootData.PopulateLootData();
+        if (!LootData.AllSpawnWeightData.TryGetValue(pool, out Dictionary<ushort, int> own) || !own.TryGetValue(prefab.itemID, out int weight))
+        {
+            Fail("a suitcase can give the Climbing Chalk", $"{luggage.gameObject.name}: its pool {pool} has no chalk");
+            yield break;
+        }
+        HashSet<Item> before = new HashSet<Item>(Item.ALL_ITEMS);
+        LootData.AllSpawnWeightData[pool] = new Dictionary<ushort, int> { [prefab.itemID] = weight };
+        List<Item> spawned = new List<Item>();
+        try
+        {
+            Step("open a suitcase", () => luggage.Interact_CastFinished(local));
+            float until = Time.realtimeSinceStartup + 3f;
+            while (Time.realtimeSinceStartup < until && spawned.Count == 0)
+            {
+                yield return null;
+                spawned = Item.ALL_ITEMS.Where(i => i != null && !before.Contains(i) && Vector3.Distance(i.transform.position, luggage.transform.position) < 5f).ToList();
+            }
+        }
+        finally
+        {
+            LootData.AllSpawnWeightData[pool] = own;
+        }
+        yield return new WaitForSeconds(0.5f);
+        spawned = Item.ALL_ITEMS.Where(i => i != null && !before.Contains(i) && Vector3.Distance(i.transform.position, luggage.transform.position) < 5f).ToList();
+        List<Item> chalks = spawned.Where(ClimbingChalkItem.IsChalk).ToList();
+        Check("a suitcase can give the Climbing Chalk, in its bag", chalks.Count > 0 && chalks.All(HasBag),
+            $"{luggage.gameObject.name} ({pool}): {chalks.Count} chalk(s) of {spawned.Count} item(s), all with the bag {chalks.All(HasBag)}");
+        yield return new WaitForSeconds(1.5f);
+        foreach (Item chalk in chalks)
+        {
+            if (chalk != null && chalk.photonView != null)
+            {
+                PhotonNetwork.Destroy(chalk.gameObject);
+            }
+        }
+    }
+
+    /// <summary>
+    /// A backpack or fanny pack on the ground: the chalk in the hand goes into it and comes back out,
+    /// as its backpack wheel does it (which offers stashing only for items that may go in a backpack).
+    /// </summary>
+    private IEnumerator ChalkInBackpack(Item chalkPrefab, BackpackSlot.BackpackType type, string what)
+    {
+        Character local = Local;
+        Item backpackPrefab = SingletonAsset<ItemDatabase>.Instance.itemLookup.Values.FirstOrDefault(i => i is Backpack b && b.backpackType == type);
+        if (backpackPrefab == null)
+        {
+            Info("no " + what + " in the item database for the chalk");
+            yield break;
+        }
+        if (local.data.currentItem == null || !ClimbingChalkItem.IsChalk(local.data.currentItem))
+        {
+            yield return SpawnIntoHand(chalkPrefab);
+            if (held == null)
+            {
+                yield break;
+            }
+        }
+        Backpack backpack = SpawnInFront(backpackPrefab, 1.2f)?.GetComponent<Backpack>();
+        if (backpack == null)
+        {
+            Fail("put a " + what + " on the ground for the chalk");
+            yield break;
+        }
+        yield return new WaitForSeconds(1f);
+        BackpackReference reference = BackpackReference.GetFromBackpackItem(backpack);
+        bool allowed = local.data.currentItem != null && local.data.currentItem.UIData.canBackpack;
+        Step("chalk into the " + what, () => backpack.Stash(local, 0));
+        yield return new WaitForSeconds(1f);
+        BackpackData data = reference.GetData();
+        ItemSlot slot = data != null && data.itemSlots != null && data.itemSlots.Length > 0 ? data.itemSlots[0] : null;
+        bool inside = slot != null && !slot.IsEmpty() && slot.prefab != null && slot.prefab.itemID == chalkPrefab.itemID;
+        Item shown = null;
+        bool hasShown = reference.GetVisuals() != null && reference.GetVisuals().TryGetSpawnedItem(0, out shown);
+        Check("the chalk goes into a " + what + " (and shows in it, in its bag)", allowed && inside && local.data.currentItem == null && hasShown && ClimbingChalkItem.IsChalk(shown) && HasBag(shown),
+            $"may go in {allowed}, in slot 1 {inside}, still in the hand {local.data.currentItem != null}, shown {(hasShown ? shown.gameObject.name : "nothing")}");
+        if (hasShown)
+        {
+            Check("in the " + what + " the chalk is shown at 0.8 of its size (the game: 0.5)", Mathf.Abs(shown.transform.localScale.x - 0.8f) < 0.001f, $"scale {shown.transform.localScale.x:0.00}");
+            // A look down at it, for the screenshot.
+            Vector2 look = local.data.lookValues;
+            local.data.lookValues = new Vector2(Quaternion.LookRotation(backpack.transform.position - local.Head).eulerAngles.y, -50f);
+            yield return new WaitForSeconds(0.4f);
+            Screenshot("chalk-in-" + what.Replace(' ', '-'));
+            yield return new WaitForSeconds(0.2f);
+            local.data.lookValues = look;
+        }
+        if (hasShown)
+        {
+            Step("chalk out of the " + what, () => shown.Interact(local));
+            float until = Time.realtimeSinceStartup + 3f;
+            while (Time.realtimeSinceStartup < until && (local.data.currentItem == null || !ClimbingChalkItem.IsChalk(local.data.currentItem)))
+            {
+                yield return null;
+            }
+            yield return new WaitForSeconds(0.3f);
+            held = local.data.currentItem;
+            BackpackData after = reference.GetData();
+            Check("the chalk comes back out of the " + what + " into the hand", held != null && ClimbingChalkItem.IsChalk(held) && after.itemSlots[0].IsEmpty(),
+                $"holding {(held != null ? held.gameObject.name : "nothing")}, slot empty {after.itemSlots[0].IsEmpty()}");
+        }
+        if (backpack != null)
+        {
+            PhotonNetwork.Destroy(backpack.gameObject);
+        }
+    }
+
+    /// <summary>A Jetpack on the ground burns the chalk in the hand as fuel, as its backpack wheel does it (35% less from ascent 14).</summary>
+    private IEnumerator ChalkAsFuel(Item chalkPrefab)
+    {
+        Character local = Local;
+        // The Jetpack (the Rocketpack is another item): the backpack with a fuel tank.
+        Item jetpackPrefab = SingletonAsset<ItemDatabase>.Instance.itemLookup.Values.FirstOrDefault(i => i is Backpack && i.GetComponent<JetpackItem>() != null);
+        if (jetpackPrefab == null)
+        {
+            Info("no Jetpack in the item database for the chalk");
+            yield break;
+        }
+        yield return SpawnIntoHand(chalkPrefab);
+        if (held == null)
+        {
+            yield break;
+        }
+        Item chalk = held;
+        GameObject spawnedJetpack = SpawnInFront(jetpackPrefab, 1.2f);
+        Backpack jetpack = spawnedJetpack != null ? spawnedJetpack.GetComponent<Backpack>() : null;
+        JetpackItem tank = spawnedJetpack != null ? spawnedJetpack.GetComponentInChildren<JetpackItem>(true) : null;
+        if (jetpack == null || tank == null)
+        {
+            Fail("put a Jetpack on the ground for the chalk", $"{jetpackPrefab.gameObject.name}: spawned {(spawnedJetpack != null ? spawnedJetpack.name : "nothing")}, backpack {jetpack != null}, tank {tank != null}");
+            yield break;
+        }
+        yield return new WaitForSeconds(1f);
+        float fuelBefore = 0f;
+        Step("chalk as fuel", () =>
+        {
+            // Room in the tank for what the chalk gives.
+            FloatItemData fuel = tank.GetData(DataEntryKey.Fuel, tank.SetupDefaultFuel);
+            fuel.Value = 20f;
+            tank.fuel = 20f;
+            fuelBefore = fuel.Value;
+            jetpack.AddFuel(local);
+        });
+        yield return new WaitForSeconds(1f);
+        float added = tank.GetData(DataEntryKey.Fuel, tank.SetupDefaultFuel).Value - fuelBefore;
+        float expected = 25f * (Rules.Enabled(Lvl.WorseItems) ? A14_Items.JetpackFuelShare : 1f);
+        Check("the chalk burns as Jetpack fuel (" + expected + " fuel)", Mathf.Abs(added - expected) < 0.01f && UsedUp(chalk, chalkPrefab),
+            $"+{added:0.##} fuel, used up {UsedUp(chalk, chalkPrefab)}");
+        if (jetpack != null)
+        {
+            PhotonNetwork.Destroy(jetpack.gameObject);
+        }
+    }
+
+    /// <summary>An item put on the ground in front of the scout, the way the game spawns items.</summary>
+    private GameObject SpawnInFront(Item prefab, float distance)
+    {
+        Character local = Local;
+        Vector3 forward = local.data.lookDirection_Flat.sqrMagnitude > 0.01f ? local.data.lookDirection_Flat.normalized : local.transform.forward;
+        Vector3 position = local.Center + forward * distance + Vector3.up * 0.3f;
+        return PhotonNetwork.InstantiateItemRoom(prefab.gameObject.name, position, Quaternion.LookRotation(-forward));
+    }
+
+    /// <summary>The chalk left the hand and the inventory (a used-up item is destroyed, which a plain == cannot tell from null).</summary>
+    private bool UsedUp(Item chalk, Item chalkPrefab)
+    {
+        Character local = Local;
+        bool inHand = !ReferenceEquals(local.data.currentItem, null) && ReferenceEquals(local.data.currentItem, chalk) && chalk != null && chalk.gameObject.activeInHierarchy;
+        bool inSlots = local.player.itemSlots.Any(slot => !slot.IsEmpty() && slot.prefab != null && slot.prefab.itemID == chalkPrefab.itemID);
+        return !inHand && !inSlots;
+    }
+
+    /// <summary>The chalk dust's particles as the camera sees them, with screenshots (diagnostics).</summary>
+    private IEnumerator WatchDust(GameObject dust)
+    {
+        float born = Time.time;
+        foreach (float at in new[] { 0.15f, 0.6f, 1.2f })
+        {
+            yield return new WaitForSeconds(Mathf.Max(0f, born + at - Time.time));
+            if (dust == null)
+            {
+                Info("chalk dust at " + at + " s", "gone");
+                yield break;
+            }
+            ParticleSystem particles = dust.GetComponent<ParticleSystem>();
+            ParticleSystem.Particle[] buffer = new ParticleSystem.Particle[particles.main.maxParticles];
+            int count = particles.GetParticles(buffer);
+            Camera camera = Camera.main;
+            float near = float.MaxValue;
+            float far = 0f;
+            float alpha = 0f;
+            float size = 0f;
+            int inFront = 0;
+            for (int i = 0; i < count; i++)
+            {
+                Vector3 world = particles.main.simulationSpace == ParticleSystemSimulationSpace.Local ? dust.transform.TransformPoint(buffer[i].position) : buffer[i].position;
+                float distance = camera != null ? Vector3.Distance(world, camera.transform.position) : 0f;
+                near = Mathf.Min(near, distance);
+                far = Mathf.Max(far, distance);
+                alpha += buffer[i].GetCurrentColor(particles).a / 255f;
+                size += buffer[i].GetCurrentSize(particles);
+                if (camera != null && Vector3.Dot(world - camera.transform.position, camera.transform.forward) > camera.nearClipPlane)
+                {
+                    inFront++;
+                }
+            }
+            Info("chalk dust at " + at + " s", count == 0 ? "no particles" :
+                $"{count} particles ({inFront} in front of the camera), {near:0.0}-{far:0.0} m from it, mean alpha {alpha / count:0.00}, mean size {size / count:0.0} m, space {particles.main.simulationSpace}, material {dust.GetComponent<ParticleSystemRenderer>().sharedMaterial?.name}");
+            Screenshot("chalk-dust-" + Mathf.RoundToInt(at * 100));
+        }
+    }
+
+    private IEnumerator ReferenceSound(float after)
+    {
+        yield return new WaitForSeconds(after);
+        SFX_Instance eat = ItemByName("Marshmallow")?.GetComponent<ItemUseFeedback>()?.sfxUsed;
+        if (eat != null)
+        {
+            eat.Play(Local.refs.carryPosRef.position, Local.refs.carryPosRef);
+            Info("reference sound", $"{eat.name} (volume {eat.settings.volume:0.##}) at {after:0.#} s after the use");
+        }
+    }
+
+    private IEnumerator StopRecording(ListenerRecorder recorder, float after, string name)
+    {
+        yield return new WaitForSeconds(after);
+        string path = Path.Combine(Paths.BepInExRootPath, "UltimateAscent.SmokeTest." + name + ".wav");
+        int written = recorder.End(path);
+        Info("recording", $"{Path.GetFileName(path)}: {written} samples at {AudioSettings.outputSampleRate} Hz");
+    }
+
+    /// <summary>The whitening has faded in by then (0.4 s).</summary>
+    private const float WhitenCheckDelay = 0.8f;
+
+    /// <summary>Saves what the screen shows to BepInEx/UltimateAscent.SmokeTest.NAME.png (written at the end of the frame).</summary>
+    private void Screenshot(string name)
+    {
+        string path = Path.Combine(Paths.BepInExRootPath, "UltimateAscent.SmokeTest." + name + ".png");
+        ScreenCapture.CaptureScreenshot(path);
+        Info("screenshot", Path.GetFileName(path));
+    }
+
+    /// <summary>Takes the first item from the inventory into the hand (the inventory stays as it is); with nothing there, an Energy Drink.</summary>
+    private IEnumerator EquipAnything()
+    {
+        Character local = Local;
+        for (byte slot = 0; slot < local.player.itemSlots.Length; slot++)
+        {
+            if (local.player.itemSlots[slot].IsEmpty())
+            {
+                continue;
+            }
+            local.refs.items.lastEquippedSlotTime = 0f;
+            local.refs.items.EquipSlot(Optionable<byte>.Some(slot));
+            float until = Time.realtimeSinceStartup + 3f;
+            while (Time.realtimeSinceStartup < until && local.data.currentItem == null)
+            {
+                yield return null;
+            }
+            yield break;
+        }
+        // An empty inventory (a run of this step alone): something to hold.
+        yield return SpawnIntoHand(ItemByName("Energy Drink"));
+    }
+
+    /// <summary>The stamina the climbing lunge (the game's own climbing method) costs right now.</summary>
+    private float LungeCost()
+    {
+        float cost = 0f;
+        Unlocked(() =>
+        {
+            Local.data.currentStamina = 1f;
+            Local.refs.climbing.RPCA_ClimbJump();
+            cost = 1f - Local.data.currentStamina;
+            Local.data.currentStamina = 1f;
+        });
+        return cost;
+    }
+
+    /// <summary>The chalk's white copy of the scout's hands, if it is there.</summary>
+    private static SkinnedMeshRenderer WhiteHands()
+    {
+        Transform body = Local.refs.customization.refs.mainRenderer.transform;
+        Transform hands = body.Find("UltimateAscent Chalked Hands");
+        return hands != null ? hands.GetComponent<SkinnedMeshRenderer>() : null;
     }
 
     private IEnumerator BurnedItemHeat()
@@ -1367,10 +2093,10 @@ internal sealed class Runner : MonoBehaviour
             poison.Stop();
         }
         Protect(true);
-        // A bite lands 10 poison (ascent 15's x1.75 included), every 0.5 s (the game: 5 every 29 s), and
+        // A bite lands 2.5 poison (ascent 15's x1.75 included), every 0.5 s (the game: 5 every 29 s), and
         // the tick keeps biting (the game stops after 10 bites once your poison is 50).
         float perBite = poison.Count > 0 ? poison.Total / poison.Count : 0f;
-        Check("a tick bite is 10 poison (17)", poison.Count >= 3 && Mathf.Abs(perBite - 0.1f) < 0.0005f,
+        Check("a tick bite is 2.5 poison (17)", poison.Count >= 3 && Mathf.Abs(perBite - 0.025f) < 0.0005f,
             $"{poison.Count} bites in {poison.Seconds:F1} s, {perBite * 100f:0.00} poison each");
         Check("a tick keeps biting (17)", poison.Count >= 11, $"{poison.Count} bites in {poison.Seconds:F1} s (the game stops after 10)");
 
@@ -1444,6 +2170,10 @@ internal sealed class Runner : MonoBehaviour
     private IEnumerator BingBong(float wake)
     {
         yield return WaitUntilTime(wake + 17f);
+        // Nobody has held Bing Bong since waking up: from 10 s he talked in his burned voice, and fell
+        // silent when the crab status came at 15 s.
+        Check("unheld, Bing Bong talks in his burned voice from 10 s, and falls silent when the crab comes (20)", A20_BingBong.LinesSpoken > 0 && !A20_BingBong.Speaking && ShakeCounter.Count == 0,
+            $"{A20_BingBong.LinesSpoken} line(s) so far, talking now {A20_BingBong.Speaking} (neglected for {A20_BingBong.neglectedFor:F0} s), voice pitch {A20_BingBong.VoicePitch:0.###} volume {A20_BingBong.VoiceVolume:0.###}, {ShakeCounter.Count} shake(s)");
         Protect(false);
         Afflictions.SetStatus(Status.Crab, 0f);
         Meter crab = new Meter(Status.Crab);
@@ -1517,8 +2247,9 @@ internal sealed class Runner : MonoBehaviour
         {
             yield break;
         }
-        // A normal Bing Bong held without a break, past both timers (10 s: the world shakes, 15 s: crab).
+        // A normal Bing Bong held without a break, past both timers (10 s: he talks, 15 s: crab).
         ShakeCounter.Count = 0;
+        int linesBefore = A20_BingBong.LinesSpoken;
         Shield(true);
         Meter heldCrab = new Meter(Status.Crab);
         float longest = 0f;
@@ -1536,8 +2267,8 @@ internal sealed class Runner : MonoBehaviour
             heldCrab.Stop();
             Protect(true);
         }
-        Check("holding a normal Bing Bong keeps the evil away for good (20)", longest < 0.5f && ShakeCounter.Count == 0 && heldCrab.Total <= 0f,
-            $"held for {heldCrab.Seconds:F1} s: timer at most {longest:F1} s, {ShakeCounter.Count} shake(s), {heldCrab.Total:0.000} crab");
+        Check("holding a normal Bing Bong keeps the evil away for good (20)", longest < 0.5f && A20_BingBong.LinesSpoken == linesBefore && ShakeCounter.Count == 0 && heldCrab.Total <= 0f,
+            $"held for {heldCrab.Seconds:F1} s: timer at most {longest:F1} s, {A20_BingBong.LinesSpoken - linesBefore} line(s), {ShakeCounter.Count} shake(s), {heldCrab.Total:0.000} crab");
 
         // Cooked once, the way a fire does it: only cooked, not burned, so it still counts.
         doll.cooking.FinishCooking();
@@ -1559,12 +2290,24 @@ internal sealed class Runner : MonoBehaviour
         // freshly burned (10 s), then it has cooled down.
         const float BurnTickHeat = 0.1f * 0.5f * 1.5f;
         ShakeCounter.Count = 0;
+        int burnedLines = A20_BingBong.LinesSpoken;
+        float talkFrom = -1f;
+        float talkTo = -1f;
         Shield(true);
         Meter burnedCrab = new Meter(Status.Crab);
         Meter burnedHeat = new Meter(Status.Hot, amount => Mathf.Abs(amount - BurnTickHeat) < 0.0005f);
         try
         {
-            yield return new WaitForSeconds(17.5f);
+            float done = Time.time + 17.5f;
+            while (Time.time < done)
+            {
+                if (A20_BingBong.Speaking)
+                {
+                    talkFrom = talkFrom < 0f ? A20_BingBong.neglectedFor : talkFrom;
+                    talkTo = A20_BingBong.neglectedFor;
+                }
+                yield return null;
+            }
         }
         finally
         {
@@ -1573,7 +2316,9 @@ internal sealed class Runner : MonoBehaviour
             Protect(true);
         }
         float neglected = A20_BingBong.neglectedFor;
-        Check("holding a burned Bing Bong, the world shakes after 10 s (20)", ShakeCounter.Count > 0, $"{ShakeCounter.Count} shake(s), neglected for {neglected:F1} s");
+        Check("holding only a burned Bing Bong, he talks in his burned voice from 10 s until the crab comes at 15 s, no shaking (20)",
+            A20_BingBong.LinesSpoken > burnedLines && talkFrom >= 9.9f && talkFrom < 10.5f && talkTo < 15.05f && talkTo > 12f && ShakeCounter.Count == 0,
+            $"{A20_BingBong.LinesSpoken - burnedLines} line(s), talking from {talkFrom:F1} s to {talkTo:F1} s of neglect, neglected for {neglected:F1} s, {ShakeCounter.Count} shake(s)");
         Check("holding a burned Bing Bong, crab status comes after 15 s (20)", burnedCrab.Total > 0.05f, $"{burnedCrab.Total:0.000} crab, neglected for {neglected:F1} s");
         float lastBurn = burnedHeat.LastAt - burnTime;
         Check("a burned Bing Bong burns the hand for 10 s, then cools down (17, 20)", burnedHeat.Count >= 15 && lastBurn <= BurnedItems.HotSeconds + 0.6f,
@@ -1583,6 +2328,87 @@ internal sealed class Runner : MonoBehaviour
         // Hands empty again: a burned item in the hand would heat the scout during the next checks.
         Local.refs.items.EquipSlot(Optionable<byte>.None);
         yield return new WaitForSeconds(0.5f);
+
+        // A fresh Bing Bong, put away into a slot: after 10 s he talks; taking him in the hand silences him.
+        yield return SpawnIntoHand(bingBong);
+        Item fresh = held;
+        byte freshSlot = 255;
+        for (byte slot = 0; fresh != null && slot < Local.player.itemSlots.Length; slot++)
+        {
+            ItemSlot itemSlot = Local.player.itemSlots[slot];
+            if (!itemSlot.IsEmpty() && itemSlot.prefab != null && itemSlot.prefab.itemID == bingBong.itemID && Local.refs.items.currentSelectedSlot.IsSome && Local.refs.items.currentSelectedSlot.Value == slot)
+            {
+                freshSlot = slot;
+            }
+        }
+        if (fresh == null || freshSlot == 255)
+        {
+            Info("the pick-up check is skipped", fresh == null ? "no fresh Bing Bong" : "its slot was not found");
+            yield break;
+        }
+        Step("put Bing Bong away", () => Local.refs.items.EquipSlot(Optionable<byte>.None));
+        float talkUntil = Time.time + 13f;
+        while (!A20_BingBong.Speaking && Time.time < talkUntil)
+        {
+            yield return null;
+        }
+        float talkingAt = A20_BingBong.neglectedFor;
+        bool talking = A20_BingBong.Speaking;
+        Local.refs.items.lastEquippedSlotTime = 0f;
+        Step("take Bing Bong in the hand while he talks", () => Local.refs.items.EquipSlot(Optionable<byte>.Some(freshSlot)));
+        float silentUntil = Time.time + 1.5f;
+        while (A20_BingBong.Speaking && Time.time < silentUntil)
+        {
+            yield return null;
+        }
+        Check("taking Bing Bong in the hand silences him at once (20)", talking && !A20_BingBong.Speaking && Time.time < silentUntil && A20_BingBong.neglectedFor < 0.5f,
+            $"talking after {talkingAt:F1} s put away {talking}; in the hand {(Local.data.currentItem != null ? Local.data.currentItem.GetItemName() : "nothing")}, still talking {A20_BingBong.Speaking}, timer {A20_BingBong.neglectedFor:F1} s");
+        Local.refs.items.EquipSlot(Optionable<byte>.None);
+        yield return new WaitForSeconds(0.5f);
+    }
+
+    /// <summary>
+    /// The test leaves the player's account and save alone: no Steam stats, no achievements and no run
+    /// save (lighting a campfire counts a morale boost, throws the area's achievement and saves the run,
+    /// in the folder Steam Cloud syncs).
+    /// </summary>
+    [HarmonyPatch(typeof(AchievementManager), nameof(AchievementManager.IncrementSteamStat))]
+    internal static class NoSteamStats
+    {
+        private static bool Prefix(ref int __result)
+        {
+            __result = 0;
+            return false;
+        }
+    }
+
+    [HarmonyPatch(typeof(AchievementManager), nameof(AchievementManager.ThrowAchievement))]
+    internal static class NoAchievements
+    {
+        private static bool Prefix() => false;
+    }
+
+    [HarmonyPatch(typeof(Peak.Quicksave), nameof(Peak.Quicksave.SaveNow))]
+    internal static class NoRunSave
+    {
+        internal static int Skipped;
+
+        private static bool Prefix()
+        {
+            Skipped++;
+            return false;
+        }
+    }
+
+    /// <summary>Marks what the rising fog adds itself: it applies its status while it updates its look, every frame.</summary>
+    [HarmonyPatch(typeof(FogSphere), nameof(FogSphere.SetSharderVars))]
+    internal static class FogCalls
+    {
+        internal static int Depth;
+
+        private static void Prefix() => Depth++;
+
+        private static void Finalizer() => Depth--;
     }
 
     /// <summary>Counts the poison screen effects (each one shakes the screen).</summary>
@@ -1715,6 +2541,220 @@ internal sealed class Runner : MonoBehaviour
         yield return new WaitForSeconds(4f);
         float rate = (size - fog.currentSize) / (Time.time - time);
         Check("the fog moves twice as fast (9)", Mathf.Abs(rate - fog.speed * 2f) < fog.speed * 0.25f, $"{rate:0.000} per second (normal speed {fog.speed:0.000})");
+        if (Rules.Enabled(Lvl.ExtremeWeather))
+        {
+            yield return FogPoisons("on the beach");
+        }
+    }
+
+    /// <summary>
+    /// With True Final Ascent's Apocalypse mode, TFA decides how hard its own events are: what its code
+    /// gives a scout lands as given, its Blackout's torch lasts as TFA sizes it, the Scoutmaster it
+    /// sends is its own, and what its events spawn is told apart on every game.
+    /// </summary>
+    private IEnumerator TfaEvents()
+    {
+        if (!Compat.Tfa.Present || !Compat.Tfa.ApocalypseActive)
+        {
+            Info("TFA's event checks are skipped", $"True Final Ascent present {Compat.Tfa.Present}, Apocalypse {Compat.Tfa.ApocalypseActive}");
+            yield break;
+        }
+        Type harm = AccessTools.TypeByName("TrueFinalAscent.FinalAscentWeatherHarm");
+        Type weather = AccessTools.TypeByName("TrueFinalAscent.FinalAscentWeather");
+        Type torch = AccessTools.TypeByName("TrueFinalAscent.FinalAscentFlashlight");
+        Type level = AccessTools.TypeByName("TrueFinalAscent.FinalAscentApoLevel");
+        MethodInfo inflict = AccessTools.Method(harm, "Inflict");
+        MethodInfo start = AccessTools.Method(weather, "Start");
+        MethodInfo stop = AccessTools.Method(weather, "Stop");
+        MethodInfo battery = AccessTools.Method(torch, "BatteryNow");
+        PropertyInfo relaxed = AccessTools.Property(level, "Relaxed");
+        MethodInfo atLeast = AccessTools.Method(level, "AtLeast");
+        if (inflict == null || start == null || stop == null || battery == null || relaxed == null || atLeast == null)
+        {
+            Fail("TFA's event checks find TFA's parts", "a TFA method is missing");
+            yield break;
+        }
+
+        // A status TFA's own code gives (its events use this helper) lands as given; the same status
+        // given by the game is boosted by ascent 15.
+        Shield(true);
+        float fromTfa = Added(Status.Cold, () => inflict.Invoke(null, new object[] { Afflictions, Status.Cold, 0.3f }));
+        float fromGame = Added(Status.Cold, () => Afflictions.AddStatus(Status.Cold, 0.3f));
+        Protect(true);
+        float boost = A15_StrongerAilments.Factor(Status.Cold);
+        Check("a status TFA's code gives lands as TFA gives it, the game's own is boosted (15)", Mathf.Abs(fromTfa - 0.3f) < 0.001f && Mathf.Abs(fromGame - 0.3f * boost) < 0.001f,
+            $"TFA: {fromTfa * 100f:F1} cold for 30, the game: {fromGame * 100f:F1} cold for 30 (x{boost})");
+
+        // TFA's Blackout, started the way its weather menu starts one: the torch lasts as TFA sizes it
+        // for its own Blackout, and this mod's Scoutmaster hunt steps aside.
+        const float span = 60f;
+        Step("start TFA's Blackout", () => start.Invoke(null, new object[] { "dark", span }));
+        float end = Time.realtimeSinceStartup + 10f;
+        while (Compat.Tfa.Weather != "dark" && Time.realtimeSinceStartup < end)
+        {
+            yield return null;
+        }
+        yield return new WaitForSeconds(2f);
+        float seconds = (float)battery.Invoke(null, null);
+        float expected = (bool)relaxed.GetValue(null) ? float.PositiveInfinity : span * ((bool)atLeast.Invoke(null, new object[] { Enum.ToObject(AccessTools.TypeByName("TrueFinalAscent.ApoLevel"), 3) }) ? 0.6f : 0.7f);
+        Screenshot("tfa-blackout");
+        Check("TFA's Blackout torch lasts as TFA sizes it for its own Blackout", Compat.Tfa.Weather == "dark" && (float.IsInfinity(expected) ? float.IsInfinity(seconds) : Mathf.Abs(seconds - expected) < 0.5f),
+            $"weather '{Compat.Tfa.Weather}', torch {seconds:0.#} s (TFA: {expected:0.#} s for a {span:0} s Blackout)");
+        Check("TFA's Blackout sends its own Scoutmaster: this mod's hunt steps aside (11)", Compat.Tfa.ScoutmasterEvent && !A11_RuleZero.Hunting,
+            $"Scoutmaster event {Compat.Tfa.ScoutmasterEvent}, rule zero hunting {A11_RuleZero.Hunting}");
+        Step("stop TFA's Blackout", () => stop.Invoke(null, null));
+        yield return new WaitForSeconds(3f);
+
+        // What TFA's events spawn carries its tag over the network, so every game tells it apart.
+        GameObject tagged = null;
+        GameObject plain = null;
+        Step("spawn a scorpion the way TFA's blood moon does, and a plain one", () =>
+        {
+            Vector3 at = Local.Center + Local.data.lookDirection_Flat * 6f + Vector3.up;
+            tagged = PhotonNetwork.InstantiateRoomObject("0_Items/Scorpion", at, Quaternion.identity, 0, new object[] { "FA_BloodMoon" });
+            plain = PhotonNetwork.InstantiateRoomObject("0_Items/Scorpion", at + Vector3.right * 2f, Quaternion.identity, 0);
+        });
+        yield return new WaitForSeconds(0.5f);
+        Check("a creature TFA's events spawned keeps TFA's numbers, a plain one gets ascent 17's", tagged != null && plain != null && Compat.Tfa.Spawned(tagged.transform) && !Compat.Tfa.Spawned(plain.transform),
+            $"TFA's: {(tagged != null ? Compat.Tfa.Spawned(tagged.transform).ToString() : "not spawned")}, plain: {(plain != null ? Compat.Tfa.Spawned(plain.transform).ToString() : "not spawned")}");
+        foreach (GameObject spawned in new[] { tagged, plain })
+        {
+            if (spawned != null)
+            {
+                PhotonNetwork.Destroy(spawned);
+            }
+        }
+    }
+
+    /// <summary>The game's rising fog adds this much cold a second to a scout it has passed (skeletons: injury).</summary>
+    private const float FogColdPerSecond = 0.0105f;
+
+    /// <summary>
+    /// From ascent 18 the rising fog is purple and its cold turns into three times as much poison
+    /// (ascent 15's poison boost on top). The fog is brought over the scout the way it closes in on
+    /// scouts left behind and what it adds itself is measured (other cold, such as a cold night's,
+    /// does not count); then it goes back where it was.
+    /// </summary>
+    private IEnumerator FogPoisons(string where)
+    {
+        Character local = Local;
+        OrbFogHandler fog = Singleton<OrbFogHandler>.Instance;
+        FogSphere sphere = fog != null ? fog.sphere : null;
+        if (sphere == null || !sphere.isActiveAndEnabled)
+        {
+            Info("no rising fog " + where);
+            yield break;
+        }
+        // Once it moves, the fog fades in over 10 s; it only acts when it is fully there.
+        float end = Time.realtimeSinceStartup + 60f;
+        while ((!fog.isMoving || !Mathf.Approximately(sphere.ENABLE, 1f)) && Time.realtimeSinceStartup < end)
+        {
+            yield return null;
+        }
+        if (!fog.isMoving || !Mathf.Approximately(sphere.ENABLE, 1f))
+        {
+            Fail("the rising fog comes " + where, $"origin {fog.currentID}, moving {fog.isMoving}, shown {sphere.ENABLE:0.00}");
+            yield break;
+        }
+        float size = fog.currentSize;
+        fog.currentSize = Mathf.Max(1f, Vector3.Distance(sphere.fogPoint, local.Center) - 8f);
+        yield return new WaitForSeconds(1f);
+        Screenshot("fog-" + where.Replace(' ', '-'));
+        MaterialPropertyBlock block = new MaterialPropertyBlock();
+        sphere.rend.GetPropertyBlock(block);
+        Color tint = block.GetColor("_FogtintColor");
+        Material material = sphere.rend.sharedMaterial;
+        Shader shader = material != null ? material.shader : null;
+        List<string> colours = new List<string>();
+        for (int i = 0; shader != null && i < shader.GetPropertyCount(); i++)
+        {
+            UnityEngine.Rendering.ShaderPropertyType type = shader.GetPropertyType(i);
+            string property = shader.GetPropertyName(i);
+            if (type == UnityEngine.Rendering.ShaderPropertyType.Color)
+            {
+                colours.Add($"{property} {material.GetColor(property)} -> {block.GetColor(property)}");
+            }
+            else if (type == UnityEngine.Rendering.ShaderPropertyType.Vector || type == UnityEngine.Rendering.ShaderPropertyType.Texture)
+            {
+                colours.Add($"{property} ({type})");
+            }
+        }
+        Info("fog material", $"{(material != null ? material.name : "none")} / {(shader != null ? shader.name : "none")}: {string.Join("; ", colours)}");
+        Shield(true);
+        Meter poison = new Meter(Status.Poison, _ => FogCalls.Depth > 0);
+        Meter cold = new Meter(Status.Cold, _ => FogCalls.Depth > 0);
+        Meter otherCold = new Meter(Status.Cold, _ => FogCalls.Depth == 0);
+        try
+        {
+            yield return new WaitForSeconds(3f);
+        }
+        finally
+        {
+            poison.Stop();
+            cold.Stop();
+            otherCold.Stop();
+            Protect(true);
+            fog.currentSize = size;
+        }
+        bool inside = fog.currentID >= 0 && Vector3.Distance(sphere.fogPoint, local.Center) > fog.currentSize;
+        float expected = FogColdPerSecond * 3f * A15_StrongerAilments.Factor(Status.Poison) * poison.Seconds;
+        Check($"the rising fog poisons {where} (18): 3x the game's cold, as poison, ascent 15's boost on top", poison.Total > expected * 0.9f && poison.Total < expected * 1.1f,
+            $"{poison.Total * 100f:F1} poison in {poison.Seconds:F1} s = {poison.Total * 100f / Mathf.Max(0.01f, poison.Seconds):F2}/s (expected {expected * 100f / Mathf.Max(0.01f, poison.Seconds):F2}/s)");
+        Check($"the rising fog does not chill {where} (18)", cold.Total == 0f && cold.Count == 0, $"{cold.Total * 100f:F2} cold from the fog in {cold.Seconds:F1} s");
+        Check($"the rising fog is purple {where} (18)", tint.r > 0.4f && tint.b > 0.4f && tint.g < 0.1f, $"tint {tint}");
+        Info("cold from anything else meanwhile", $"{otherCold.Total * 100f:F2} in {otherCold.Seconds:F1} s (daylight {(DayNightManager.instance != null ? DayNightManager.instance.isDay : -1f):0.00}; nights before the Caldera are cold)");
+    }
+
+    /// <summary>
+    /// The first campfire, lit as a player lights it (everyone beside it, the interaction done): the
+    /// game moves on to the second segment and the fog to its next start. From ascent 18 the fog there
+    /// still poisons.
+    /// </summary>
+    private IEnumerator FirstCampfire()
+    {
+        Character local = Local;
+        OrbFogHandler fog = Singleton<OrbFogHandler>.Instance;
+        Campfire campfire = Campfire.ALL_CAMPFIRES.FirstOrDefault(c => c != null && !c.Lit && c.advanceToSegment == Segment.Tropics);
+        if (campfire == null || fog == null || Singleton<MapHandler>.Instance.currentSegment != (int)Segment.Beach)
+        {
+            Info("first campfire check skipped", campfire == null ? "no unlit campfire at the end of the beach" : "not on the beach");
+            yield break;
+        }
+        Vector3 away = local.Center - campfire.transform.position;
+        away.y = 0f;
+        Vector3 standAt = campfire.transform.position + (away.sqrMagnitude > 0.01f ? away.normalized : Vector3.forward) * 1.6f + Vector3.up;
+        local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, standAt, false);
+        yield return new WaitForSeconds(1f);
+        int saves = NoRunSave.Skipped;
+        Step("light the first campfire", () => campfire.Interact_CastFinished(local));
+        float end = Time.realtimeSinceStartup + 30f;
+        while (fog.currentID == 0 && Time.realtimeSinceStartup < end)
+        {
+            yield return null;
+        }
+        int segment = Singleton<MapHandler>.Instance.currentSegment;
+        Check("lighting the first campfire moves on to the second segment and its fog", campfire.Lit && segment == (int)Segment.Tropics && fog.currentID == segment,
+            $"lit {campfire.Lit}, segment {segment}, fog start {fog.currentID}, place {Map.CurrentPlace}; the game's run save skipped {NoRunSave.Skipped - saves} time(s)");
+        if (fog.currentID != segment)
+        {
+            yield break;
+        }
+        if (!Rules.Enabled(Lvl.ExtremeWeather))
+        {
+            yield break;
+        }
+        // The fog waits while everyone rests at a lit campfire: the scout climbs on into the segment.
+        Vector3 ahead = fog.origins[segment].transform.position - campfire.transform.position;
+        ahead.y = 0f;
+        Vector3 spot = campfire.transform.position + (ahead.sqrMagnitude > 0.01f ? ahead.normalized : Vector3.forward) * 30f;
+        RaycastHit ground = HelperFunctions.LineCheck(spot + Vector3.up * 100f, spot + Vector3.down * 150f, HelperFunctions.LayerType.AllPhysical);
+        local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, (ground.transform != null ? ground.point : spot) + Vector3.up * 1.5f, false);
+        yield return new WaitForSeconds(1f);
+        Info("the scout moves on from the campfire", $"{Vector3.Distance(campfire.transform.position, local.Center):F0} m away, resting {fog.PlayersAreResting}");
+        yield return FogPoisons("after the first campfire");
+        // Back to the camp, where the second segment's checks start.
+        local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, standAt, false);
+        yield return new WaitForSeconds(1.5f);
     }
 
     private void CheckWeatherPhases()
@@ -1767,7 +2807,7 @@ internal sealed class Runner : MonoBehaviour
         BeeSwarm swarm = swarms[0];
         float startDistance = Vector3.Distance(swarm.transform.position, local.Center);
         Check("the ambush swarm belongs to no hive", swarm.beehiveID == -1, $"beehive {swarm.beehiveID}");
-        Check("the ambush swarm stays angry for 35 s and follows up to 40 m (17)", swarm.beehiveDangerTick > 33f && Mathf.Abs(swarm.maxHiveDistance - 40f) < 0.01f,
+        Check("the ambush swarm stays angry for 50 s and follows up to 120 m (17)", swarm.beehiveDangerTick > 48f && Mathf.Abs(swarm.maxHiveDistance - 120f) < 0.01f,
             $"angry for {swarm.beehiveDangerTick:F1} s more, leash {swarm.maxHiveDistance:F0} m");
         Check("the ambush swarm goes for the scout", swarm.currentAggroCharacter == local && swarm.beesAngry,
             $"target {(swarm.currentAggroCharacter != null ? swarm.currentAggroCharacter.characterName : "none")}, angry {swarm.beesAngry}, {startDistance:F1} m away");
@@ -1783,7 +2823,7 @@ internal sealed class Runner : MonoBehaviour
         // The stings: angry bees land 15 poison a second (calm ones 10), ascent 15's x1.75 included.
         StatusField stinger = swarm.stingerField;
         Status stingType = stinger != null ? stinger.statusType : Status.Poison;
-        Check("bees sting within 1.5 m (17)", stinger != null && Mathf.Abs(stinger.radius - 1.5f) < 0.01f, stinger == null ? "no stinger field" : $"radius {stinger.radius:0.0#} m (the game: 1.3 m)");
+        Check("bees sting within 2 m (17)", stinger != null && Mathf.Abs(stinger.radius - 2f) < 0.01f, stinger == null ? "no stinger field" : $"radius {stinger.radius:0.0#} m (the game: 1.3 m)");
         Shield(true);
         PoisonFxCounter.Count = 0;
         Meter sting = new Meter(stingType);
@@ -1965,8 +3005,10 @@ internal sealed class Runner : MonoBehaviour
             injury.Stop();
             Protect(true);
         }
-        Check("fall damage makes the scout 80 drowsy (12)", injury.Total > 0f && Mathf.Abs(drowsy.Total - 0.8f) < 0.005f,
-            $"{injury.Total * 100f:F1} fall damage, {drowsy.Total * 100f:F1} drowsiness");
+        // 80 from ascent 15 on; below 15 without that ascent's boost (61.5, of which the first fall lands 60).
+        float expected = A15_StrongerAilments.FromAscent15(CharacterAfflictions.STATUSTYPE.Drowsy, 0.8f);
+        Check("fall damage makes the scout 80 drowsy, less below 15 (12)", injury.Total > 0f && Mathf.Abs(drowsy.Total - expected) < 0.026f,
+            $"{injury.Total * 100f:F1} fall damage, {drowsy.Total * 100f:F1} drowsiness (expected {expected * 100f:F1})");
     }
 
     /// <summary>
@@ -2051,6 +3093,80 @@ internal sealed class Runner : MonoBehaviour
                 yield return null;
             }
             Check("passing out is instant death (24)", local.data.dead, $"dead {local.data.dead}, passed out {local.data.passedOut}");
+        }
+    }
+}
+
+/// <summary>Records what the AudioListener hears (the final mix) into a WAV file (diagnostics).</summary>
+internal sealed class ListenerRecorder : MonoBehaviour
+{
+    private readonly List<float> samples = new List<float>();
+    private readonly object gate = new object();
+    private volatile bool recording;
+    private int channels = 2;
+
+    internal static ListenerRecorder Attach()
+    {
+        AudioListener listener = UnityEngine.Object.FindObjectOfType<AudioListener>();
+        if (listener == null)
+        {
+            return null;
+        }
+        return listener.GetComponent<ListenerRecorder>() ?? listener.gameObject.AddComponent<ListenerRecorder>();
+    }
+
+    internal void Begin()
+    {
+        lock (gate)
+        {
+            samples.Clear();
+        }
+        recording = true;
+    }
+
+    /// <summary>Stops and writes a 16-bit WAV; returns the number of samples written.</summary>
+    internal int End(string path)
+    {
+        recording = false;
+        float[] data;
+        lock (gate)
+        {
+            data = samples.ToArray();
+            samples.Clear();
+        }
+        int rate = AudioSettings.outputSampleRate;
+        using (BinaryWriter writer = new BinaryWriter(File.Create(path)))
+        {
+            writer.Write(System.Text.Encoding.ASCII.GetBytes("RIFF"));
+            writer.Write(36 + data.Length * 2);
+            writer.Write(System.Text.Encoding.ASCII.GetBytes("WAVEfmt "));
+            writer.Write(16);
+            writer.Write((short)1);
+            writer.Write((short)channels);
+            writer.Write(rate);
+            writer.Write(rate * channels * 2);
+            writer.Write((short)(channels * 2));
+            writer.Write((short)16);
+            writer.Write(System.Text.Encoding.ASCII.GetBytes("data"));
+            writer.Write(data.Length * 2);
+            foreach (float sample in data)
+            {
+                writer.Write((short)Mathf.Clamp(Mathf.RoundToInt(sample * 32767f), -32768, 32767));
+            }
+        }
+        return data.Length;
+    }
+
+    private void OnAudioFilterRead(float[] data, int channelCount)
+    {
+        if (!recording)
+        {
+            return;
+        }
+        channels = channelCount;
+        lock (gate)
+        {
+            samples.AddRange(data);
         }
     }
 }

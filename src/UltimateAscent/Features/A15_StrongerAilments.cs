@@ -7,8 +7,11 @@ namespace UltimateAscent.Features;
 
 /// <summary>
 /// Ascent 15 (13DDA): cold and drowsiness apply 30% more, heat 50% more, spores 65% more and
-/// poison 75% more. No exceptions: rules that need an exact amount on the bar ask
-/// <see cref="Raw"/> for the amount to add (see <see cref="ExactStatus"/> for streams).
+/// poison 75% more, on everything. The mod's exact numbers are what lands from ascent 15 on, this
+/// boost included; below 15 the same rules land them without the boost (<see cref="FromAscent15"/>),
+/// so ascent 14 always gets less than 15. <see cref="Raw"/> and <see cref="ExactStatus"/> put an
+/// amount on the bar exactly. True Final Ascent's Apocalypse events land what TFA gives
+/// (<see cref="Compat.Tfa.Causing"/>).
 /// </summary>
 [HarmonyPatch(typeof(CharacterAfflictions), nameof(CharacterAfflictions.AddStatus))]
 internal static class A15_StrongerAilments
@@ -25,10 +28,18 @@ internal static class A15_StrongerAilments
     /// <summary>How much this ascent scales a status right now (1 below ascent 15).</summary>
     internal static float Factor(CharacterAfflictions.STATUSTYPE type)
     {
-        if (!Rules.Enabled(Lvl.StrongerAilments))
-        {
-            return 1f;
-        }
+        return Rules.Enabled(Lvl.StrongerAilments) ? FullFactor(type) : 1f;
+    }
+
+    /// <summary>What a number given for ascent 15 or higher comes to now: itself from 15 on, without this ascent's factor below 15.</summary>
+    internal static float FromAscent15(CharacterAfflictions.STATUSTYPE type, float value)
+    {
+        return value * Factor(type) / FullFactor(type);
+    }
+
+    /// <summary>How much this ascent scales a status (1 for those it leaves alone), whether or not it is on.</summary>
+    internal static float FullFactor(CharacterAfflictions.STATUSTYPE type)
+    {
         switch (type)
         {
             case CharacterAfflictions.STATUSTYPE.Cold:
@@ -68,7 +79,12 @@ internal static class A15_StrongerAilments
         {
             return;
         }
-        amount *= Factor(statusType);
+        float factor = Factor(statusType);
+        if (factor == 1f || Compat.Tfa.Causing)
+        {
+            return;
+        }
+        amount *= factor;
     }
 }
 

@@ -20,6 +20,9 @@ internal static class A17_Hazards
 {
     private static bool On => Rules.Enabled(Lvl.Hazards);
 
+    /// <summary>On for this hazard: not one True Final Ascent's events spawned (its blood moon, cactus rain, mines), which keep TFA's numbers.</summary>
+    private static bool OnFor(Component hazard) => On && !Compat.Tfa.Spawned(hazard);
+
     private const CharacterAfflictions.STATUSTYPE Poison = CharacterAfflictions.STATUSTYPE.Poison;
 
     // Targets: what lands on the bar from this ascent on, ascent 15's boost included (see A15_StrongerAilments.Raw).
@@ -35,6 +38,13 @@ internal static class A17_Hazards
 
     /// <summary>Urchins and thorny vines push you away 1.5 times as hard.</summary>
     private const float SpikyKnockback = 1.5f;
+
+    /// <summary>A bounce on a Roots mushroom gives back 5 stamina, on a purple (spore) one 2.5 (the game: 10 on both).</summary>
+    private const float RedBounceStamina = 0.05f;
+    private const float PurpleBounceStamina = 0.025f;
+
+    /// <summary>A beetle's bonk also deals 10 injury (the game: none).</summary>
+    private const float BeetleInjury = 0.1f;
 
     /// <summary>The Gloom's spiked fences: 15 injury per touch (the game: 2.5).</summary>
     private const float FenceInjury = 0.15f;
@@ -171,7 +181,8 @@ internal static class A17_Hazards
     /// Touch hazards: sea urchins land 40 poison and thorny vines 60, both pushing 1.5 times as hard;
     /// the Gloom's spiked fences 15 injury; lava streams 50 injury and 100 heat; petrifying stones 4
     /// petrification (only while you are not climbing them, see <see cref="A17_ClimbingHazards"/>).
-    /// Everything else that hurts on touch does twice as much (cold and heat at least 2).
+    /// Everything else that hurts on touch does twice as much (cold and heat at least 2). The Roots'
+    /// bouncy mushrooms give back 5 stamina per bounce, the purple (spore) ones 2.5.
     /// </summary>
     [HarmonyPatch(typeof(CollisionModifier), nameof(CollisionModifier.Collide))]
     private static class TouchHazards
@@ -183,6 +194,11 @@ internal static class A17_Hazards
                 return true;
             }
             float original = Overrides.Original(__instance, "damage", __instance.damage);
+            if (__instance.useBounceCoroutine && __instance.name.StartsWith("Flat Top Mush", StringComparison.Ordinal))
+            {
+                bool purple = __instance.statusType == CharacterAfflictions.STATUSTYPE.Spores && original > 0f;
+                Overrides.Set(__instance, nameof(CollisionModifier.staminaBackOnBounce), purple ? PurpleBounceStamina : RedBounceStamina);
+            }
             if (__instance.applyPetrify)
             {
                 if (character != null && character.IsLocal && character.data.isClimbing && character.data.climbMod != null && character.data.climbMod.applyPetrify)
@@ -244,14 +260,14 @@ internal static class A17_Hazards
     private const float CalmBeePoison = 0.1f;
     private const float AngryBeePoison = 0.15f;
 
-    /// <summary>Entering a swarm stings for 5 poison, as in the game.</summary>
-    private const float EntrySting = 0.05f;
+    /// <summary>Bees sting within 2 m (the game: 1.3 m).</summary>
+    private const float StingRadius = 2f;
 
-    /// <summary>Bees sting within 1.5 m (the game: 1.3 m).</summary>
-    private const float StingRadius = 1.5f;
+    /// <summary>Angry bees stay angry for 50 s (the game: 8 s after the hive is grabbed, 12 s after it is destroyed).</summary>
+    internal const float BeeAngerSeconds = 50f;
 
-    /// <summary>Angry bees stay angry for 35 s (the game: 8 s after the hive is grabbed, 12 s after it is destroyed).</summary>
-    internal const float BeeAngerSeconds = 35f;
+    /// <summary>A swarm chases up to 120 m from its hive or from where an ambush swarm appeared (the game: 20 m).</summary>
+    internal const float BeeChaseDistance = 120f;
 
     private sealed class SwarmOf
     {
@@ -273,7 +289,7 @@ internal static class A17_Hazards
         }
     }
 
-    /// <summary>Bees: a wider sting, a gentle sting on entering, and 35 s of anger.</summary>
+    /// <summary>Bees: a wider sting, a gentle sting on entering, 50 s of anger and a chase up to 120 m from the hive.</summary>
     [HarmonyPatch(typeof(BeeSwarm), nameof(BeeSwarm.Update))]
     private static class Bees
     {
@@ -285,8 +301,9 @@ internal static class A17_Hazards
             }
             Overrides.Set(__instance, nameof(BeeSwarm.beesAngerTimeHiveStolen), BeeAngerSeconds);
             Overrides.Set(__instance, nameof(BeeSwarm.beesAngerTimeHiveDestroyed), BeeAngerSeconds);
+            Overrides.Set(__instance, nameof(BeeSwarm.maxHiveDistance), BeeChaseDistance);
+            // Entering a swarm stings for the game's 5 poison, which ascent 15 already makes 7.5.
             Overrides.Set(__instance.stingerField, nameof(StatusField.radius), StingRadius);
-            Overrides.Set(__instance.stingerField, nameof(global::Peak.StatusFieldBase.statusAmountOnEntry), A15_StrongerAilments.Raw(Poison, EntrySting));
         }
     }
 
@@ -306,7 +323,23 @@ internal static class A17_Hazards
         }
     }
 
-    /// <summary>Beetles hit 10x harder, from 2 m further, and knock you down for 10 seconds.</summary>
+    /// <summary>A frog's tongue pull poisons the pulled scout for 10 (the game: nothing).</summary>
+    private const float FrogPoison = 0.1f;
+
+    [HarmonyPatch(typeof(FrogTongue), nameof(FrogTongue.LetGo))]
+    private static class PoisonousFrogs
+    {
+        private static void Prefix(FrogTongue __instance)
+        {
+            Character target = __instance._targetCharacter;
+            if (OnFor(__instance) && target != null && target.IsLocal)
+            {
+                target.refs.afflictions.AddStatus(Poison, A15_StrongerAilments.Raw(Poison, FrogPoison));
+            }
+        }
+    }
+
+    /// <summary>Beetles hit 10x harder, from 2 m further, deal 10 injury and knock you down for 10 seconds.</summary>
     [HarmonyPatch(typeof(Beetle), nameof(Beetle.InflictAttack))]
     private static class Beetles
     {
@@ -321,7 +354,7 @@ internal static class A17_Hazards
         private static void Prefix(Beetle __instance, out Stats __state)
         {
             __state = default;
-            if (!On)
+            if (!OnFor(__instance))
             {
                 return;
             }
@@ -329,6 +362,14 @@ internal static class A17_Hazards
             __instance.bonkForce *= 10f;
             __instance.bonkRange += 2f;
             __instance.ragdollTime = 10f;
+        }
+
+        private static void Postfix(Beetle __instance, Character character)
+        {
+            if (OnFor(__instance) && character != null && character.IsLocal)
+            {
+                character.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Injury, A15_StrongerAilments.Raw(CharacterAfflictions.STATUSTYPE.Injury, BeetleInjury));
+            }
         }
 
         private static Exception Finalizer(Beetle __instance, Stats __state, Exception __exception)
@@ -349,7 +390,7 @@ internal static class A17_Hazards
     {
         private static bool Prefix(StickyCactus __instance, Character character, Collision collision, Bodypart bodypart)
         {
-            if (!On)
+            if (!OnFor(__instance))
             {
                 return true;
             }
@@ -388,7 +429,7 @@ internal static class A17_Hazards
     {
         private static void Prefix(Dynamite __instance)
         {
-            if (!On)
+            if (!OnFor(__instance))
             {
                 return;
             }
@@ -412,7 +453,7 @@ internal static class A17_Hazards
     {
         private static void Prefix(Dynamite __instance)
         {
-            if (On)
+            if (OnFor(__instance))
             {
                 DynamiteSettings(__instance);
             }
@@ -495,7 +536,7 @@ internal static class A17_Hazards
     {
         private static void Prefix(VenusFlyTrap __instance)
         {
-            if (!On)
+            if (!OnFor(__instance))
             {
                 return;
             }
@@ -511,7 +552,7 @@ internal static class A17_Hazards
     {
         private static bool Prefix(VenusFlyTrap __instance, Character character)
         {
-            if (!On)
+            if (!OnFor(__instance))
             {
                 return true;
             }
@@ -534,7 +575,7 @@ internal static class A17_Hazards
     {
         private static void Prefix(Mob __instance)
         {
-            if (!On || !(__instance is Scorpion))
+            if (!(__instance is Scorpion) || !OnFor(__instance))
             {
                 return;
             }
@@ -551,7 +592,7 @@ internal static class A17_Hazards
         private static void Prefix(Scorpion __instance, out float? __state)
         {
             __state = null;
-            if (On)
+            if (OnFor(__instance))
             {
                 __state = __instance.totalPoisonTime;
                 __instance.totalPoisonTime *= 0.5f;
@@ -574,7 +615,7 @@ internal static class A17_Hazards
     {
         private static void Prefix(CactusBall __instance)
         {
-            if (On)
+            if (OnFor(__instance))
             {
                 Overrides.Set(__instance, nameof(StickyItemComponent.addThornsToStuckPlayer), (int)Overrides.Original(__instance, "thorns", __instance.addThornsToStuckPlayer) * 2);
             }
@@ -907,8 +948,8 @@ internal static class A17_Hazards
     /// <summary>A tick bites every half second (the game: every 29 s)...</summary>
     private const float TickBiteSeconds = 0.5f;
 
-    /// <summary>...for 10 poison (the game: 5), and keeps biting until it is pulled off (the game stops after 10 bites once your poison is 50).</summary>
-    private const float TickBitePoison = 0.1f;
+    /// <summary>...for 2.5 poison (the game: 5), and keeps biting until it is pulled off (the game stops after 10 bites once your poison is 50).</summary>
+    private const float TickBitePoison = 0.025f;
 
     /// <summary>After each bite your poison does not heal for 10 s (the game's own "no healing" effect never did anything).</summary>
     internal const float TickNoHealingSeconds = 10f;
@@ -919,7 +960,7 @@ internal static class A17_Hazards
     internal static bool PoisonHealingBlocked => On && Time.time - LastTickBite < TickNoHealingSeconds;
 
     /// <summary>
-    /// Ticks bite every half second for 10 poison until they are pulled off, and block poison
+    /// Ticks bite every half second for 2.5 poison until they are pulled off, and block poison
     /// recovery for 10 s after each bite. A tick that latched on is visible at once and swells to
     /// three times the game's full-grown size within a minute (the game grows it from nothing over
     /// five minutes).
@@ -949,14 +990,18 @@ internal static class A17_Hazards
         }
     }
 
+    /// <summary>Tumbleweeds roll 15% faster than in the game.</summary>
+    private const float TumbleweedRollForce = 1.15f;
+
     [HarmonyPatch(typeof(TumbleWeed), nameof(TumbleWeed.Start))]
     private static class TumbleweedSpawn
     {
         private static void Postfix(TumbleWeed __instance)
         {
+            // 15% more rolling force than the game's (13DDA slowed them down by up to half instead).
             if (On)
             {
-                __instance.rollForce *= Mathf.Lerp(0.5f, 1f, Mathf.Pow(UnityEngine.Random.value, 6f));
+                __instance.rollForce *= TumbleweedRollForce;
                 __instance.powerMultiplier *= 2f;
             }
         }
@@ -1145,9 +1190,8 @@ internal static class A17_Hazards
         }
     }
 
-    /// <summary>A geyser's warm spot: 2 m across (the game: 3 m), removing 15 cold a second (the game: 5).</summary>
+    /// <summary>A geyser's warm spot reaches 2 m (the game: 3 m) and removes the game's 5 cold a second.</summary>
     private const float GeyserWarmRadius = 2f;
-    private const float GeyserWarmth = -0.15f;
 
     /// <summary>A geyser erupts on 80% of the steps onto it (the game: 33%).</summary>
     private const float GeyserChance = 0.8f;
@@ -1164,14 +1208,14 @@ internal static class A17_Hazards
         }
     }
 
-    /// <summary>Spore and gas emitters are four times as strong; geysers' warm spots are smaller and warmer.</summary>
+    /// <summary>Spore and gas emitters are four times as strong; geysers' warm spots are smaller.</summary>
     [HarmonyPatch(typeof(StatusEmitter), nameof(StatusEmitter.Update))]
     private static class Emitters
     {
         private static void Prefix(StatusEmitter __instance, out float? __state)
         {
             __state = null;
-            if (!On)
+            if (!OnFor(__instance))
             {
                 return;
             }
@@ -1179,7 +1223,6 @@ internal static class A17_Hazards
             {
                 Overrides.Set(__instance, nameof(StatusEmitter.radius), GeyserWarmRadius);
                 Overrides.Set(__instance, nameof(StatusEmitter.outerFade), 0f);
-                Overrides.Set(__instance, nameof(StatusEmitter.amount), GeyserWarmth);
             }
             else if (__instance.amount > 0f)
             {
@@ -1201,11 +1244,11 @@ internal static class A17_Hazards
     // ---- Explosions: double status, much stronger knockback, 3x longer knock-down that also knocks you out.
     // Some bursts land exact targets instead (amounts given as they land on the bar, before falloff).
 
-    /// <summary>Poison mines: up to 60 poison (the game: 20), then up to 5 every 0.5 s in their cloud for 11 s (the game: 2.5).</summary>
-    private const float PoisonMineBurst = 0.6f;
+    /// <summary>Poison mines: up to 50 poison (the game: 20), then up to 5 every 0.5 s in their cloud for 11 s (the game: 2.5).</summary>
+    private const float PoisonMineBurst = 0.5f;
 
-    /// <summary>Spore mines: up to 55 spores (the game: 20), then up to 5 every 0.5 s in their cloud for 11 s.</summary>
-    private const float SporeMineBurst = 0.55f;
+    /// <summary>Spore mines: up to 45 spores (the game: 20), then up to 5 every 0.5 s in their cloud for 11 s.</summary>
+    private const float SporeMineBurst = 0.45f;
     private const float MineCloudTick = 0.05f;
 
     /// <summary>Flash plants blind for up to 180 s, less with distance (the game: 45 s).</summary>
@@ -1214,6 +1257,13 @@ internal static class A17_Hazards
     /// <summary>The Gloom's ghost: 60 cold (the game: 35) and 80 s of blindness (the game: 20 s).</summary>
     private const float GhostCold = 0.6f;
     private const float GhostBlindSeconds = 80f;
+
+    /// <summary>
+    /// A Mandrake's scream: up to 75 drowsiness per scream, falloff included (the game: 5 every tick, 55 up close).
+    /// A 3 s scream ticks 11 times: the game's 0.25 s timer only fires once more than 0.25 s has passed.
+    /// </summary>
+    private const float MandrakeScream = 0.75f;
+    private const float MandrakeScreamTicks = 11f;
 
     private static bool IsMineBurst(AOE aoe) =>
         aoe.name.StartsWith("VFX_PoisonExplo", StringComparison.Ordinal) ||
@@ -1255,6 +1305,11 @@ internal static class A17_Hazards
             aoe.statusAmount = aoe.statusType == CharacterAfflictions.STATUSTYPE.Spores ? SporeMineBurst : PoisonMineBurst;
             return true;
         }
+        if (aoe.statusType == CharacterAfflictions.STATUSTYPE.Drowsy && aoe.GetComponentInParent<Mandrake>() != null)
+        {
+            aoe.statusAmount = MandrakeScream / MandrakeScreamTicks;
+            return true;
+        }
         return false;
     }
 
@@ -1272,7 +1327,9 @@ internal static class A17_Hazards
 
         private static void Prefix(AOE __instance, out Scope __state)
         {
-            __state = new Scope { entered = On, previous = ExactSource };
+            // A Shroomberry's spore burst has its own numbers (ascent 14), not an explosion's; True Final
+            // Ascent's blasts (its mines, its cactus rain's dynamite) keep TFA's.
+            __state = new Scope { entered = OnFor(__instance) && !A14_Shroomberries.IsSporeBurst(__instance) && !Compat.Tfa.Causing, previous = ExactSource };
             if (__state.entered)
             {
                 Depth++;

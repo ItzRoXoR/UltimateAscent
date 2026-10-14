@@ -20,10 +20,10 @@ internal static class A11_RuleZero
     private const float ForceSeconds = 30f;
     private const float HazardForceSeconds = 70f;
 
-    /// <summary>Cannibalism: 50 poison and 25 curse in all (the game adds 10 curse itself).</summary>
-    private const float CannibalPoison = 0.5f;
-    private const float CannibalCurse = 0.25f;
-    private const float GameCannibalCurse = 0.1f;
+    /// <summary>Cannibalism: 50 poison from ascent 15 (28.6 below it, without that ascent's boost) and 25 curse in all (the game adds 10 curse itself).</summary>
+    internal const float CannibalPoison = 0.5f;
+    internal const float CannibalCurse = 0.25f;
+    internal const float GameCannibalCurse = 0.1f;
     private const double CompanionRadiusSq = 15.0 * 15.0;
     private const double LeadDistance = 150.0;
 
@@ -47,6 +47,9 @@ internal static class A11_RuleZero
     private static int huntedId;
     private static float nextCheck;
 
+    /// <summary>This rule has the Scoutmaster hunting someone (host).</summary>
+    internal static bool Hunting => huntingScout != null;
+
     internal static void Reset()
     {
         huntingScout = null;
@@ -62,6 +65,20 @@ internal static class A11_RuleZero
             return;
         }
         nextCheck = Time.time + CheckInterval;
+        // True Final Ascent's Blackout and Watch send the Scoutmaster themselves: this rule's hunt steps aside.
+        if (Compat.Tfa.ScoutmasterEvent)
+        {
+            if (huntingScout != null)
+            {
+                Character hunted = huntingScout.currentTarget;
+                if (hunted != null && hunted.photonView != null && hunted.photonView.ViewID == huntedId && !huntingScout.isThrowing)
+                {
+                    huntingScout.SetCurrentTarget(null);
+                }
+                huntingScout = null;
+            }
+            return;
+        }
         CollectScouts();
 
         if (huntingScout != null)
@@ -209,19 +226,20 @@ internal static class A11_RuleZero
         {
             if (Rules.Enabled(Lvl.RuleZero) && eater != null && eater.IsLocal)
             {
-                eater.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Poison, A15_StrongerAilments.Raw(CharacterAfflictions.STATUSTYPE.Poison, CannibalPoison));
+                CharacterAfflictions.STATUSTYPE poison = CharacterAfflictions.STATUSTYPE.Poison;
+                ExactStatus.Add(eater.refs.afflictions, poison, A15_StrongerAilments.FromAscent15(poison, CannibalPoison), "cannibalism");
                 eater.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Curse, CannibalCurse - GameCannibalCurse);
             }
         }
     }
 
-    /// <summary>Being thrown by the Scoutmaster adds 4 curse.</summary>
+    /// <summary>Being thrown by the Scoutmaster adds 4 curse (not when True Final Ascent's Blackout or Watch sent him).</summary>
     [HarmonyPatch(typeof(Scoutmaster), nameof(Scoutmaster.IThrow))]
     private static class CurseOnThrow
     {
         private static void Prefix(Scoutmaster __instance)
         {
-            if (Rules.Enabled(Lvl.RuleZero) && Rules.Owns(__instance.currentTarget))
+            if (Rules.Enabled(Lvl.RuleZero) && Rules.Owns(__instance.currentTarget) && !Compat.Tfa.ScoutmasterEvent)
             {
                 __instance.currentTarget.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Curse, 0.04f);
             }

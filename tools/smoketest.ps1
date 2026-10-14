@@ -10,13 +10,16 @@
   -Clean runs it in a throwaway profile (artifacts\smoketest\clean-profile) with nothing but BepInEx
   (copied from -Profile), Ultimate Ascent and the test plugin: no True Final Ascent, no other mods.
   True Final Ascent's Apocalypse mode is switched off for that session (in memory only), because its
-  random weather can knock the test scout out; -KeepApocalypse keeps it and checks ascent 25's second
-  Apocalypse weather instead of its storms. TFA's saved selection file is backed up before and put
+  random weather can knock the test scout out; -KeepApocalypse keeps it and checks that TFA's events
+  stay TFA's (at ascent 25: that the weather is left to TFA, instead of its storms). The test changes no
+  Steam stats or achievements and saves no run. TFA's saved selection file is backed up before and put
   back afterwards in any case.
 .EXAMPLE
   .\tools\smoketest.ps1 -Clean
   .\tools\smoketest.ps1 -Profile FinalAscent
   .\tools\smoketest.ps1 -Profile FinalAscent -Ascent 20 -SkipBuild -KeepApocalypse
+  .\tools\smoketest.ps1 -Profile FinalAscent -Apocalypse -Only TFA   (Apocalypse on for the test: TFA's events)
+  .\tools\smoketest.ps1 -Clean -Only chalk     (only the run steps whose names contain "chalk")
 #>
 param(
     [string]$Profile = 'FinalAscent',
@@ -25,6 +28,8 @@ param(
     [switch]$SkipBuild,
     [switch]$KeepHarness,
     [switch]$KeepApocalypse,
+    [switch]$Apocalypse,
+    [string]$Only = '',
     [int]$TimeoutSeconds = 960,
     [string]$ProfilesDir = "$env:APPDATA\r2modmanPlus-local\PEAK\profiles",
     [string]$SteamExe = 'C:\Program Files (x86)\Steam\steam.exe'
@@ -65,6 +70,7 @@ else {
 New-Item -ItemType Directory -Force $harnessDir | Out-Null
 Copy-Item (Join-Path $root 'tools\SmokeTest\bin\Release\netstandard2.1\UltimateAscent.SmokeTest.dll') $harnessDir -Force
 Remove-Item $resultFile -ErrorAction SilentlyContinue
+Remove-Item (Join-Path $profileDir 'BepInEx\UltimateAscent.SmokeTest.*.png') -ErrorAction SilentlyContinue
 
 # True Final Ascent keeps its last selection (Apocalypse mode included) in this file; keep a copy.
 $tfaSelection = Join-Path $env:LOCALAPPDATA 'LandCrab\PEAK\TrueFinalAscent\TrueFinalAscent.Auswahl.txt'
@@ -72,7 +78,9 @@ $tfaBackup = $null
 if (Test-Path $tfaSelection) { $tfaBackup = [System.IO.File]::ReadAllBytes($tfaSelection) }
 
 $arguments = @('-applaunch', '3527290', '--doorstop-enabled', 'true', '--doorstop-target-assembly', $preloader, '--ua-smoketest', "--ua-smoketest-ascent=$Ascent")
-if (-not $KeepApocalypse) { $arguments += '--ua-smoketest-noapocalypse' }
+if ($Apocalypse) { $arguments += '--ua-smoketest-apocalypse' }
+elseif (-not $KeepApocalypse) { $arguments += '--ua-smoketest-noapocalypse' }
+if ($Only) { $arguments += "--ua-smoketest-only=$Only" }
 $launched = Get-Date
 Write-Host "Starting PEAK ($(if ($Clean) { 'clean profile' } else { "profile $Profile" }), ascent $Ascent)..."
 Start-Process $SteamExe -ArgumentList $arguments
@@ -111,6 +119,7 @@ finally {
 New-Item -ItemType Directory -Force $out | Out-Null
 if (Test-Path $resultFile) { Copy-Item $resultFile $out -Force }
 if (Test-Path $logFile) { Copy-Item $logFile (Join-Path $out 'LogOutput.log') -Force }
+Copy-Item (Join-Path $profileDir 'BepInEx\UltimateAscent.SmokeTest.*.png') $out -Force -ErrorAction SilentlyContinue
 
 if (-not (Test-Path $resultFile)) { throw 'The smoke test wrote no result (see artifacts\smoketest\LogOutput.log).' }
 Get-Content $resultFile

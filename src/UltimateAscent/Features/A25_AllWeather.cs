@@ -21,8 +21,8 @@ namespace UltimateAscent.Features;
 /// <item>Extra tornadoes roam near the scouts (see <see cref="ExtraTornadoes"/>).</item>
 /// <item>The Kiln/Citadel and everything after it keep their normal weather.</item>
 /// <item>Weather stays calm for 30 s after waking up (see <see cref="WeatherGrace"/>).</item>
-/// <item>With True Final Ascent's Apocalypse mode the vanilla weather is TFA's business: instead,
-/// two Apocalypse events run at once (see <see cref="Compat.Tfa"/>), plus the extra tornadoes.</item>
+/// <item>With True Final Ascent's Apocalypse mode the weather is TFA's business: its Apocalypse
+/// weather runs as TFA runs it, plus the extra tornadoes.</item>
 /// </list>
 /// </summary>
 internal static class A25_AllWeather
@@ -47,16 +47,6 @@ internal static class A25_AllWeather
     private static float nextEnsure;
 
     private static bool On => Rules.Enabled(Lvl.AllWeather);
-
-    /// <summary>
-    /// The Gloom gets snowstorms on top of its sleep fog at ascent 25, so its sleep fog keeps the
-    /// strength it has without ascent 15's drowsiness boost (<see cref="GloomFogScale"/>) and its slow
-    /// drowsiness recovery is doubled.
-    /// </summary>
-    internal static bool GloomRelief => On && Map.InGloom;
-
-    /// <summary>What the Gloom's sleep fog is scaled by, so ascent 15's boost leaves it as it was.</summary>
-    internal static float GloomFogScale => GloomRelief ? 1f / A15_StrongerAilments.Factor(CharacterAfflictions.STATUSTYPE.Drowsy) : 1f;
 
     /// <summary>The Kiln/Citadel, the Peak and the Nadir keep their normal weather.</summary>
     internal static bool Excluded => On && Map.Ready && !Map.InLowerMountain;
@@ -99,7 +89,9 @@ internal static class A25_AllWeather
         Overrides.Set(zone, nameof(WindChillZone.setSlippy), true);
         if (zone.name == "WindStorm" || zone.name == "SnowStorm")
         {
-            Overrides.Set(zone, nameof(WindChillZone.windTimeRangeOff), new Vector2(30f, 90f));
+            // Pauses of at most 30-90 s; a storm that already paused less (the Alpine's snow: 20-90 s) keeps that.
+            Vector2 pause = zone.windTimeRangeOff;
+            Overrides.Set(zone, nameof(WindChillZone.windTimeRangeOff), new Vector2(Mathf.Min(pause.x, 30f), Mathf.Min(pause.y, 90f)));
         }
         Plugin.Log.LogInfo("Ascent 25: " + zone.name + " now covers the whole mountain.");
     }
@@ -276,51 +268,4 @@ internal static class A25_AllWeather
         }
     }
 
-    /// <summary>The Gloom's own sleep fog, relieved like the chasing fog (see <see cref="GloomFogScale"/>).</summary>
-    [HarmonyPatch(typeof(global::Peak.StatusFieldGloom), nameof(global::Peak.StatusFieldGloom.TickStatus))]
-    private static class GloomFogRelief
-    {
-        private static void Prefix(global::Peak.StatusFieldGloom __instance, out float? __state)
-        {
-            __state = null;
-            if (GloomRelief)
-            {
-                __state = __instance.statusAmountPerSecond;
-                __instance.statusAmountPerSecond *= GloomFogScale;
-            }
-        }
-
-        private static Exception Finalizer(global::Peak.StatusFieldGloom __instance, float? __state, Exception __exception)
-        {
-            if (__state.HasValue)
-            {
-                __instance.statusAmountPerSecond = __state.Value;
-            }
-            return __exception;
-        }
-    }
-
-    /// <summary>In the Gloom the snowstorm pauses longer (60-120 s).</summary>
-    [HarmonyPatch(typeof(WindChillZone), nameof(WindChillZone.GetNextWindTime))]
-    private static class GloomSnowRest
-    {
-        private static void Prefix(WindChillZone __instance, bool windActive, out Vector2? __state)
-        {
-            __state = null;
-            if (!windActive && __instance.name == "SnowStorm" && GloomRelief)
-            {
-                __state = __instance.windTimeRangeOff;
-                __instance.windTimeRangeOff = new Vector2(60f, 120f);
-            }
-        }
-
-        private static Exception Finalizer(WindChillZone __instance, Vector2? __state, Exception __exception)
-        {
-            if (__state.HasValue)
-            {
-                __instance.windTimeRangeOff = __state.Value;
-            }
-            return __exception;
-        }
-    }
 }

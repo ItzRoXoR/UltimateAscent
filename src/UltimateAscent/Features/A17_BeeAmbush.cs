@@ -13,8 +13,8 @@ namespace UltimateAscent.Features;
 /// (no beehive needed), so several scouts can be hit at the same time. The swarm appears right next
 /// to its scout.
 /// Escaping works like with a stolen beehive: the swarm is tied to the spot it appeared at (it
-/// follows you up to 40 m from there), so you have to run far away from it; once it loses you, it
-/// disperses. It stays angry for 35 s. Bees only ambush in the Tropics:
+/// follows you up to 120 m from there), so you have to outrun it or run far away from it; once it
+/// loses you, it disperses. It stays angry for 50 s. Bees only ambush in the Tropics:
 /// a scout standing anywhere else (also one lagging behind on the shore) is left alone.
 /// </summary>
 internal static class A17_BeeAmbush
@@ -24,8 +24,8 @@ internal static class A17_BeeAmbush
     private const float ChancePerMoment = 0.3f;
     private const float AngrySeconds = A17_Hazards.BeeAngerSeconds;
 
-    /// <summary>An ambush swarm follows its scout up to 40 m from where it appeared (a hive's bees: 20 m).</summary>
-    private const float Leash = 40f;
+    /// <summary>An ambush swarm follows its scout up to 120 m from where it appeared, like a hive's bees from their hive.</summary>
+    private const float Leash = A17_Hazards.BeeChaseDistance;
     private const string FallbackPrefab = "BeeSwarm";
     private const float FallbackSpawnDistance = 3f;
 

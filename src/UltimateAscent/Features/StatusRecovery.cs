@@ -61,11 +61,6 @@ internal static class StatusRecovery
             slowDrowsyRegion = Map.InGloom || Map.InCitadel;
             if (slowDrowsyRegion)
             {
-                if (A25_AllWeather.GloomRelief)
-                {
-                    // Ascent 25 adds snowstorms to the Gloom, so its sleep heals twice as fast as on 16-24.
-                    slowDrowsyRate *= 2f;
-                }
                 __instance.drowsyReductionPerSecond = slowDrowsyRate;
             }
         }

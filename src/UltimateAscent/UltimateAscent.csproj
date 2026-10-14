@@ -4,7 +4,7 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>UltimateAscent</AssemblyName>
     <RootNamespace>UltimateAscent</RootNamespace>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -35,6 +35,16 @@
   <ItemGroup>
     <!-- The game's own Alpine snowstorm visuals (particles, material, fog texture), for maps without an Alpine biome. -->
     <EmbeddedResource Include="Resources\NativeAlpineSnow.bundle" LogicalName="UltimateAscent.NativeAlpineSnow.bundle" />
+    <!-- A chalk-bag model for the Climbing Chalk, whose prefab only has Unity's placeholder cube. -->
+    <EmbeddedResource Include="Resources\ClimbingChalk.obj" LogicalName="UltimateAscent.ClimbingChalk.obj" />
+    <EmbeddedResource Include="Resources\ClimbingChalk_palette.png" LogicalName="UltimateAscent.ClimbingChalk_palette.png" />
+    <!-- Its inventory icon (rendered from the model), the chalked-hands icon shown above the stamina bar,
+         and its hand-rub sound (16-bit PCM, levelled to the game's item sounds). -->
+    <EmbeddedResource Include="Resources\ClimbingChalk_icon.png" LogicalName="UltimateAscent.ClimbingChalk_icon.png" />
+    <EmbeddedResource Include="Resources\ClimbingChalk_status.png" LogicalName="UltimateAscent.ClimbingChalk_status.png" />
+    <EmbeddedResource Include="Resources\ClimbingChalk_rub.wav" LogicalName="UltimateAscent.ClimbingChalk_rub.wav" />
+    <!-- The hands of every outfit's body mesh (from the game files), for the chalk's white hands. -->
+    <EmbeddedResource Include="Resources\ClimbingChalk_hands.bin" LogicalName="UltimateAscent.ClimbingChalk_hands.bin" />
   </ItemGroup>
 
   <ItemGroup>
@@ -96,6 +106,14 @@
     </Reference>
     <Reference Include="UnityEngine.AssetBundleModule">
       <HintPath>$(ManagedDir)\UnityEngine.AssetBundleModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.ImageConversionModule">
+      <HintPath>$(ManagedDir)\UnityEngine.ImageConversionModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AudioModule">
+      <HintPath>$(ManagedDir)\UnityEngine.AudioModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.UI">

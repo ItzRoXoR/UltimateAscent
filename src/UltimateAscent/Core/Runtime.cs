@@ -20,11 +20,13 @@ internal sealed class Runtime : MonoBehaviourPunCallbacks
         BurnedItems.Tick,
         A17_BeeAmbush.Tick,
         A17_Looker.Tick,
+        A15_FoodPoison.Tick,
+        A14_Items.Tick,
+        ClimbingChalkHands.Tick,
         CalderaTide.Tick,
         WeatherGrace.Tick,
         A25_AllWeather.Tick,
         ExtraTornadoes.Tick,
-        Compat.Tfa.Tick,
     };
 
     private readonly bool[] failed = new bool[Ticks.Length];

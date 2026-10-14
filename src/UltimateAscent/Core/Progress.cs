@@ -53,8 +53,8 @@ internal static class Progress
     }
 
     /// <summary>
-    /// Beating an extended ascent: record the progress in the config and queue the usual
-    /// promotion screen. Vanilla ascents keep the game's own handling.
+    /// Beating an extended ascent: record the progress in the config. These ascents give no reward,
+    /// so the end screen shows no promotion for them. Vanilla ascents keep the game's own handling.
     /// </summary>
     [HarmonyPatch(typeof(AchievementManager), nameof(AchievementManager.TryCompleteAscent))]
     private static class CompleteExtendedAscent
@@ -73,11 +73,6 @@ internal static class Progress
             int next = Earned;
             if (ascent >= next)
             {
-                if (!__instance.runBasedValueData.completedAscentsThisRun.Contains(ascent))
-                {
-                    __instance.runBasedValueData.completedAscentsThisRun.Add(ascent);
-                    Player.localPlayer?.OnAchievementProgressChanged();
-                }
                 Plugin.ExtendedProgress.Value = Mathf.Min(ascent + 1, Lvl.Last + 1);
                 Plugin.Instance.Config.Save();
                 Plugin.Log.LogInfo($"Ascent {ascent} beaten; ascent {Mathf.Min(ascent + 1, Lvl.Last)} is unlocked.");

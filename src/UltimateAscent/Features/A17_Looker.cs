@@ -11,9 +11,9 @@ namespace UltimateAscent.Features;
 /// of which shows a Looker in 5% of runs; it peeks out now and then and leaves for good once the
 /// host has watched it for 3 s or anyone comes within 5 m. Here:
 /// <list type="bullet">
-/// <item>Every spot shows a Looker with 15% (about 3 per map).</item>
+/// <item>Every spot shows a Looker with 25% (about 5 per map).</item>
 /// <item>Watching one while it peeks out (in the middle of your view, within 40 m, nothing in
-/// between) curses you for 5 a second and gives you a lollipop's sugar rush for 5 s, then not
+/// between) curses you for 2.5 a second and gives you a lollipop's sugar rush for 5 s, then not
 /// again until 10 s after it wore off. Only looking counts: walking up to it without looking
 /// costs nothing.</item>
 /// <item>After 5 s of watching in all, it leaves and sends the Scoutmaster after the scout who
@@ -25,8 +25,8 @@ internal static class A17_Looker
 {
     private static bool On => Rules.Enabled(Lvl.Hazards);
 
-    private const float SpotChance = 0.15f;
-    private const float CursePerSecond = 0.05f;
+    private const float SpotChance = 0.25f;
+    private const float CursePerSecond = 0.025f;
     private const float SugarRushSeconds = 5f;
     private const float SugarRushCooldown = 10f;
     private const float StareSeconds = 5f;
