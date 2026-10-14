@@ -6,18 +6,18 @@ namespace UltimateAscent.Features;
 
 /// <summary>
 /// Ascent 12 (13DDA + More Ascents): falling and helping people make you drowsy.
-/// Taking fall damage makes you 80 drowsy (61.5 below ascent 15, without its boost). Pulling someone up makes you
-/// drowsy while you help. Falls can no longer be
+/// Taking fall damage makes you 60 drowsy (46.2 below ascent 15, without its boost). Pulling someone up makes you
+/// 10 drowsy a second while you help (7.7 below ascent 15). Falls can no longer be
 /// cancelled by snapping the ragdoll to its animation (e.g. by switching items mid-air).
 /// </summary>
 internal static class A12_Drowsy
 {
     /// <summary>
-    /// Drowsiness from fall damage, as it lands from ascent 15 on (61.5 below 15, without that ascent's
-    /// boost), and per second of helping (ascent 15 boosts it like any drowsiness).
+    /// Drowsiness from fall damage and per second of helping, as they land from ascent 15 on (below 15
+    /// without that ascent's boost: 46.2 and 7.7).
     /// </summary>
-    private const float FallDrowsiness = 0.8f;
-    private const float HelpDrowsyPerSecond = 0.05f;
+    internal const float FallDrowsiness = 0.6f;
+    internal const float HelpDrowsyPerSecond = 0.1f;
 
     private static float lastHelpTime = -10f;
 
@@ -65,7 +65,8 @@ internal static class A12_Drowsy
                 if (CharacterGrabbing.TargetCanBeHelped(other, helper))
                 {
                     lastHelpTime = Time.time;
-                    helper.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Drowsy, HelpDrowsyPerSecond);
+                    CharacterAfflictions.STATUSTYPE drowsy = CharacterAfflictions.STATUSTYPE.Drowsy;
+                    ExactStatus.Add(helper.refs.afflictions, drowsy, A15_StrongerAilments.FromAscent15(drowsy, HelpDrowsyPerSecond), "help");
                     return;
                 }
             }

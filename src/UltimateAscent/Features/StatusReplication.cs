@@ -7,14 +7,17 @@ namespace UltimateAscent.Features;
 /// <summary>
 /// When the game copies a character's absolute statuses over the network it replays them through
 /// AddStatus. Status multipliers must not run again on those copies, and the received values
-/// are written back exactly.
+/// are written back exactly. The same goes for statuses a checkpoint flag puts back when it saves
+/// a scout (<see cref="Restore"/>): they come back as they were when the flag was planted.
 /// </summary>
 [HarmonyPatch(typeof(CharacterAfflictions), nameof(CharacterAfflictions.SetAll))]
 internal static class StatusReplication
 {
     [ThreadStatic] private static int depth;
+    [ThreadStatic] private static int restoring;
 
-    internal static bool Active => depth > 0;
+    /// <summary>Statuses are being copied or put back, not gained: no multiplier may touch them.</summary>
+    internal static bool Active => depth > 0 || restoring > 0;
 
     private static bool Relevant => Rules.Enabled(Lvl.WorseItems) || Rules.Enabled(Lvl.StrongerAilments) || Rules.Enabled(Lvl.Hazards);
 
@@ -53,5 +56,24 @@ internal static class StatusReplication
             depth--;
         }
         return __exception;
+    }
+
+    /// <summary>
+    /// A checkpoint flag that saves a scout puts back the statuses saved when it was planted, through
+    /// AddStatus; ascent 15's boost (and the other multipliers) must not grow them.
+    /// </summary>
+    [HarmonyPatch(typeof(CharacterAfflictions), nameof(CharacterAfflictions.ApplyStatusesFromFloatArray))]
+    internal static class Restore
+    {
+        private static void Prefix()
+        {
+            restoring++;
+        }
+
+        private static Exception Finalizer(Exception __exception)
+        {
+            restoring--;
+            return __exception;
+        }
     }
 }

@@ -27,9 +27,13 @@ internal static class Rules
         }
     }
 
+    /// <summary>One of this mod's ascents (9-25) is being climbed, whichever of their rules are switched on.</summary>
+    internal static bool InExtraAscent => Plugin.Ready && InRun && !RunSettings.IsCustomRun && Ascents._currentAscent >= Lvl.First;
+
+    /// <summary>The rule of this ascent applies: the climb is on it or a higher one, and its switch (the host's) is on.</summary>
     internal static bool Enabled(int level)
     {
-        return Plugin.Ready && InRun && !RunSettings.IsCustomRun && Ascents._currentAscent >= level;
+        return Plugin.Ready && InRun && !RunSettings.IsCustomRun && Ascents._currentAscent >= level && HostOptions.AscentOn(level);
     }
 
     /// <summary>The local client is responsible for this character's statuses and movement.</summary>

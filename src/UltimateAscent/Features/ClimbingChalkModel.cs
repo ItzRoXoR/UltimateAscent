@@ -12,9 +12,9 @@ namespace UltimateAscent.Features;
 /// The Climbing Chalk is in the game files but has only Unity's placeholder cube for a model (and
 /// is never handed out). It gets a chalk bag instead: a low-poly mesh coloured by a 4 x 3 palette,
 /// both shipped inside this DLL. The prefab's "Cube" child keeps its place, its 0.28 scale and its
-/// renderer (the game's "main renderer" for the burnt tint); its mesh, material and box collider
-/// change, and the hands' grip points (Hand_L, Hand_R, set for the cube) move in to the bag's sides.
-/// In a backpack it is shown larger than the game's half size, since the bag is smaller than the cube.
+/// renderer; its mesh, material and box collider change, and the hands' grip points (Hand_L, Hand_R,
+/// set for the cube) move in to the bag's sides. Cooking darkens the bag like any item. In a backpack
+/// it is shown larger than the game's half size, since the bag is smaller than the cube.
 /// Cosmetic only, so it is not tied to an ascent.
 /// </summary>
 internal static class ClimbingChalkModel
@@ -92,6 +92,35 @@ internal static class ClimbingChalkModel
             if (setState == ItemState.InBackpack && __instance.forceScale && !failed && ClimbingChalkItem.IsChalk(__instance))
             {
                 __instance.transform.localScale = Vector3.one * BackpackScale;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Cooking darkens an item through its materials' "_Tint", which the bag's material (Unity's Lit)
+    /// does not have; the bag takes the same colour through its base colour instead: brown once
+    /// cooked, darker twice, almost black when burned.
+    /// </summary>
+    [HarmonyPatch(typeof(ItemCooking), nameof(ItemCooking.CookVisually))]
+    private static class CookedBag
+    {
+        private static void Postfix(ItemCooking __instance, int cookedAmount)
+        {
+            if (cookedAmount <= 0 || failed || !ClimbingChalkItem.IsChalk(__instance.item))
+            {
+                return;
+            }
+            Transform child = __instance.item.transform.Find(ModelChild);
+            MeshRenderer renderer = child != null ? child.GetComponent<MeshRenderer>() : null;
+            if (renderer == null)
+            {
+                return;
+            }
+            Color tint = ItemCooking.GetCookColor(cookedAmount);
+            foreach (Material own in renderer.materials)
+            {
+                own.SetColor("_BaseColor", tint);
+                own.SetColor("_Color", tint);
             }
         }
     }

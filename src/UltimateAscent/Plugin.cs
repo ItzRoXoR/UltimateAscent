@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using BepInEx;
@@ -15,13 +16,14 @@ namespace UltimateAscent;
 [BepInDependency(Compat.Tfa.Guid, BepInDependency.DependencyFlags.SoftDependency)]
 [BepInDependency(Compat.ItemStats.Guid, BepInDependency.DependencyFlags.SoftDependency)]
 [BepInDependency(Compat.EffectPreview.Guid, BepInDependency.DependencyFlags.SoftDependency)]
+[BepInDependency(Compat.PlayersInfo.Guid, BepInDependency.DependencyFlags.SoftDependency)]
 [BepInIncompatibility("MoreAscents")]
 [BepInIncompatibility("13dastardlyascents")]
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "UltimateAscent";
     public const string Name = "Ultimate Ascent";
-    public const string Version = "1.1.0";
+    public const string Version = "1.1.1";
 
     internal static ManualLogSource Log;
     internal static Plugin Instance;
@@ -31,9 +33,10 @@ public sealed class Plugin : BaseUnityPlugin
     internal static ConfigEntry<int> ExtendedProgress;
     internal static ConfigEntry<int> DefaultAscent;
     internal static ConfigEntry<bool> WrapAround;
-    internal static ConfigEntry<bool> NerfedRevives;
-    internal static ConfigEntry<bool> CursePunishment;
     internal static ConfigEntry<bool> VerboseLogging;
+
+    /// <summary>One switch per ascent 9-25 (indexed by the ascent): off leaves that ascent's own rule out.</summary>
+    internal static ConfigEntry<bool>[] AscentSwitches;
 
     private Harmony harmony;
 
@@ -89,17 +92,43 @@ public sealed class Plugin : BaseUnityPlugin
             new ConfigDescription("The ascent the boarding pass shows when you first open it after arriving at the airport. -1 = Tenderfoot, 0 = Peak (the game's normal choice, also leaves True Final Ascent's own start option alone), 1-25 = that ascent. Values above your highest unlocked ascent pick the highest unlocked one.",
                 new AcceptableValueRange<int>(-1, Lvl.Last)));
         WrapAround = Config.Bind("Boarding Pass", "Wrap Around", true,
-            "The ascent arrows wrap around: left from Tenderfoot jumps to your highest unlocked ascent, right from the last entry goes back to Tenderfoot.");
+            "The ascent arrows wrap around: left from Tenderfoot jumps to the end of the list (True Final Ascent's FINAL ASCENT if installed, otherwise your highest unlocked ascent), right from the end of the list goes back to Tenderfoot.");
         UnlockAll = Config.Bind("Unlocks", "Unlock All Ascents", false,
             "Makes ascents 9-25 selectable on the boarding pass without beating them in order. Turning it off again brings back your normal progress.");
         ExtendedProgress = Config.Bind("Unlocks", "Highest Unlocked Ascent", 0,
             new ConfigDescription("Progress through ascents 9-25, saved by the mod (the game's own Steam stat stops at ascent 8). Beating ascent N unlocks N+1. 0 means only the vanilla progress counts.",
                 new AcceptableValueRange<int>(0, Lvl.Last + 1)));
-        NerfedRevives = Config.Bind("Big Lobbies", "Nerfed Revives", true,
-            "Ascent 14+: reviving and status clearing keep 25% of the cleared statuses (the Cursed Skull's clear 10%), and revives that would add no status add curse and hunger instead. Only the host's setting counts.");
-        CursePunishment = Config.Bind("Big Lobbies", "Curse On Teammate Death", true,
-            "Ascent 11+: when a scout dies, every survivor gets curse (less in bigger lobbies). Only the host's setting counts.");
+        AscentSwitches = new ConfigEntry<bool>[Lvl.Last + 1];
+        for (int level = Lvl.First; level <= Lvl.Last; level++)
+        {
+            AscentSwitches[level] = Config.Bind("Ascents", "Ascent " + level, true,
+                AscentCatalog.Description(level) + " Off: this ascent's own rule is left out; the other ascents keep theirs (ascent 25 with Ascent 20 off plays without Bing Bong's rule). Only the host's settings count.");
+            AscentSwitches[level].SettingChanged += (_, _) => HostOptions.Invalidate();
+        }
         VerboseLogging = Config.Bind("Debug", "Verbose Logging", false, "Writes extra diagnostic lines to the BepInEx log.");
+        RemoveRetiredEntries();
+    }
+
+    /// <summary>
+    /// Entries this version no longer has (the "Big Lobbies" section, the dropped "Double Apocalypse
+    /// Weather") leave the file: BepInEx keeps writing back every entry it read and nothing bound. Every
+    /// entry of this mod is bound above, so whatever is left over is retired.
+    /// </summary>
+    private void RemoveRetiredEntries()
+    {
+        try
+        {
+            if (AccessTools.Property(typeof(ConfigFile), "OrphanedEntries")?.GetValue(Config, null) is Dictionary<ConfigDefinition, string> retired && retired.Count > 0)
+            {
+                Log.LogInfo("Removed retired config entries: " + string.Join(", ", retired.Keys.Select(key => $"[{key.Section}] {key.Key}")));
+                retired.Clear();
+                Config.Save();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.LogWarning("Could not remove retired entries from the config file: " + ex.GetBaseException().Message);
+        }
     }
 
     private static void OnActiveSceneChanged(Scene previous, Scene next)

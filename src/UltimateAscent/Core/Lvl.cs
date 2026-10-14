@@ -30,10 +30,13 @@ internal static class Lvl
     internal const int WorseItems = 14;
     // 13DDA: cold, drowsy, poison and heat apply more.
     internal const int StrongerAilments = 15;
-    // 13DDA + More Ascents: heat heals 3x slower in the Caldera/Kiln, campfires are extremely hot.
-    internal const int SlowHeatHotCampfires = 16;
+    // 13DDA + More Ascents: heat heals slower in the Caldera/Kiln (0.6/s), drowsiness in the
+    // Gloom/Citadel (1/s); lighting a campfire takes off less petrification.
+    internal const int SlowRecovery = 16;
     // 13DDA: hazards are more dangerous.
     internal const int Hazards = 17;
+    // More Ascents: campfires are extremely hot (cooking chars on the first cycle; lava and explosions too).
+    internal const int HotCampfires = 17;
     // 13DDA: weather is more extreme (including the Caldera lava).
     internal const int ExtremeWeather = 18;
     // More Ascents (extended): no revive statues; 20 starting curse, 15 curse per revive, revives keep petrification.

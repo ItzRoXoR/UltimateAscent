@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 using HarmonyLib;
 using UltimateAscent.Core;
 using UnityEngine;
@@ -6,66 +7,81 @@ using UnityEngine;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// The per-frame status update of the local scout, shared by two ascents:
+/// The per-frame status update of the scouts, shared by several ascents:
 /// <list type="bullet">
-/// <item>Ascent 16: heat heals three times slower in the volcanic Caldera and Kiln; in their
-/// variants (the Gloom and the Citadel) drowsiness heals at that same slow rate instead.</item>
+/// <item>Ascent 16: heat heals at 0.6 a second in the volcanic Caldera and Kiln (the game: 1.3); in
+/// their variants (the Gloom and the Citadel) drowsiness heals at 1 a second (the game: 2.5).</item>
 /// <item>Ascent 22: unique effects. Poison and spores make you stumble, injuries slowly worsen,
 /// weight pulls you down faster, drowsiness does not heal at night (there is no night from the
-/// Caldera and the Gloom on, see <see cref="Map.IsNight"/>), heat drains stamina while sprinting or
-/// climbing (cold slows you down: see <see cref="A22_UniqueAilments"/>).</item>
+/// Caldera and the Gloom on, see <see cref="Map.IsNight"/>) and heals at 2 a second by day, heat
+/// drains stamina while sprinting or climbing (cold slows you down: see <see cref="A22_UniqueAilments"/>).</item>
 /// <item>Ascent 17: poison does not heal for 10 s after a tick bite.</item>
 /// </list>
-/// Recovery rates are changed only for the duration of the call and then restored.
+/// The drowsiness and heat recovery rates stay on every scout's own fields (the game's are kept
+/// aside and come back wherever the rules leave them alone), so mods that work out from those fields
+/// when a status wears off (PlayersInfo's countdowns, Effect Preview) show this ascent's times. For
+/// other players' scouts they serve only those displays: each player's own game heals their scout.
+/// The tick bite's pause is set only for the duration of the update.
 /// </summary>
 [HarmonyPatch(typeof(CharacterAfflictions), nameof(CharacterAfflictions.UpdateNormalStatuses))]
 internal static class StatusRecovery
 {
-    private const float SlowHeatRecovery = 0.00333333f;
+    private const float SlowHeatRecovery = 0.006f;
+    private const float SlowDrowsyRecovery = 0.01f;
     private const float DayDrowsyRecovery = 0.02f;
     private const float InjuryWorsening = 0.00033333f;
 
-    internal struct Rates
+    /// <summary>A scout's recovery rates as the game set them, kept aside the first time it is updated.</summary>
+    private sealed class GameRates
     {
-        internal bool changed;
-        internal float drowsy;
-        internal float hot;
-        internal float poison;
+        internal readonly float drowsy;
+        internal readonly float hot;
+
+        internal GameRates(CharacterAfflictions afflictions)
+        {
+            drowsy = afflictions.drowsyReductionPerSecond;
+            hot = afflictions.hotReductionPerSecond;
+        }
     }
 
-    private static void Prefix(CharacterAfflictions __instance, out Rates __state)
+    private static readonly ConditionalWeakTable<CharacterAfflictions, GameRates> gameRates = new ConditionalWeakTable<CharacterAfflictions, GameRates>();
+
+    /// <summary>How fast drowsiness heals here and now on this ascent, given the game's own rate.</summary>
+    internal static float DrowsyRate(float game)
     {
-        __state = default;
+        bool slowRegion = Rules.Enabled(Lvl.SlowRecovery) && (Map.InGloom || Map.InCitadel);
+        float rate = slowRegion ? SlowDrowsyRecovery : game;
+        if (Rules.Enabled(Lvl.UniqueAilments) && DayNightManager.instance != null)
+        {
+            rate = Map.IsNight ? 0f : slowRegion ? SlowDrowsyRecovery : DayDrowsyRecovery;
+        }
+        return rate;
+    }
+
+    /// <summary>How fast heat heals here and now on this ascent, given the game's own rate.</summary>
+    internal static float HeatRate(float game)
+    {
+        return Rules.Enabled(Lvl.SlowRecovery) && Map.InVolcano ? SlowHeatRecovery : game;
+    }
+
+    private static void Prefix(CharacterAfflictions __instance, out float? __state)
+    {
+        __state = null;
+        GameRates game = gameRates.GetValue(__instance, afflictions => new GameRates(afflictions));
+        __instance.drowsyReductionPerSecond = DrowsyRate(game.drowsy);
+        __instance.hotReductionPerSecond = HeatRate(game.hot);
+
         Character character = __instance.character;
-        bool slow = Rules.Enabled(Lvl.SlowHeatHotCampfires);
-        bool unique = Rules.Enabled(Lvl.UniqueAilments);
-        bool bitten = A17_Hazards.PoisonHealingBlocked;
-        if ((!slow && !unique && !bitten) || !Rules.Owns(character))
+        if (!Rules.Owns(character))
         {
             return;
         }
-        __state = new Rates { changed = true, drowsy = __instance.drowsyReductionPerSecond, hot = __instance.hotReductionPerSecond, poison = __instance.poisonReductionPerSecond };
-        if (bitten)
+        if (A17_Hazards.PoisonHealingBlocked)
         {
+            __state = __instance.poisonReductionPerSecond;
             __instance.poisonReductionPerSecond = 0f;
         }
-
-        bool slowDrowsyRegion = false;
-        float slowDrowsyRate = SlowHeatRecovery;
-        if (slow)
-        {
-            if (Map.InVolcano)
-            {
-                __instance.hotReductionPerSecond = SlowHeatRecovery;
-            }
-            slowDrowsyRegion = Map.InGloom || Map.InCitadel;
-            if (slowDrowsyRegion)
-            {
-                __instance.drowsyReductionPerSecond = slowDrowsyRate;
-            }
-        }
-
-        if (!unique)
+        if (!Rules.Enabled(Lvl.UniqueAilments))
         {
             return;
         }
@@ -84,17 +100,6 @@ internal static class StatusRecovery
         {
             character.GetBodypart(BodypartType.Hip).rig.linearVelocity -= Vector3.up * weight * 100f * Time.deltaTime;
         }
-        if (DayNightManager.instance != null)
-        {
-            if (Map.IsNight)
-            {
-                __instance.drowsyReductionPerSecond = 0f;
-            }
-            else
-            {
-                __instance.drowsyReductionPerSecond = slowDrowsyRegion ? slowDrowsyRate : DayDrowsyRecovery;
-            }
-        }
         float heat = __instance.GetCurrentStatus(CharacterAfflictions.STATUSTYPE.Hot);
         if (heat > 0f && (character.data.isClimbing || character.data.isSprinting))
         {
@@ -102,13 +107,11 @@ internal static class StatusRecovery
         }
     }
 
-    private static Exception Finalizer(CharacterAfflictions __instance, Rates __state, Exception __exception)
+    private static Exception Finalizer(CharacterAfflictions __instance, float? __state, Exception __exception)
     {
-        if (__state.changed)
+        if (__state.HasValue)
         {
-            __instance.drowsyReductionPerSecond = __state.drowsy;
-            __instance.hotReductionPerSecond = __state.hot;
-            __instance.poisonReductionPerSecond = __state.poison;
+            __instance.poisonReductionPerSecond = __state.Value;
         }
         return __exception;
     }

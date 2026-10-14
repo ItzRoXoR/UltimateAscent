@@ -6,21 +6,20 @@ using UnityEngine;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// Ascent 16 (More Ascents): campfires are extremely hot, so anything cooked on a campfire is
+/// Ascent 17 (More Ascents): campfires are extremely hot, so anything cooked on a campfire is
 /// charred to ruin; so is anything cooked over lava or by an explosion (see
-/// <see cref="A16_LavaAndBlastCooking"/>). (The slower heat recovery of this ascent lives in
-/// <see cref="StatusRecovery"/>.)
+/// <see cref="A17_LavaAndBlastCooking"/>).
 /// Every client runs the cooking RPC, so the check uses only shared state: the item is held by a
 /// scout standing at a lit campfire.
 /// </summary>
 [HarmonyPatch(typeof(ItemCooking), nameof(ItemCooking.FinishCookingImpl))]
-internal static class A16_HotCampfires
+internal static class A17_HotCampfires
 {
     private const float CampfireReach = 6f;
 
     private static void Prefix(ItemCooking __instance)
     {
-        if (!Rules.Enabled(Lvl.SlowHeatHotCampfires) || __instance.wreckWhenCooked)
+        if (!Rules.Enabled(Lvl.HotCampfires) || __instance.wreckWhenCooked)
         {
             return;
         }
@@ -47,11 +46,11 @@ internal static class A16_HotCampfires
 }
 
 /// <summary>
-/// Ascent 16: lava and explosions char what they cook to ruin on the first cooking cycle, like
+/// Ascent 17: lava and explosions char what they cook to ruin on the first cooking cycle, like
 /// campfires. Lava (host) and explosions (the item's owner) cook on one client, which first tells
 /// everybody, through the item's own cooking message, that this cooking ruins the item.
 /// </summary>
-internal static class A16_LavaAndBlastCooking
+internal static class A17_LavaAndBlastCooking
 {
     /// <summary>A cooking message the game does not use: "the next cooking chars this item".</summary>
     private const ItemCooking.NetworkedCooking Char = (ItemCooking.NetworkedCooking)85;
@@ -91,7 +90,7 @@ internal static class A16_LavaAndBlastCooking
     {
         private static void Prefix(ItemCooking __instance)
         {
-            if (scorching <= 0 || !Rules.Enabled(Lvl.SlowHeatHotCampfires) || __instance.wreckWhenCooked || __instance.photonView == null || !__instance.photonView.AmController)
+            if (scorching <= 0 || !Rules.Enabled(Lvl.HotCampfires) || __instance.wreckWhenCooked || __instance.photonView == null || !__instance.photonView.AmController)
             {
                 return;
             }
@@ -111,43 +110,6 @@ internal static class A16_LavaAndBlastCooking
             }
             __instance.wreckWhenCooked = true;
             return false;
-        }
-    }
-}
-
-/// <summary>
-/// Ascent 16: lighting a campfire takes only 10 petrification off the scouts beside it (the game: 20).
-/// </summary>
-internal static class A16_CampfirePetrify
-{
-    internal const float PetrifyHealed = 0.1f;
-
-    [ThreadStatic] private static bool lighting;
-
-    [HarmonyPatch(typeof(Campfire), nameof(Campfire.Update))]
-    private static class Lighting
-    {
-        private static void Prefix()
-        {
-            lighting = Rules.Enabled(Lvl.SlowHeatHotCampfires);
-        }
-
-        private static Exception Finalizer(Exception __exception)
-        {
-            lighting = false;
-            return __exception;
-        }
-    }
-
-    [HarmonyPatch(typeof(CharacterAfflictions), nameof(CharacterAfflictions.AdjustStatus))]
-    private static class LessHealing
-    {
-        private static void Prefix(CharacterAfflictions.STATUSTYPE statusType, ref float amount)
-        {
-            if (lighting && statusType == CharacterAfflictions.STATUSTYPE.Petrify && amount < 0f)
-            {
-                amount = -PetrifyHealed;
-            }
         }
     }
 }

@@ -22,9 +22,11 @@ internal enum Place
 
 /// <summary>
 /// Safe questions about where the climb currently is. On regular maps the place comes from the
-/// segment and its biome variant. During True Final Ascent's FINAL ASCENT all biomes are stacked
-/// into the vanilla segments (Roots reports Tropics, Mesa reports Alpine, Gloom and Citadel report
-/// the Kiln), so there TFA's own stage tracking is used instead.
+/// segment and its biome variant: the map's fourth biome holds either the Caldera and the Kiln (the
+/// Volcano biome) or the Gloom and the Citadel (both the Swamp biome; the game has no separate
+/// biome for the Citadel there). During True Final Ascent's FINAL ASCENT all biomes are stacked into
+/// the vanilla segments (Roots reports Tropics, Mesa reports Alpine, Gloom and Citadel report the
+/// Kiln), so there TFA's own stage tracking is used instead.
 /// </summary>
 internal static class Map
 {
@@ -86,7 +88,8 @@ internal static class Map
             case Segment.Caldera:
                 return biome == Biome.BiomeType.Swamp ? Place.Gloom : Place.Caldera;
             case Segment.TheKiln:
-                return biome == Biome.BiomeType.Temple ? Place.Citadel : biome == Biome.BiomeType.Swamp ? Place.Gloom : Place.Kiln;
+                // Above the Gloom, the Kiln's place is the Citadel's (still reported as the Swamp biome).
+                return biome == Biome.BiomeType.Temple || biome == Biome.BiomeType.Swamp ? Place.Citadel : Place.Kiln;
             case Segment.Peak:
                 return Place.Peak;
             case Segment.Void:
@@ -102,13 +105,47 @@ internal static class Map
     /// <summary>The Gloom, wherever the map puts it.</summary>
     internal static bool InGloom => CurrentPlace == Place.Gloom;
 
-    /// <summary>The Gloom of a regular map, which takes the Caldera's place below the Kiln.</summary>
-    internal static bool InCalderaGloom => InGloom && CurrentSegment == Segment.Caldera;
-
     /// <summary>The volcanic Kiln (not the Citadel).</summary>
     internal static bool InVolcanoKiln => CurrentPlace == Place.Kiln;
 
     internal static bool InCitadel => CurrentPlace == Place.Citadel;
+
+    /// <summary>The Citadel's segment object in the game's map (under the Gloom's biome).</summary>
+    private const string CitadelSegmentName = "Temple_Segment";
+
+    /// <summary>
+    /// A scene object that belongs to the Citadel: on a regular map it sits under the segment the
+    /// game uses for the Kiln's place on a map whose fourth biome is the Gloom's (Swamp). True Final
+    /// Ascent's FINAL ASCENT moves that segment elsewhere; there it is found by its name.
+    /// </summary>
+    internal static bool InCitadelSegment(Component component)
+    {
+        if (component == null)
+        {
+            return false;
+        }
+        if (Ready)
+        {
+            MapHandler map = Singleton<MapHandler>.Instance;
+            int kiln = (int)Segment.TheKiln;
+            if (kiln < map.segments.Length && map.segments[kiln] != null && map.segments[kiln].biome == Biome.BiomeType.Swamp)
+            {
+                GameObject citadel = map.segments[kiln].segmentParent;
+                if (citadel != null && component.transform.IsChildOf(citadel.transform))
+                {
+                    return true;
+                }
+            }
+        }
+        for (Transform parent = component.transform; parent != null; parent = parent.parent)
+        {
+            if (parent.name == CitadelSegmentName)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
 
     /// <summary>The volcanic Caldera or Kiln.</summary>
     internal static bool InVolcano

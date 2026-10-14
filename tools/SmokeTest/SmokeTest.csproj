@@ -41,6 +41,10 @@
       <HintPath>$(ManagedDir)\Zorro.Core.Runtime.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="Zorro.Settings.Runtime" Publicize="true">
+      <HintPath>$(ManagedDir)\Zorro.Settings.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="PhotonUnityNetworking">
       <HintPath>$(ManagedDir)\PhotonUnityNetworking.dll</HintPath>
       <Private>false</Private>

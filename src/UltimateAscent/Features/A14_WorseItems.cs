@@ -329,7 +329,7 @@ internal static class A14_WorseItems
         }
     }
 
-    /// <summary>Items with several uses lose two uses per use.</summary>
+    /// <summary>Items with several uses lose two uses per use (the Climbing Chalk's three leave two).</summary>
     [HarmonyPatch(typeof(Action_ReduceUses), nameof(Action_ReduceUses.ReduceUsesRPC))]
     private static class DoubleUseCost
     {
@@ -516,8 +516,8 @@ internal static class A14_WorseItems
     }
 
     /// <summary>
-    /// Reviving keeps 25% of the cleared statuses, the Cursed Skull's clear 10% (host option
-    /// "Nerfed Revives"; the skull's crab is left to <see cref="A14_Items"/>).
+    /// Reviving keeps 25% of the cleared statuses, the Cursed Skull's clear 10% (the skull's crab is
+    /// left to <see cref="A14_Items"/>).
     /// </summary>
     [HarmonyPatch(typeof(CharacterAfflictions), nameof(CharacterAfflictions.ClearAllStatus))]
     private static class ClearLeavesResidue
@@ -525,7 +525,7 @@ internal static class A14_WorseItems
         private static void Prefix(CharacterAfflictions __instance, bool excludeCurse, bool excludePetrify, out float[] __state)
         {
             __state = null;
-            if (!On || !HostOptions.NerfedRevives || CheckpointScope.Depth > 0 || !Rules.Owns(__instance.character) || Compat.Tfa.Causing)
+            if (!On || CheckpointScope.Depth > 0 || !Rules.Owns(__instance.character) || Compat.Tfa.Causing)
             {
                 return;
             }
@@ -565,7 +565,7 @@ internal static class A14_WorseItems
 
     /// <summary>A checkpoint flag restores its saved statuses exactly; no residue there.</summary>
     [HarmonyPatch(typeof(Character), nameof(Character.TryCheckpoint))]
-    private static class CheckpointScope
+    internal static class CheckpointScope
     {
         [ThreadStatic] internal static int Depth;
 
@@ -581,7 +581,7 @@ internal static class A14_WorseItems
         }
     }
 
-    /// <summary>Revives that would give no status give curse and hunger instead (host option "Nerfed Revives").</summary>
+    /// <summary>Revives that would give no status give curse and hunger instead.</summary>
     [HarmonyPatch(typeof(Character), nameof(Character.ReviveCharacter))]
     private static class RevivalPenalty
     {
@@ -592,7 +592,7 @@ internal static class A14_WorseItems
 
         private static void Postfix(Character __instance, bool applyStatus, bool __state)
         {
-            if (__state && !applyStatus && HostOptions.NerfedRevives)
+            if (__state && !applyStatus)
             {
                 // From ascent 19 every revive already curses for 15.
                 if (!Rules.Enabled(Lvl.NoReviveStatues))

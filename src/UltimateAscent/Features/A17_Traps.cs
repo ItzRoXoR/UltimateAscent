@@ -126,8 +126,11 @@ internal static class A17_Traps
         }
     }
 
-    /// <summary>An ordinary chest in the Citadel (not a statue, a clown chest or one of the game's own mimics).</summary>
-    private static bool IsCitadelChest(Luggage luggage)
+    /// <summary>
+    /// An ordinary chest in the Citadel (not a statue, a clown chest or one of the game's own mimics).
+    /// The Citadel shares the Gloom's biome, so its chests are found by the Citadel's segment.
+    /// </summary>
+    internal static bool IsCitadelChest(Luggage luggage)
     {
         if (luggage == null || luggage is RespawnChest || luggage.CompareTag("ClownLuggage"))
         {
@@ -137,7 +140,7 @@ internal static class A17_Traps
         {
             return false;
         }
-        return Map.TryGetBiome(luggage, out Biome.BiomeType biome) && biome == Biome.BiomeType.Temple;
+        return Map.InCitadelSegment(luggage);
     }
 
     /// <summary>Every second one, by its network id, which every player agrees on.</summary>

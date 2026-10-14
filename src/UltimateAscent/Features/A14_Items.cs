@@ -20,9 +20,10 @@ namespace UltimateAscent.Features;
 /// <item>A heat pack warms for 20 s (the game: 60 s).</item>
 /// <item>The Scoutmaster's Bugle sends him after his target for 180 s (the game: 120 s).</item>
 /// <item>A Bounce Fungus pad gives back 2.5 stamina per bounce (the game: 10).</item>
-/// <item>The Roots' copy of the parasol becomes the Lightweight Parasol: it weighs nothing and is the
-/// one parasol that still slows your fall (every other one pulls you down, see A14_WorseItems). It
-/// is the Lightweight Parasol from ascent 9 and in custom runs (see <see cref="IsLightweightParasol"/>).</item>
+/// <item>The Roots' copy of the parasol becomes the Lightweight Parasol: it weighs nothing below
+/// ascent 14 and in custom runs, 5% of the bar from 14 (as much as the Parasol), and is the one
+/// parasol that still slows your fall (every other one pulls you down, see A14_WorseItems). It is the
+/// Lightweight Parasol from ascent 9 and in custom runs (see <see cref="IsLightweightParasol"/>).</item>
 /// <item>The Energy Drink speeds your walking up by 30% (see A14_WorseItems' energy-drink rule); from
 /// ascent 15 its crash brings 50 drowsiness. The Big Lollipop's drowsiness comes over 12 s and adds up
 /// to 85 (the game: 33 over 10 s).</item>
@@ -42,10 +43,12 @@ namespace UltimateAscent.Features;
 /// <item>Whatever you feed the Jetpack gives 35% less fuel.</item>
 /// <item>A checkpoint flag that saves you curses you for 10.</item>
 /// <item>The Cursed Skull is the only cure for the crab status (Bing Bong's, see A20_BingBong): cure-alls
-/// such as the Book of Bones leave it alone, the skull takes it with everything else, and with
-/// "Nerfed Revives" its clear keeps 10% of every status (crab included) instead of 25%.</item>
+/// such as the Book of Bones leave it alone, the skull takes it with everything else, and its clear
+/// keeps 10% of every status (crab included) instead of the 25% revives keep.</item>
 /// <item>The Ritual Dagger turns the teammate it is used on into a zombie instead of killing them.</item>
 /// <item>Pandora's Lunchbox can hand out the crab status too.</item>
+/// <item>A lit Lantern takes 1.5 cold a second off the scouts within 4.5 m of it (the game: 2.5); a lit
+/// Faerie Lantern 2.5 a second of each of cold, injury, poison, drowsiness and heat (the game: 5).</item>
 /// </list>
 /// </summary>
 internal static class A14_Items
@@ -84,14 +87,17 @@ internal static class A14_Items
     }
 
     /// <summary>
-    /// The Lightweight Parasol (name, no weight) exists from ascent 9, so ascent 14 never carries
-    /// lighter than 13; from 14 it is also the one parasol that still slows your fall. Custom runs
-    /// have it too, with its own switch on the Custom Run screen (<see cref="CustomRunItems"/>).
+    /// The Lightweight Parasol (name, no weight) exists from ascent 9; from 14 it weighs as much as
+    /// the Parasol and is the one parasol that still slows your fall. Custom runs have it too,
+    /// weightless, with its own switch on the Custom Run screen (<see cref="CustomRunItems"/>).
     /// </summary>
     internal static bool IsLightweightParasol(Item item)
     {
-        return (Rules.Enabled(Lvl.First) || CustomRunItems.InCustomRun) && IsRootsParasol(item);
+        return LightweightParasolExists && IsRootsParasol(item);
     }
+
+    /// <summary>The Roots parasol is the Lightweight Parasol in this run (from ascent 9, and in custom runs).</summary>
+    internal static bool LightweightParasolExists => Rules.InExtraAscent || CustomRunItems.InCustomRun;
 
     internal const string EnergyDrinkName = "Energy Drink";
     internal const string BigLollipopName = "Big Lollipop";
@@ -147,8 +153,20 @@ internal static class A14_Items
 
     private const string AncientIdolName = "Ancient Idol";
 
+    private const string LanternName = "Lantern";
+    private const string FaerieLanternName = "Faerie Lantern";
+
+    /// <summary>What a lit Lantern takes off a second: cold (the game: 2.5).</summary>
+    internal const float LanternWarmth = 0.015f;
+
+    /// <summary>What a lit Faerie Lantern takes off a second, of each of its statuses (the game: 5).</summary>
+    internal const float FaerieLanternHealing = 0.025f;
+
     /// <summary>The Ancient Idol's weight: half the bar (each point is 2.5).</summary>
     private const int AncientIdolWeight = 20;
+
+    /// <summary>The Lightweight Parasol's weight from ascent 14: 5% of the bar, as much as the Parasol.</summary>
+    internal const int WorseLightweightParasolWeight = 2;
 
     /// <summary>A carried Balloon takes 2% of the bar off your weight, a Balloon Bunch 8% (the game, from ascent 3: 2.5% and 12.5%).</summary>
     private const string BalloonName = "Balloon";
@@ -164,7 +182,7 @@ internal static class A14_Items
 
     private const string CursedSkullName = "Cursed Skull";
 
-    /// <summary>The share of every status the Cursed Skull's clear keeps with "Nerfed Revives" (revives keep 25%).</summary>
+    /// <summary>The share of every status the Cursed Skull's clear keeps (revives keep 25%).</summary>
     internal const float CursedSkullResidue = 0.1f;
 
     [ThreadStatic] private static int energyDrinkScope;
@@ -551,7 +569,7 @@ internal static class A14_Items
         {
             if (IsLightweightParasol(__instance))
             {
-                __result = 0;
+                __result = On ? WorseLightweightParasolWeight : 0;
                 return;
             }
             if (!On)
@@ -566,6 +584,36 @@ internal static class A14_Items
             else if (name == BalloonName || name == BalloonBunchName)
             {
                 __result = 0;
+            }
+        }
+    }
+
+    /// <summary>
+    /// A lit lantern's warmth is a status field on its light, switched on with it: the Lantern's takes
+    /// cold off, the Faerie Lantern's the same amount of each of its statuses (the game uses the field's
+    /// one amount for all of them). Each item gets its own copy of the field, so this changes nothing else.
+    /// </summary>
+    [HarmonyPatch(typeof(Item), nameof(Item.Awake))]
+    private static class WeakerLanterns
+    {
+        private static void Postfix(Item __instance)
+        {
+            if (!On)
+            {
+                return;
+            }
+            string name = NameOf(__instance);
+            float perSecond = name == LanternName ? LanternWarmth : name == FaerieLanternName ? FaerieLanternHealing : 0f;
+            if (perSecond <= 0f)
+            {
+                return;
+            }
+            foreach (StatusField field in __instance.GetComponentsInChildren<StatusField>(true))
+            {
+                if (field.statusAmountPerSecond < 0f)
+                {
+                    field.statusAmountPerSecond = -perSecond;
+                }
             }
         }
     }
@@ -669,16 +717,31 @@ internal static class A14_Items
         }
     }
 
-    /// <summary>Runs on the saved scout's client, after the flag has restored their statuses.</summary>
-    [HarmonyPatch(typeof(Character), nameof(Character.TryCheckpoint))]
+    /// <summary>
+    /// Runs on the saved scout's client, right after the flag has put back its saved statuses: the game
+    /// then moves the scout to the flag, and statuses cannot change while it does.
+    /// </summary>
+    [HarmonyPatch(typeof(CharacterAfflictions), nameof(CharacterAfflictions.ApplyStatusesFromFloatArray))]
     private static class CursedCheckpoint
+    {
+        private static void Postfix(CharacterAfflictions __instance)
+        {
+            if (A14_WorseItems.CheckpointScope.Depth > 0 && On && Rules.Owns(__instance.character))
+            {
+                __instance.AddStatus(Curse, A15_StrongerAilments.Raw(Curse, CheckpointCurse));
+            }
+        }
+    }
+
+    /// <summary>The bean's thorns come out when a flag saves the scout.</summary>
+    [HarmonyPatch(typeof(Character), nameof(Character.TryCheckpoint))]
+    private static class CheckpointPullsBeanThorns
     {
         private static void Postfix(Character __instance, bool __result)
         {
             if (__result && On && Rules.Owns(__instance))
             {
                 ClearBeanThorns(__instance.refs.afflictions);
-                __instance.refs.afflictions.AddStatus(Curse, A15_StrongerAilments.Raw(Curse, CheckpointCurse));
             }
         }
     }
@@ -825,7 +888,7 @@ internal static class A14_Items
             float crab = __instance.GetCurrentStatus(Crab);
             if (crab > 0f)
             {
-                __instance.SetStatus(Crab, HostOptions.NerfedRevives ? crab * CursedSkullResidue : 0f);
+                __instance.SetStatus(Crab, crab * CursedSkullResidue);
             }
         }
     }

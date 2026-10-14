@@ -197,7 +197,7 @@ internal static class A11_RuleZero
 
         private static void Postfix(Character __instance, bool __state)
         {
-            if (__state || !Rules.Enabled(Lvl.RuleZero) || !HostOptions.CursePunishment || __instance.isBot || __instance.isScoutmaster)
+            if (__state || !Rules.Enabled(Lvl.RuleZero) || __instance.isBot || __instance.isScoutmaster)
             {
                 return;
             }

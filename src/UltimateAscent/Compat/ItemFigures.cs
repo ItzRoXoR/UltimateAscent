@@ -20,7 +20,8 @@ namespace UltimateAscent.Compat;
 /// <item>Extra stamina: half (14). Poisonous food: its exact total (15) or the boosted poison.</item>
 /// <item>Effects: the Energy Drink's 50 crash and the boost on other crashes (15), the Big Lollipop's
 /// crash (14), every drowsiness over time (14), the Heat Pack's 20 s (14), the gems' numbers (14).</item>
-/// <item>Weight (for Item Stats, which reads the raw field): the rules' weight.</item>
+/// <item>Weight (for Item Stats, which reads the raw field): the rules' weight, in custom runs too
+/// (the Lightweight Parasol weighs nothing there as well).</item>
 /// </list>
 /// </summary>
 internal static class ItemFigures
@@ -32,13 +33,14 @@ internal static class ItemFigures
     internal static void Begin(Item item, bool weight = false)
     {
         depth++;
-        if (depth > 1 || item == null || !Rules.Enabled(Lvl.First))
+        bool rules = Rules.InExtraAscent;
+        if (depth > 1 || item == null || (!rules && !weight))
         {
             return;
         }
         try
         {
-            Apply(item, weight);
+            Apply(item, weight, rules);
         }
         catch (Exception ex)
         {
@@ -86,13 +88,11 @@ internal static class ItemFigures
         set(value);
     }
 
-    private static void Apply(Item item, bool weight)
+    private static void Apply(Item item, bool weight, bool rules)
     {
-        bool worse = Rules.Enabled(Lvl.WorseItems);
-        bool stronger = Rules.Enabled(Lvl.StrongerAilments);
-        string name = A14_Items.NameOf(item);
         if (weight)
         {
+            // What the weight bar counts (the rules' weights, also outside the ascents' rules).
             int carry = item.carryWeight;
             int shown = item.CarryWeight - Ascents.itemWeightModifier;
             if (carry != shown)
@@ -101,6 +101,13 @@ internal static class ItemFigures
                 item.carryWeight = shown;
             }
         }
+        if (!rules)
+        {
+            return;
+        }
+        bool worse = Rules.Enabled(Lvl.WorseItems);
+        bool stronger = Rules.Enabled(Lvl.StrongerAilments);
+        string name = A14_Items.NameOf(item);
         A14_Gems.Prepare(item);
         foreach (ItemAction action in item.GetComponentsInChildren<ItemAction>(true))
         {

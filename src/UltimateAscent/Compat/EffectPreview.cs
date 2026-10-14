@@ -17,7 +17,7 @@ namespace UltimateAscent.Compat;
 /// <list type="bullet">
 /// <item>Items (and the cooked item's next stage): this ascent's numbers (<see cref="ItemFigures"/>),
 /// plus what the rules add: a raw egg's or tick's poison, a raw Mandrake's spores, a scorpion's poison
-/// (14). Cure-alls take at most 50 of each status (14). Cooking is not previewed from ascent 16, where
+/// (14). Cure-alls take at most 50 of each status (14). Cooking is not previewed from ascent 17, where
 /// it ruins the food at once; from 14 it keeps poison and spores.</item>
 /// <item>A Remedy Fungus cloud lasts 8 s, so it heals less (14); feeding the Jetpack gives 35% less
 /// fuel (14).</item>
@@ -215,7 +215,7 @@ internal static class EffectPreview
         }
     }
 
-    /// <summary>From ascent 16 one cooking cycle ruins the food (the charring rule), so there is no next stage to show.</summary>
+    /// <summary>From ascent 17 one cooking cycle ruins the food (the charring rule), so there is no next stage to show.</summary>
     [HarmonyPatch]
     private static class NoCookingStages
     {
@@ -225,7 +225,7 @@ internal static class EffectPreview
 
         private static void Postfix(ref bool __result)
         {
-            if (__result && Rules.Enabled(Lvl.SlowHeatHotCampfires))
+            if (__result && Rules.Enabled(Lvl.HotCampfires))
             {
                 __result = false;
             }
@@ -305,7 +305,7 @@ internal static class EffectPreview
 
         private static void Postfix(object __result)
         {
-            if (__result != null && Rules.Enabled(Lvl.SlowHeatHotCampfires))
+            if (__result != null && Rules.Enabled(Lvl.SlowRecovery))
             {
                 float reduction = (float)petrifyReduction.GetValue(__result);
                 petrifyReduction.SetValue(__result, Mathf.Min(reduction, A16_CampfirePetrify.PetrifyHealed));

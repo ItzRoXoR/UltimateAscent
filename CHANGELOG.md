@@ -1,5 +1,60 @@
 # Changelog
 
+## 1.1.1
+
+For PEAK 2.6.b.
+
+* Config: every ascent 9-25 has its own switch (section "Ascents"): one switched off leaves out only
+  that ascent's rule, so ascent 25 can be played without ascent 20's Bing Bong. The host's switches
+  apply to everyone. The "Big Lobbies" section is gone (Nerfed Revives and Curse On Teammate Death are
+  simply part of ascents 14 and 11 again), and the config file drops entries the mod no longer has,
+  such as "Double Apocalypse Weather".
+* Ascent 12: fall damage makes you 60 drowsy (was 80; below ascent 15 46.2, was 61.5). At ascent 24
+  a fall no longer kills by itself: with the starting 20 curse it takes a fall that hurts for 20 or
+  more, or other statuses on the bar.
+* Ascent 12: pulling someone up makes you 10 drowsy a second (7.7 below ascent 15). It was 5 at
+  every ascent: the bar's 2.5-point steps swallowed ascent 15's boost.
+* Ascents 12 and 13 with True Final Ascent's Apocalypse: every fall the game hurts you for brings
+  the drowsiness and the drop, also when TFA's events made you fall. Before, a landing within 5 s of
+  a TFA gust, knock-down or throw, or within 15 s of its antigravity, was left to TFA, so during its
+  storms no fall brought them (balloons or not).
+* Ascent 14: a lit Lantern takes 1.5 cold a second off the scouts near it (game: 2.5), a lit Faerie
+  Lantern 2.5 a second of each of cold, injury, poison, drowsiness and heat (game: 5).
+* Ascent 14: the Lightweight Parasol weighs 5% of the bar, as much as the Parasol (it stays
+  weightless from 9 to 13 and in custom runs).
+* Ascent 16: heat heals at 0.6 a second in the Caldera and the Kiln (was 0.33; game: 1.3), and
+  drowsiness at 1 a second in the Gloom and the Citadel (was 0.33; game: 2.5).
+* Campfires are extremely hot from ascent 17 instead of 16: cooking on a campfire, over lava or by
+  an explosion chars to ruin on the first cycle. Lighting a campfire still takes only 10
+  petrification off from ascent 16.
+* Ascent 17: a Mandrake's stronger scream makes only players drowsy who can hear it (the game's
+  rule): with your sound-effects or master volume at 0 it gives nothing.
+* Climbing Chalk: as rare as the Big Lollipop (was as common as the Energy Drink), still in the
+  Energy Drink's luggage. Three uses, two from ascent 14 (which takes two uses per use), each with
+  its cloud of dust; every further use starts the effect's time over. Cooking now darkens it like any
+  other item (it kept its colour) and gives it none of the food changes (Item Stats and Effect
+  Preview showed poison on an incinerated chalk); a burned chalk can no longer be used.
+* The Lightweight Parasol looks its own: a dark blue, turquoise and pale mint canopy instead of the
+  Parasol's rainbow, and its own inventory icon (from ascent 9 and in custom runs).
+* Shorter boarding-pass descriptions for ascents 9, 11, 13, 16, 18 and 23.
+* Fixed, checkpoint flags:
+  - a flag that saved you put the cold, drowsiness, heat, poison and spores it had saved back bigger
+    than they were (ascent 15's boost hit them a second time); it now puts them back exactly;
+  - its 10 curse (ascent 14) never landed, because the game locks statuses while it moves you to the
+    flag; it now lands;
+  - at ascent 24 a scout the flag saved collapsed again at the flag a moment later and dropped what
+    they held (the pass-out's fade to black finished after the save); the flag now saves you before
+    you pass out.
+* Fixed: ascent 17's Citadel mimics (every second ordinary Citadel chest) never came on normal maps,
+  because the game files list the Citadel under the Gloom's biome. The mod also tells the Citadel
+  from the Gloom again.
+* Fixed: with True Final Ascent, the boarding pass's left arrow on Tenderfoot skipped TFA's FINAL
+  ASCENT and went straight to the highest ascent; it now goes to FINAL ASCENT first, like the right
+  arrow the other way.
+* PlayersInfo: its countdowns of how long a status takes to wear off follow the ascent's recovery
+  (it read the game's rates); cactus thorns that never fall out show no broken countdown.
+* Item Stats: the Lightweight Parasol shows no weight in custom runs either.
+
 ## 1.1.0
 
 For PEAK 2.6.b.

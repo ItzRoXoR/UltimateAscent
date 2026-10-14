@@ -15,20 +15,24 @@ namespace UltimateAscent.Features;
 /// never handed out, nothing to use it up, its effect switched off (none of its action's triggers is
 /// set) and nothing that reads the climbing multiplier of that effect.
 /// <list type="bullet">
-/// <item>From ascent 9 it turns up wherever the Energy Drink does, exactly as often (a rare find in the
-/// same luggage). Below ascent 9 it never spawns. A custom run lists it on the Custom Run screen with
-/// the other items (<see cref="CustomRunItems"/>), and its switch there decides.</item>
-/// <item>Using it takes 2 s and uses it up. For 16 s, climbing (walls, ropes and vines alike) costs 75%
-/// of its stamina; from ascent 14, 85% for 12 s. Another chalk restarts the time.</item>
+/// <item>From ascent 9 it turns up wherever the Energy Drink does, as rarely as the Big Lollipop (its
+/// rarity, Legendary). Below ascent 9 it never spawns. A custom run lists it on the Custom Run screen
+/// with the other items (<see cref="CustomRunItems"/>), and its switch there decides.</item>
+/// <item>It has three uses (a use bar like the game's other multi-use items); from ascent 14 two, as
+/// that ascent takes two uses per use of every item. Each use takes 2 s. For 16 s, climbing (walls,
+/// ropes and vines alike) costs 75% of its stamina; from ascent 14, 85% for 12 s. Another use restarts
+/// the time.</item>
+/// <item>Cooking darkens it but gives it none of the game's food changes (extra stamina, poison once
+/// incinerated); a burned chalk (cooked three times or more) can no longer be used.</item>
 /// <item>While it is being used, its user hears hands rubbing (only its user, like the game's own
-/// item-use sounds). When it is used up, a puff of dust bursts around the scout for everyone: the
+/// item-use sounds). After each use, a puff of dust bursts around the scout for everyone: the
 /// Sunscreen's spray cloud, without its sound and without its sun protection.</item>
 /// <item>While the effect lasts, a chalked hand shows above the right end of the stamina bar (for the
 /// scout the HUD follows, so also when spectating); it goes when the effect ends.</item>
 /// <item>While the effect lasts, the scout's hands are chalk white for everyone, gloves included
 /// (<see cref="ClimbingChalkHands"/>).</item>
-/// <item>It gets an icon (rendered from its model), its name, the prompt "use", no use bar, and loses
-/// the game's "mystical" tag: picking up a mystical item earns a Steam achievement.</item>
+/// <item>It gets an icon (rendered from its model), its name, the prompt "use", and loses the game's
+/// "mystical" tag: picking up a mystical item earns a Steam achievement.</item>
 /// </list>
 /// </summary>
 internal static class ClimbingChalkItem
@@ -37,6 +41,9 @@ internal static class ClimbingChalkItem
     internal const string NameKey = "NAME_CLIMBING CHALK";
 
     internal const string EnergyDrinkPrefab = "Energy Drink";
+
+    /// <summary>The Big Lollipop, whose rarity the chalk has.</summary>
+    internal const string BigLollipopPrefab = "Lollipop";
     private const string SunscreenPrefab = "Sunscreen";
     private const string IconResource = "UltimateAscent.ClimbingChalk_icon.png";
     private const string StatusIconResource = "UltimateAscent.ClimbingChalk_status.png";
@@ -46,6 +53,9 @@ internal static class ClimbingChalkItem
     /// <summary>The share of climbing stamina it costs while chalked, and for how long.</summary>
     private const float Stamina = 0.75f;
     private const float Seconds = 16f;
+
+    /// <summary>How many times one chalk can be used (ascent 14's two uses per use leave two).</summary>
+    internal const int Uses = 3;
 
     /// <summary>From ascent 14.</summary>
     private const float WorseStamina = 0.85f;
@@ -119,6 +129,7 @@ internal static class ClimbingChalkItem
     /// The item's own fields, on the prefab (the inventory shows the prefab's icon) and on every copy.
     /// The effect action fires once the 2 s use is done. Its triggers are read each time it subscribes
     /// (OnEnable, then Start, which subscribes it afresh), so setting them in its Item's Awake is enough.
+    /// The item's Start then gives a new chalk its uses (with the use bar).
     /// </summary>
     internal static void Prepare(Item item)
     {
@@ -129,8 +140,7 @@ internal static class ClimbingChalkItem
         }
         item.UIData.mainInteractPrompt = UsePrompt;
         item.itemTags &= ~Item.ItemTags.Mystical;
-        // Single use, like the Energy Drink: no use bar.
-        item.totalUses = -1;
+        item.totalUses = Uses;
         foreach (Action_ApplyAffliction effect in item.GetComponents<Action_ApplyAffliction>())
         {
             effect.OnCastFinished = true;
@@ -151,11 +161,37 @@ internal static class ClimbingChalkItem
                 Prepare(prefab);
             }
             Prepare(__instance);
-            if (!__instance.TryGetComponent(out Action_Consume _))
+            if (!__instance.TryGetComponent(out Action_ReduceUses _))
             {
-                // Its own Start subscribes it to the finished use (the flag is still off in OnEnable).
-                Action_Consume consume = __instance.gameObject.AddComponent<Action_Consume>();
-                consume.OnCastFinished = true;
+                // Each finished use takes one off; the last one uses the chalk up. Its own Start
+                // subscribes it to the finished use (the flag is still off in OnEnable).
+                Action_ReduceUses uses = __instance.gameObject.AddComponent<Action_ReduceUses>();
+                uses.consumeOnFullyUsed = true;
+                uses.OnCastFinished = true;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The game gives an item its uses when it first starts, unless something has read its uses before
+    /// (the inventory does, for an item made straight into a hand or a slot), and a chalk carried over
+    /// from a version where it had a single use has none either. A chalk without uses gets its three.
+    /// </summary>
+    [HarmonyPatch(typeof(Item), nameof(Item.Start))]
+    private static class ChalkUses
+    {
+        private static void Postfix(Item __instance)
+        {
+            if (!IsChalk(__instance))
+            {
+                return;
+            }
+            OptionableIntItemData uses = __instance.GetData<OptionableIntItemData>(DataEntryKey.ItemUses);
+            if (!uses.HasData)
+            {
+                uses.HasData = true;
+                uses.Value = Uses;
+                __instance.SetUseRemainingPercentage(1f);
             }
         }
     }
@@ -220,8 +256,16 @@ internal static class ClimbingChalkItem
         }
     }
 
+    /// <summary>The weight of the Big Lollipop's rarity in the loot tables (the chalk's own, if that item is missing).</summary>
+    internal static int SpawnWeight()
+    {
+        LootData lollipop = ItemDatabase.TryGetItem(BigLollipopPrefab, out Item item) && item != null ? item.GetComponent<LootData>() : null;
+        Rarity rarity = lollipop != null ? lollipop.Rarity : Rarity.Legendary;
+        return LootData.RarityWeights.TryGetValue(rarity, out int weight) ? weight : 15;
+    }
+
     /// <summary>
-    /// The chalk joins every pool the Energy Drink is in, with the Energy Drink's weight. The table is
+    /// The chalk joins every pool the Energy Drink is in, as rare as the Big Lollipop. The table is
     /// built once and kept, so the chalk is always in it; <see cref="OnlyFromAscent9"/> keeps it out
     /// of what actually spawns below ascent 9.
     /// </summary>
@@ -238,13 +282,53 @@ internal static class ClimbingChalkItem
                 return;
             }
             Prepare(chalk);
+            int weight = SpawnWeight();
             foreach (Dictionary<ushort, int> pool in LootData.AllSpawnWeightData.Values)
             {
-                if (pool.TryGetValue(drink.itemID, out int weight))
+                if (pool.ContainsKey(drink.itemID))
                 {
                     pool[chalk.itemID] = weight;
                 }
             }
+        }
+    }
+
+    /// <summary>A burned chalk (cooked three times or more) cannot be used.</summary>
+    [HarmonyPatch(typeof(Item), nameof(Item.CanUsePrimary))]
+    private static class BurnedChalkPrimary
+    {
+        private static void Postfix(Item __instance, ref bool __result)
+        {
+            if (__result && IsChalk(__instance) && BurnedItems.IsBurned(__instance))
+            {
+                __result = false;
+            }
+        }
+    }
+
+    [HarmonyPatch(typeof(Item), nameof(Item.CanUseSecondary))]
+    private static class BurnedChalkSecondary
+    {
+        private static void Postfix(Item __instance, ref bool __result)
+        {
+            if (__result && IsChalk(__instance) && BurnedItems.IsBurned(__instance))
+            {
+                __result = false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Cooking gives food extra stamina and, once incinerated, poison, both handed out when the item is
+    /// used up; the chalk is no food and gets neither. Ruining it (a scorching campfire, lava or an
+    /// explosion from ascent 17) still ruins it.
+    /// </summary>
+    [HarmonyPatch(typeof(ItemCooking), nameof(ItemCooking.ChangeStatsCooked))]
+    private static class NoFoodChanges
+    {
+        private static bool Prefix(ItemCooking __instance, int totalCooked)
+        {
+            return !IsChalk(__instance.item) || (__instance.wreckWhenCooked && totalCooked > 0);
         }
     }
 
@@ -257,7 +341,7 @@ internal static class ClimbingChalkItem
     {
         private static void Postfix(Item __instance, ref bool __result)
         {
-            if (__result && IsChalk(__instance) && !RunSettings.IsCustomRun && !Rules.Enabled(Lvl.First))
+            if (__result && IsChalk(__instance) && !RunSettings.IsCustomRun && !Rules.InExtraAscent)
             {
                 __result = false;
             }
@@ -311,15 +395,16 @@ internal static class ClimbingChalkItem
     }
 
     /// <summary>
-    /// The used-up chalk's consume message reaches every player, so everyone sees the dust (before the
-    /// item is switched off, while it still knows who holds it).
+    /// Every use's message (one use off) reaches every player, so everyone sees the dust, the last
+    /// use's too (it arrives before the chalk is used up and switched off).
     /// </summary>
-    [HarmonyPatch(typeof(Item), nameof(Item.Consume))]
+    [HarmonyPatch(typeof(Action_ReduceUses), nameof(Action_ReduceUses.ReduceUsesRPC))]
     private static class ChalkDust
     {
-        private static void Prefix(Item __instance)
+        private static void Postfix(Action_ReduceUses __instance)
         {
-            if (!IsChalk(__instance))
+            Item item = __instance.item;
+            if (!IsChalk(item))
             {
                 return;
             }
@@ -329,7 +414,7 @@ internal static class ClimbingChalkItem
                 return;
             }
             // From the hands, where the chalk was rubbed in (and in front of the scout's own eyes).
-            UnityEngine.Object.Instantiate(template, __instance.transform.position, Quaternion.identity);
+            UnityEngine.Object.Instantiate(template, item.transform.position, Quaternion.identity);
         }
     }
 

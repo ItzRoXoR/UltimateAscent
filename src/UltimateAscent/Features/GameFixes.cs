@@ -19,7 +19,7 @@ namespace UltimateAscent.Features;
 /// </summary>
 internal static class GameFixes
 {
-    private static bool On => Rules.Enabled(Lvl.First);
+    private static bool On => Rules.InExtraAscent;
 
     [HarmonyPatch(typeof(Campfire), nameof(Campfire.Awake))]
     private static class StoveLitFromTheStart

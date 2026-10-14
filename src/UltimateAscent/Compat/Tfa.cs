@@ -34,9 +34,6 @@ internal static class Tfa
     /// <summary>What TFA puts in the network data of the things its events spawn ("FA_BloodMoon", "FA_CactusRain", "FA_SUPPLY").</summary>
     private const string SpawnTag = "FA_";
 
-    /// <summary>The landings this long after TFA's antigravity ends are still its fall.</summary>
-    private const float AntigravAfterSeconds = 15f;
-
     private static bool? present;
     private static bool broken;
 
@@ -48,6 +45,8 @@ internal static class Tfa
     private static FieldInfo builderOffsets;
     private static PropertyInfo weatherApplied;
     private static PropertyInfo iceFogDrawing;
+    private static MethodInfo terrainComeBack;
+    private static bool terrainFailed;
 
     internal static bool Present => present ??= Chainloader.PluginInfos.ContainsKey(Guid) && Bind();
 
@@ -69,6 +68,9 @@ internal static class Tfa
             weatherApplied = AccessTools.Property(weather, "Applied");
             // Optional: without it the fog colour simply does not check for TFA's Ice Fog.
             iceFogDrawing = AccessTools.Property(AccessTools.TypeByName(Ns + "FinalAscentIceFog"), "Drawing");
+            // Optional: without it, leaving FINAL ASCENT by wrapping around leaves the TerrainRandomiser mod as TFA set it.
+            Type terrain = AccessTools.TypeByName(Ns + "FinalAscentTerrainRandomiser");
+            terrainComeBack = terrain != null ? AccessTools.Method(terrain, "ComeBack") : null;
 
             if (finalAscent == null || finalAscentActive == null || placeCurrent == null || placeInRun == null || apocalypseActive == null || builderOffsets == null || weatherApplied == null)
             {
@@ -108,7 +110,6 @@ internal static class Tfa
     private static bool finalAscentCached;
     private static bool apocalypseCached;
     private static string weatherCached = "";
-    private static float antigravSeen = float.NegativeInfinity;
 
     private static void RefreshFlags()
     {
@@ -121,10 +122,6 @@ internal static class Tfa
         finalAscentCached = Rules.InRun && Guard(() => (bool)finalAscentActive.GetValue(null), false);
         apocalypseCached = Rules.InRun && Guard(() => (bool)apocalypseActive.GetValue(null) && (bool)placeInRun.Invoke(null, null), false);
         weatherCached = apocalypseCached ? Guard(() => weatherApplied.GetValue(null) as string ?? "", "") : "";
-        if (weatherCached == "antigrav")
-        {
-            antigravSeen = Time.time;
-        }
     }
 
     /// <summary>A FINAL ASCENT climb is loaded.</summary>
@@ -181,16 +178,6 @@ internal static class Tfa
         {
             string weather = Weather;
             return weather == "dark" || weather == "watch";
-        }
-    }
-
-    /// <summary>TFA's antigravity is on, or ended so recently that scouts are still coming down from it.</summary>
-    internal static bool AntigravFalls
-    {
-        get
-        {
-            _ = Weather;
-            return Present && !broken && Time.time - antigravSeen < AntigravAfterSeconds;
         }
     }
 
@@ -276,6 +263,27 @@ internal static class Tfa
     /// TFA's Ice Fog is drawing its fog with the game's fog sphere: while it runs it takes the rising
     /// fog's sphere over, in its own colour and with its own cold.
     /// </summary>
+    /// <summary>
+    /// The boarding pass leaves FINAL ASCENT: TFA switches the TerrainRandomiser mod back on if it switched
+    /// it off for FINAL ASCENT (its own left arrow does this; the wrap-around to Tenderfoot is this mod's).
+    /// </summary>
+    internal static void LeaveFinalAscent()
+    {
+        if (terrainFailed || terrainComeBack == null || !Present)
+        {
+            return;
+        }
+        try
+        {
+            terrainComeBack.Invoke(null, null);
+        }
+        catch (Exception ex)
+        {
+            terrainFailed = true;
+            Plugin.Log.LogWarning("Could not hand the TerrainRandomiser mod back to True Final Ascent: " + ex.GetBaseException().Message);
+        }
+    }
+
     internal static bool IceFogDrawing => iceFogDrawing != null && Guard(() => (bool)iceFogDrawing.GetValue(null), false);
 
     // ---- FINAL ASCENT ----
@@ -337,6 +345,5 @@ internal static class Tfa
     internal static void Reset()
     {
         spawned = new ConditionalWeakTable<GameObject, StrongBox<bool>>();
-        antigravSeen = float.NegativeInfinity;
     }
 }

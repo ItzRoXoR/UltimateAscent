@@ -13,8 +13,9 @@ namespace UltimateAscent.Features;
 /// <list type="bullet">
 /// <item>The arrows go up to the highest unlocked ascent. With True Final Ascent installed, its
 /// FINAL ASCENT entry stays right after that, exactly where TFA puts it.</item>
-/// <item>The arrows wrap around: left from Tenderfoot jumps to the highest unlocked ascent, right
-/// from the end of the list goes back to Tenderfoot.</item>
+/// <item>The arrows wrap around: left from Tenderfoot jumps to the end of the list (True Final
+/// Ascent's FINAL ASCENT when it is installed, otherwise the highest unlocked ascent), right from the
+/// end of the list goes back to Tenderfoot.</item>
 /// <item>The boarding pass opens on the ascent chosen in the config ("Default Ascent").</item>
 /// <item>Ascents 9-25 give no reward, so their reward line stays hidden.</item>
 /// <item>Ascents 9-25 can only be started when every player has this mod in the same version.</item>
@@ -121,23 +122,34 @@ internal static class BoardingPassUi
             {
                 return true;
             }
+            if (__instance.ascentIndex == FinalAscentIndex)
+            {
+                // What TFA's own left arrow does when it leaves FINAL ASCENT.
+                Compat.Tfa.LeaveFinalAscent();
+            }
             __instance.ascentIndex = -1;
             __instance.UpdateAscent();
             return false;
         }
     }
 
+    /// <summary>
+    /// After TFA's own left arrow: every prefix runs even once one has skipped the game's method, and
+    /// TFA's moves FINAL ASCENT on to the highest ascent, so going there first would land on that.
+    /// </summary>
     [HarmonyPatch(typeof(BoardingPass), nameof(BoardingPass.DecrementAscent))]
     private static class WrapBackward
     {
-        [HarmonyPriority(Priority.First)]
+        [HarmonyPriority(Priority.Last)]
         private static bool Prefix(BoardingPass __instance)
         {
             if (!Plugin.WrapAround.Value || RunSettings.IsCustomRun || !AscentCatalog.Registered || __instance.ascentIndex != -1)
             {
                 return true;
             }
-            __instance.ascentIndex = Progress.MaxSelectable;
+            // TFA offers its FINAL ASCENT right after the highest ascent whenever it is installed (its
+            // own arrows go there the same way: the index, then the pass is redrawn).
+            __instance.ascentIndex = Compat.Tfa.Present ? FinalAscentIndex : Progress.MaxSelectable;
             __instance.UpdateAscent();
             return false;
         }

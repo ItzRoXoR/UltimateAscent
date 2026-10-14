@@ -28,19 +28,19 @@ internal static class AscentCatalog
     private static readonly Entry[] Entries =
     {
         // 9
-        new Entry("The fog is twice as fast and starts almost at once, until the Caldera or the Gloom. The Kiln's lava and the Citadel's gloom rise sooner and faster.",
+        new Entry("The fog, the Kiln's lava and the Citadel's gloom start rising sooner and go faster.",
             new Color32(255, 166, 77, 255)),
         // 10
         new Entry("Big and Explorer's luggage have a chance to contain only one item.",
             new Color32(255, 140, 64, 255)),
         // 11
-        new Entry("Rule zero is stricter: stray from your group and the Scoutmaster hunts you. Every death curses the survivors, and eating a scout poisons you.",
+        new Entry("Rule zero is stricter.",
             new Color32(255, 115, 51, 255)),
         // 12
         new Entry("Falling and helping people up make you drowsy.",
             new Color32(242, 92, 64, 255)),
         // 13
-        new Entry("Butter fingers: fall damage makes you drop everything, your backpack included.",
+        new Entry("Fall damage makes you drop everything.",
             new Color32(230, 72, 72, 255)),
         // 14
         new Entry("Items are worse.",
@@ -49,13 +49,13 @@ internal static class AscentCatalog
         new Entry("Cold, drowsiness, poison, spores and heat apply more.",
             new Color32(204, 46, 92, 255)),
         // 16
-        new Entry("Heat heals 3x slower in the Caldera and the Kiln, drowsiness in the Gloom and the Citadel. Campfires are extremely hot.",
+        new Entry("Heat in the Caldera and drowsiness in the Gloom heal slower.",
             new Color32(191, 38, 106, 255)),
         // 17
-        new Entry("Hazards are more dangerous.",
+        new Entry("Hazards are more dangerous. Campfires are extremely hot.",
             new Color32(173, 33, 122, 255)),
         // 18
-        new Entry("Weather is more extreme, including the Caldera's lava. Nights are colder, and longer in the Alpine. The Mesa's midday sun burns whatever you shield yourself with.",
+        new Entry("The weather is more extreme.",
             new Color32(153, 31, 140, 255)),
         // 19
         new Entry("No more revive statues, and reviving comes at a price.",
@@ -70,7 +70,7 @@ internal static class AscentCatalog
         new Entry("All status ailments have unique effects.",
             new Color32(74, 38, 163, 255)),
         // 23
-        new Entry("The sun is hot everywhere but the Alpine, and everywhere it burns whatever you shield yourself with if used too long.",
+        new Entry("The sun is very hot.",
             new Color32(56, 38, 148, 255)),
         // 24
         new Entry("Going unconscious is instant death.",

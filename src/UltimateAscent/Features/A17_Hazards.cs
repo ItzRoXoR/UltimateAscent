@@ -1265,6 +1265,21 @@ internal static class A17_Hazards
     private const float MandrakeScream = 0.75f;
     private const float MandrakeScreamTicks = 11f;
 
+    /// <summary>The game counts a volume at or below this as switched off.</summary>
+    private const float MutedVolume = 0.01f;
+
+    /// <summary>
+    /// The game's own rule: a Mandrake's scream only makes players drowsy who can hear it, with both
+    /// their sound-effects and their master volume above 1%. Read afresh for every tick of the scream.
+    /// </summary>
+    internal static bool HearsMandrakes()
+    {
+        SettingsHandler settings = GameHandler.Instance != null ? GameHandler.Instance.SettingsHandler : null;
+        SFXVolumeSetting effects = settings?.GetSetting<SFXVolumeSetting>();
+        MasterVolumeSetting master = settings?.GetSetting<MasterVolumeSetting>();
+        return effects == null || master == null || (effects.Value > MutedVolume && master.Value > MutedVolume);
+    }
+
     private static bool IsMineBurst(AOE aoe) =>
         aoe.name.StartsWith("VFX_PoisonExplo", StringComparison.Ordinal) ||
         (aoe.name.StartsWith("VFX_SporeExplo", StringComparison.Ordinal) && !aoe.name.StartsWith("VFX_SporeExploExplo", StringComparison.Ordinal));
@@ -1307,7 +1322,8 @@ internal static class A17_Hazards
         }
         if (aoe.statusType == CharacterAfflictions.STATUSTYPE.Drowsy && aoe.GetComponentInParent<Mandrake>() != null)
         {
-            aoe.statusAmount = MandrakeScream / MandrakeScreamTicks;
+            // Only the local scout can be made drowsy here, and only if this player hears the scream.
+            aoe.statusAmount = HearsMandrakes() ? MandrakeScream / MandrakeScreamTicks : 0f;
             return true;
         }
         return false;

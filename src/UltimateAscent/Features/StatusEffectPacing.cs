@@ -21,7 +21,7 @@ internal static class StatusEffectPacing
     private static readonly float[] screen = new float[64];
     private static ConditionalWeakTable<CharacterAfflictions, float[]> sounds = new ConditionalWeakTable<CharacterAfflictions, float[]>();
 
-    private static bool On => Rules.Enabled(Lvl.First);
+    private static bool On => Rules.InExtraAscent;
 
     private static bool Allow(float[] lastPlayed, CharacterAfflictions.STATUSTYPE type)
     {
