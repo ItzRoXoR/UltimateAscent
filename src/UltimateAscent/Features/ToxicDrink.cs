@@ -9,7 +9,7 @@ using UnityEngine;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// The Toxic Drink: the Energy Drink's can in the player's own toxic-green label. Drunk, it makes you
+/// The Toxic Drink: the Energy Drink's can in the player's own purple label. Drunk, it makes you
 /// walk and climb 5 times as fast for 10 s (4 times for 8 s with ascent 14's rule); when the boost is
 /// over it poisons you for 4 over 5 s (8 with ascent 14's rule, as it lands from ascent 15 on). Cooked,
 /// it works like a cooked Energy Drink: it bursts when drunk (a knock-down and a push, never knocking you
@@ -54,6 +54,9 @@ internal static class ToxicDrink
     private const string TextureResource = "UltimateAscent.ToxicDrink.png";
     private const string IconResource = "UltimateAscent.ToxicDrink_icon.png";
     private const string CanMaterial = "M_EnergyDrink";
+
+    /// <summary>The item shader's first paint layer: on the Energy Drink's can a coarse checker "print" pattern.</summary>
+    internal const string CheckerLayer = "_Texture1";
 
     /// <summary>What the poison lands as (one name for every drink: what is left of a 2.5-point step carries over to the next).</summary>
     private const string PoisonSource = "toxic drink";
@@ -121,6 +124,10 @@ internal static class ToxicDrink
         }
         Material look = new Material(can.sharedMaterial) { name = "M_ToxicDrink" };
         look.SetTexture("_BaseTexture", label);
+        // The item shader lays a coarse checker "print" pattern over the label (its first paint layer); on this
+        // detailed label it clashes with the label's own halftone and looks grainy, so that layer is plain. The
+        // shader's two other paint layers stay.
+        look.SetTexture(CheckerLayer, Texture2D.whiteTexture);
         can.sharedMaterial = look;
 
         // Its own boosts (as drunk, and the cooked one cooking switches to); neither ends in drowsiness. They last

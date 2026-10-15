@@ -8,7 +8,8 @@ namespace UltimateAscent.Features;
 /// the Gloom, at its own rarity (Epic). The game puts it only in the Tropics' and the Alpine's. The game
 /// builds its loot tables from the items' own data, so before a pick the Lantern's own spawn places are
 /// set for the climb (the Shore's, the Roots', the Mesa's, the Caldera's and the Gloom's added, or in other
-/// climbs taken away again), and the tables are rebuilt when that changes.
+/// climbs taken away again), and the tables are rebuilt when that changes. The Torch turns up wherever the
+/// Lantern does, at half its weight (see <see cref="TorchItem"/>).
 /// </summary>
 internal static class MoreLanterns
 {
@@ -40,9 +41,19 @@ internal static class MoreLanterns
             ownKnown = true;
         }
         SpawnPool wanted = On ? own | Extra : own;
+        bool changed = false;
         if (loot.spawnLocations != wanted)
         {
             loot.spawnLocations = wanted;
+            changed = true;
+        }
+        if (TorchItem.Template != null && TorchItem.Template.TryGetComponent(out LootData torch) && torch.spawnLocations != wanted)
+        {
+            torch.spawnLocations = wanted;
+            changed = true;
+        }
+        if (changed)
+        {
             LootData.PopulateLootData();
         }
     }

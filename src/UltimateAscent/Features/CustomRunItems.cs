@@ -69,6 +69,12 @@ internal static class CustomRunItems
                 items.Remove(ToxicDrink.Template);
                 Insert(items, ToxicDrink.Template, WarpCompass.PrefabName);
             }
+            if (TorchItem.Template != null)
+            {
+                // The game lists it by itself (it spawns in the Lantern's suitcases); after the Lantern.
+                items.Remove(TorchItem.Template);
+                Insert(items, TorchItem.Template, MoreLanterns.LanternPrefab);
+            }
             if (AutoParachute.Template != null)
             {
                 // The game lists it by itself (it spawns in suitcases), at the end.

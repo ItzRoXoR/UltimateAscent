@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.2.1
+
+For PEAK 2.6.b.
+
+* New: the Torch, the game's (three hang in the Mesa's Tomb), turns up in suitcases from ascent 9
+  wherever the Lantern does, half as often; its own switch on the Custom Run screen, after the
+  Lantern's. Lit, it is also a weapon: the right mouse button swings it like the Stick (33% stamina),
+  knocking every scout and zombie it reaches down for 2 s; the scouts take 10 heat (20 from ascent
+  14), zombies none. A swing burns 4 s of its 40 s of fuel (a full Torch: 10 swings); unlit it cannot
+  swing. Lit, it warms like the Lantern: from ascent 14 2 cold a second (it kept the game's 2.5).
+* Toxic Drink: the can is purple (was toxic green), with a new inventory icon. Its label is drawn
+  without the checker pattern the game's item shader prints over cans, which made it look grainy.
+
 ## 1.2.0
 
 For PEAK 2.6.b.

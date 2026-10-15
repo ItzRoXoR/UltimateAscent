@@ -48,7 +48,7 @@ namespace UltimateAscent.Features;
 /// keeps 10% of every status (crab included) instead of the 25% revives keep.</item>
 /// <item>The Ritual Dagger turns the teammate it is used on into a zombie instead of killing them.</item>
 /// <item>Pandora's Lunchbox can hand out the crab status too.</item>
-/// <item>A lit Lantern takes 2 cold a second off the scouts within 4.5 m of it (the game: 2.5); a lit
+/// <item>A lit Lantern or Torch takes 2 cold a second off the scouts within 4.5 m of it (the game: 2.5); a lit
 /// Faerie Lantern 2.5 a second of each of cold, injury, poison, drowsiness and heat (the game: 5).</item>
 /// </list>
 /// </summary>
@@ -159,7 +159,7 @@ internal static class A14_Items
     private const string LanternName = "Lantern";
     private const string FaerieLanternName = "Faerie Lantern";
 
-    /// <summary>What a lit Lantern takes off a second: cold (the game: 2.5).</summary>
+    /// <summary>What a lit Lantern (and Torch) takes off a second: cold (the game: 2.5).</summary>
     internal const float LanternWarmth = 0.02f;
 
     /// <summary>What a lit Faerie Lantern takes off a second, of each of its statuses (the game: 5).</summary>
@@ -608,7 +608,7 @@ internal static class A14_Items
                 return;
             }
             string name = NameOf(__instance);
-            float perSecond = name == LanternName ? LanternWarmth : name == FaerieLanternName ? FaerieLanternHealing : 0f;
+            float perSecond = name == LanternName || name == TorchItem.ItemName ? LanternWarmth : name == FaerieLanternName ? FaerieLanternHealing : 0f;
             if (perSecond <= 0f)
             {
                 return;

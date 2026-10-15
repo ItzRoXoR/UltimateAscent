@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,6 +18,7 @@ namespace UltimateAscent.Features;
 /// up and back over the head, then a chop forward and down, played on every client. (The Ritual Dagger's
 /// animation turns its blade in the hand into a stab grip, which held a stick wrongly.) The hit uses the
 /// kick's reach, aim and push, checked by the swinger when the chop lands.</para>
+/// <para>A lit Torch swings the same way (<see cref="TorchItem"/>).</para>
 /// </summary>
 internal static class StickItem
 {
@@ -97,25 +99,35 @@ internal static class StickItem
     {
         private static void Postfix(Item __instance)
         {
-            if (!IsStick(__instance))
+            if (IsStick(__instance))
             {
-                return;
+                TrySwing(__instance, (target, zombie) => Knockdown);
             }
-            Character holder = __instance.holderCharacter;
-            if (holder == null || !holder.IsLocal || holder.data.dead || !holder.data.fullyConscious || Time.time < readyAt || holder.OutOfRegularStamina())
-            {
-                return;
-            }
-            readyAt = Time.time + SwingSeconds;
-            Swings++;
-            holder.UseStamina(SwingStamina, useBonusStamina: true, ignoreAscents: true);
-            __instance.photonView.RPC(nameof(Action_PlayItemAnimation.PlayAnimationRPC), RpcTarget.All);
-            __instance.StartCoroutine(Strike(__instance, holder));
         }
     }
 
-    /// <summary>The strike, when it lands: the kick's reach and aim, a 3 s knock-down, the kick's push without its stamina boost.</summary>
-    private static IEnumerator Strike(Item stick, Character holder)
+    /// <summary>
+    /// A swing of an item held like the stick (the Stick, a lit Torch) by its local holder, if they can (awake, the
+    /// last swing over, stamina left, as for a kick): its stamina, its motion on every client and its strike, which
+    /// knocks each scout and zombie it reaches down for the seconds given (a scout or a zombie). False if no swing.
+    /// </summary>
+    internal static bool TrySwing(Item item, Func<Character, bool, float> knockdown)
+    {
+        Character holder = item.holderCharacter;
+        if (holder == null || !holder.IsLocal || holder.data.dead || !holder.data.fullyConscious || Time.time < readyAt || holder.OutOfRegularStamina())
+        {
+            return false;
+        }
+        readyAt = Time.time + SwingSeconds;
+        Swings++;
+        holder.UseStamina(SwingStamina, useBonusStamina: true, ignoreAscents: true);
+        item.photonView.RPC(nameof(Action_PlayItemAnimation.PlayAnimationRPC), RpcTarget.All);
+        item.StartCoroutine(Strike(item, holder, knockdown));
+        return true;
+    }
+
+    /// <summary>The strike, when it lands: the kick's reach and aim, the knock-down given, the kick's push without its stamina boost.</summary>
+    private static IEnumerator Strike(Item stick, Character holder, Func<Character, bool, float> knockdown)
     {
         yield return new WaitForSeconds(StrikeDelay);
         LastHits.Clear();
@@ -134,12 +146,10 @@ internal static class StickItem
             look.y = 0f;
             look.Normalize();
         }
-        List<Character> targets = new List<Character>(Character.AllCharacters);
-        if (ZombieManager.Instance != null)
-        {
-            targets.AddRange(ZombieManager.Instance.zombies.Where(z => z != null && z.character != null).Select(z => z.character));
-        }
-        foreach (Character target in targets.Distinct())
+        List<Character> zombies = ZombieManager.Instance != null
+            ? ZombieManager.Instance.zombies.Where(z => z != null && z.character != null).Select(z => z.character).ToList()
+            : new List<Character>();
+        foreach (Character target in Character.AllCharacters.Concat(zombies).Distinct())
         {
             if (target == null || target == holder)
             {
@@ -152,20 +162,20 @@ internal static class StickItem
             }
             Vector3 point = holder.Center + look * distance;
             holder.refs.view.RPC(nameof(CharacterGrabbing.RPCA_KickImpact), RpcTarget.All, point);
-            target.Fall(Knockdown);
+            target.Fall(knockdown(target, zombies.Contains(target)));
             target.AddForceAtPosition(look * push, point, spread);
             LastHits.Add(target);
         }
     }
 
-    /// <summary>The swing on every client: the hold's motion and the sound of a swing.</summary>
+    /// <summary>The swing on every client (the Stick's, a Torch's): the hold's motion and the sound of a swing.</summary>
     [HarmonyPatch(typeof(Action_PlayItemAnimation), nameof(Action_PlayItemAnimation.PlayAnimationRPC))]
     private static class SwingLook
     {
         private static bool Prefix(Action_PlayItemAnimation __instance)
         {
             Item item = __instance.GetComponent<Item>();
-            if (!IsStick(item))
+            if (!IsStick(item) && !TorchItem.IsTorch(item))
             {
                 return true;
             }
@@ -175,28 +185,38 @@ internal static class StickItem
         }
     }
 
-    /// <summary>The hold follows the swing; at the end it is back at rest.</summary>
-    private static IEnumerator SwingMotion(Item stick)
+    /// <summary>The hold follows the swing; at the end it is back at rest (the item's own, as its prefab holds it).</summary>
+    private static IEnumerator SwingMotion(Item item)
     {
+        Vector3 rest = restHold;
+        Vector3 restAim = restFacing;
+        if (!IsStick(item) && ItemDatabase.TryGetItem(item.itemID, out Item prefab) && prefab != null)
+        {
+            rest = prefab.defaultPos;
+            restAim = prefab.defaultForward;
+        }
         float start = Time.time;
-        while (stick != null)
+        while (item != null)
         {
             float t = Time.time - start;
-            Pose(t, out Vector3 hold, out Vector3 facing);
-            stick.defaultPos = hold;
-            stick.defaultForward = facing;
+            Pose(t, rest, restAim, out Vector3 hold, out Vector3 facing);
+            item.defaultPos = hold;
+            item.defaultForward = facing;
             if (t >= SwingSeconds)
             {
-                stick.defaultPos = restHold;
-                stick.defaultForward = restFacing;
+                item.defaultPos = rest;
+                item.defaultForward = restAim;
                 yield break;
             }
             yield return null;
         }
     }
 
+    /// <summary>The Stick's swing at a time (see <see cref="Pose(float, Vector3, Vector3, out Vector3, out Vector3)"/>).</summary>
+    internal static void Pose(float time, out Vector3 hold, out Vector3 facing) => Pose(time, restHold, restFacing, out hold, out facing);
+
     /// <summary>The swing's hold at a time: between two of its steps, eased in and out; the hold faces forward, tipped back by the step's angle.</summary>
-    internal static void Pose(float time, out Vector3 hold, out Vector3 facing)
+    internal static void Pose(float time, Vector3 restHold, Vector3 restFacing, out Vector3 hold, out Vector3 facing)
     {
         int last = Swing.Length - 1;
         int i = 1;

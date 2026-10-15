@@ -23,7 +23,7 @@ public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "UltimateAscent";
     public const string Name = "Ultimate Ascent";
-    public const string Version = "1.2.0";
+    public const string Version = "1.2.1";
 
     internal static ManualLogSource Log;
     internal static Plugin Instance;
@@ -115,7 +115,7 @@ public sealed class Plugin : BaseUnityPlugin
             "Nights make you cold: the game's rule from ascent 5, until the third part of the climb (harsher from ascent 18, and longer in the Alpine). Off: the night itself no longer makes you cold, on every ascent; cold from anything else (storms, snow, water, the Alpine) stays. Custom runs keep their own Cold Night setting. Only the host's settings count.");
         ColdNights.SettingChanged += (_, _) => HostOptions.Invalidate();
         NewItems = Config.Bind("Items", "New Items", true,
-            "The mod's new items spawn in regular runs from ascent 9: the Climbing Chalk, the Lightweight Parasol (the Roots parasol), the Auto-Parachute, the Warp Compass, the Toxic Drink, the Vanilla Scout Cookies (half of the Scout Cookies), the Pink Lollipop (half of the Big Lollipops), the wild Wonderberry, Green Clusterberry and Weird Shroom, and the Stones and Sticks on the ground. Off: none of them spawns in regular runs; the regular Parasol spawns wherever the Lightweight Parasol would, and the Scout Cookies and the Big Lollipop keep all their spawns. Custom runs keep their own switches for the items on the Custom Run screen (the Pink Lollipop and the Vanilla Scout Cookies have their own there); the wild foods, Stones and Sticks (not on that screen) follow this switch there too. Only the host's settings count.");
+            "The mod's new items spawn in regular runs from ascent 9: the Climbing Chalk, the Lightweight Parasol (the Roots parasol), the Auto-Parachute, the Warp Compass, the Toxic Drink, the Vanilla Scout Cookies (half of the Scout Cookies), the Pink Lollipop (half of the Big Lollipops), the Torch in suitcases (half as often as the Lantern), the wild Wonderberry, Green Clusterberry and Weird Shroom, and the Stones and Sticks on the ground. Off: none of them spawns in regular runs; the regular Parasol spawns wherever the Lightweight Parasol would, the Scout Cookies and the Big Lollipop keep all their spawns, and Torches hang only in the Mesa's Tomb. Custom runs keep their own switches for the items on the Custom Run screen (the Pink Lollipop and the Vanilla Scout Cookies have their own there); the wild foods, Stones and Sticks (not on that screen) follow this switch there too. Only the host's settings count.");
         NewItems.SettingChanged += (_, _) => HostOptions.Invalidate();
         VerboseLogging = Config.Bind("Debug", "Verbose Logging", false, "Writes extra diagnostic lines to the BepInEx log.");
         RemoveRetiredEntries();

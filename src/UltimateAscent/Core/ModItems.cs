@@ -35,6 +35,7 @@ internal static class ModItems
         Features.WarpCompass.Build,
         Features.PinkLollipop.Build,
         Features.ToxicDrink.Build,
+        Features.TorchItem.Build,
     };
 
     /// <summary>The templates' parent: inactive and kept across scenes, so no template ever runs.</summary>

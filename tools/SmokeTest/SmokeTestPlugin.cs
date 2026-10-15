@@ -603,6 +603,7 @@ internal sealed class Runner : MonoBehaviour
             ("Pink Lollipop (9)", PinkLollipopCheck),
             ("custom run: the variants' own switches", VariantSwitchesCheck),
             ("Toxic Drink (9, 14)", ToxicDrinkCheck),
+            ("Torch (9, 14)", TorchCheck),
             ("Lanterns in every part (9)", LanternPoolsCheck),
             ("the new items darken when cooked", NewItemsCooking),
             ("storms between Apocalypse weather (25)", ApocalypseBreaks),
@@ -866,13 +867,16 @@ internal sealed class Runner : MonoBehaviour
         bool worse = Rules.Level >= Lvl.WorseItems;
         worseRule.Value = worse || saved;
         HostOptions.Invalidate();
+        Action undo = CalmForMeasuring();
         try
         {
             yield return LanternCase("Lantern", worse ? 2f : 2.5f, false);
             yield return LanternCase("Lantern_Faerie", worse ? 2.5f : 5f, true);
+            yield return LanternCase(TorchItem.PrefabName, worse ? 2f : 2.5f, false);
         }
         finally
         {
+            undo();
             worseRule.Value = saved;
             HostOptions.Invalidate();
         }
@@ -4073,6 +4077,13 @@ internal sealed class Runner : MonoBehaviour
                 $"pools {string.Join(", ", pools)}, weight {weight} (the Faerie Lantern's {faerieWeight}), on the Custom Run screen at {listed} (the Warp Compass at {compassAt})");
             Check("it is called the Toxic Drink and spawns in this run", Plain(drink.GetItemName()) == "TOXIC DRINK" && drink.IsValidToSpawn(),
                 $"name '{Plain(drink.GetItemName())}', valid to spawn {drink.IsValidToSpawn()}, icon '{(drink.UIData.icon != null ? drink.UIData.icon.name : "none")}'");
+            Material canLook = drink.GetComponentsInChildren<Renderer>(true).Select(r => r.sharedMaterial).FirstOrDefault(m => m != null && m.name == "M_ToxicDrink");
+            Material energyLook = energy.GetComponentsInChildren<Renderer>(true).Select(r => r.sharedMaterial).FirstOrDefault(m => m != null && m.name.StartsWith("M_EnergyDrink", StringComparison.Ordinal));
+            Texture Layer(Material m, string name) => m != null && m.HasProperty(name) ? m.GetTexture(name) : null;
+            Check("its can wears its own label, drawn without the item shader's checker layer (the Energy Drink keeps it)",
+                canLook != null && energyLook != null && Layer(canLook, "_BaseTexture") != null && Layer(canLook, "_BaseTexture").name == "ToxicDrink"
+                && Layer(canLook, ToxicDrink.CheckerLayer)?.name == Texture2D.whiteTexture.name && Layer(energyLook, ToxicDrink.CheckerLayer) != null && Layer(energyLook, ToxicDrink.CheckerLayer).name != Texture2D.whiteTexture.name,
+                $"label '{Layer(canLook, "_BaseTexture")?.name}', checker layer '{Layer(canLook, ToxicDrink.CheckerLayer)?.name}' (the Energy Drink's '{Layer(energyLook, ToxicDrink.CheckerLayer)?.name}')");
             SFX_Instance sound = drink.GetComponent<ItemUseFeedback>()?.sfxUsed;
             SFX_Instance game = energy.GetComponent<ItemUseFeedback>()?.sfxUsed;
             Check("its drinking sound is the Energy Drink's, played 1.5 times as fast",
@@ -4170,6 +4181,193 @@ internal sealed class Runner : MonoBehaviour
             HostOptions.Invalidate();
             Protect(true);
             undo();
+            local.data.lookValues = look;
+        }
+    }
+
+    /// <summary>
+    /// The Torch (9, 14): in the Lantern's suitcases at half its weight, after the Lantern on the Custom Run screen. Held
+    /// unlit it cannot swing; lit (the game's own lighting) its second use swings it: 33% stamina, 4 s of its fuel, a
+    /// zombie in front knocked down for 2 s without heat. A teammate's burning hit (the knock-down message their client
+    /// sends) knocks the scout down for 2 s and burns 10, 20 with ascent 14's rule (on in memory). A swing that uses up the
+    /// last fuel puts it out.
+    /// </summary>
+    private IEnumerator TorchCheck()
+    {
+        Item torch = TorchItem.Template;
+        Item lanternItem = ItemByName(MoreLanterns.LanternPrefab);
+        if (torch == null || lanternItem == null)
+        {
+            Fail("the Torch and the Lantern are in the item database", $"Torch {torch != null}, Lantern {lanternItem != null}");
+            yield break;
+        }
+        if (!Rules.InExtraAscent)
+        {
+            Info("the Torch checks are skipped", $"testing ascent {target}");
+            yield break;
+        }
+        Step("Torch in the suitcases", () =>
+        {
+            MoreLanterns.Sync();
+            LootData.PopulateLootData();
+            List<string> parts = new List<string>();
+            bool all = true;
+            int pools = 0;
+            foreach (KeyValuePair<SpawnPool, Dictionary<ushort, int>> pool in LootData.AllSpawnWeightData)
+            {
+                bool hasLantern = pool.Value.TryGetValue(lanternItem.itemID, out int lw);
+                bool hasTorch = pool.Value.TryGetValue(torch.itemID, out int tw);
+                if (!hasLantern && !hasTorch)
+                {
+                    continue;
+                }
+                pools++;
+                all &= hasLantern && hasTorch && tw * 2 == lw;
+                parts.Add($"{pool.Key}: Lantern {lw}, Torch {tw}");
+            }
+            int listed = RunSettings.ModifiableItemPrefabs.IndexOf(torch);
+            int lanternAt = RunSettings.ModifiableItemPrefabs.IndexOf(lanternItem);
+            Check("the Torch turns up wherever the Lantern does, at half its weight, and spawns in this run (9)",
+                all && pools >= 7 && torch.IsValidToSpawn(), string.Join("; ", parts) + $"; valid to spawn {torch.IsValidToSpawn()}");
+            Check("on the Custom Run screen the Torch comes right after the Lantern", listed > 0 && listed == lanternAt + 1, $"Torch at {listed}, Lantern at {lanternAt}");
+        });
+
+        Character local = Local;
+        ConfigEntry<bool> worseRule = UltimateAscent.Plugin.AscentSwitches[Lvl.WorseItems];
+        bool worseSaved = worseRule.Value;
+        Vector2 look = local.data.lookValues;
+        Vector3 forward = local.data.lookDirection_Flat.sqrMagnitude > 0.01f ? local.data.lookDirection_Flat.normalized : local.transform.forward;
+        Action undo = CalmForMeasuring();
+        GameObject zombie = null;
+        try
+        {
+            yield return SpawnIntoHand(torch);
+            if (held == null)
+            {
+                yield break;
+            }
+            Item inHand = held;
+            Lantern flame = inHand.GetComponent<Lantern>();
+            local.data.lookValues = new Vector2(Quaternion.LookRotation(forward).eulerAngles.y, -5f);
+            yield return new WaitForSeconds(0.8f);
+            int swings = TorchItem.Swings;
+            bool unlitCan = inHand.CanUseSecondary();
+            inHand.StartUseSecondary();
+            inHand.CancelUseSecondary();
+            Check("an unlit Torch cannot swing (no second use, no swing)", !unlitCan && TorchItem.Swings == swings, $"second use offered {unlitCan}, swings {TorchItem.Swings - swings}");
+
+            // The game's own lighting: the use button held until the cast is done.
+            inHand.StartUsePrimary();
+            for (float until = Time.realtimeSinceStartup + 3f; Time.realtimeSinceStartup < until && inHand != null && !inHand.finishedCast;)
+            {
+                inHand.ContinueUsePrimary();
+                yield return null;
+            }
+            inHand.CancelUsePrimary();
+            yield return new WaitForSeconds(1f);
+            string prompt = LocalizedText.GetText(inHand.UIData.secondaryInteractPrompt);
+            Check("lit, the Torch's second use is to swing it", flame != null && flame.lit && inHand.CanUseSecondary() && Plain(prompt).ToLowerInvariant() == "swing",
+                $"lit {flame != null && flame.lit}, second use offered {inHand.CanUseSecondary()}, prompt '{prompt}'");
+            Screenshot("torch-lit-held");
+
+            Vector3 spot = local.Center + forward * 1.7f;
+            if (Physics.Raycast(spot + Vector3.up * 2f, Vector3.down, out RaycastHit ground, 6f, HelperFunctions.terrainMapMask))
+            {
+                spot = ground.point + Vector3.up * 0.9f;
+            }
+            zombie = PhotonNetwork.Instantiate("MushroomZombie_Player", spot, Quaternion.LookRotation(-forward), 0);
+            MushroomZombie walker = zombie != null ? zombie.GetComponent<MushroomZombie>() : null;
+            yield return new WaitForSeconds(1.5f);
+            if (walker != null && ZombieManager.Instance != null && !ZombieManager.Instance.zombies.Contains(walker))
+            {
+                ZombieManager.Instance.RegisterZombie(walker);
+            }
+            Character targetZombie = walker != null ? walker.character : null;
+            float zombieHeat = targetZombie != null ? targetZombie.refs.afflictions.GetCurrentStatus(Status.Hot) : 0f;
+            local.data.currentStamina = 1f;
+            float staminaBefore = local.data.currentStamina;
+            float fuelBefore = flame.fuel;
+            float swungAt = Time.time;
+            swings = TorchItem.Swings;
+            FallRecorder.Clear();
+            FallRecorder.Of = targetZombie;
+            Step("swing the lit Torch (second use)", () => inHand.StartUseSecondary());
+            float cost = staminaBefore - local.data.currentStamina;
+            float fuelCost = fuelBefore - flame.fuel;
+            Check("a swing costs 33% stamina and burns 4 s of the Torch's fuel (a full Torch: 10 swings)",
+                TorchItem.Swings == swings + 1 && Mathf.Abs(cost - StickItem.SwingStamina) < 0.003f && Mathf.Abs(fuelCost - TorchItem.SwingFuel) < 0.1f,
+                $"{TorchItem.Swings - swings} swing, {cost * 100f:0.#}% stamina, fuel {fuelBefore:0.0} -> {flame.fuel:0.0} s");
+            yield return new WaitForSeconds(StickItem.Swing[1].at + 0.02f);
+            Screenshot("torch-swing-raised");
+            yield return new WaitForSeconds(Mathf.Max(0f, StickItem.StrikeDelay + 0.08f - (Time.time - swungAt)));
+            float longest = 0f;
+            for (float until = Time.time + 0.6f; Time.time < until;)
+            {
+                if (targetZombie != null)
+                {
+                    longest = Mathf.Max(longest, targetZombie.data.fallSeconds);
+                }
+                yield return null;
+            }
+            inHand.CancelUseSecondary();
+            FallRecorder.Of = null;
+            bool hit = targetZombie != null && StickItem.LastHits.Contains(targetZombie);
+            float sent = FallRecorder.Seconds.Count > 0 ? FallRecorder.Seconds[0] : 0f;
+            float zombieBurn = targetZombie != null ? targetZombie.refs.afflictions.GetCurrentStatus(Status.Hot) - zombieHeat : 0f;
+            Check("the swing knocks down the zombie in front for 2 s, without heat (a plain knock-down, no burning mark)",
+                hit && Mathf.Abs(sent - TorchItem.Knockdown) < 0.0001f && longest >= TorchItem.Knockdown - 0.7f && zombieBurn < 0.001f,
+                targetZombie == null ? "no zombie" : $"hit {hit}, knock-down sent {sent:0.0000} s (down for {longest:0.00} s right after the hit, still from rising), +{zombieBurn * 100f:0.#} heat");
+            yield return new WaitForSeconds(1f);
+
+            // A teammate's burning hit on this scout: the knock-down message their client sends.
+            Protect(false);
+            foreach (bool worse in new[] { false, true })
+            {
+                worseRule.Value = worse;
+                HostOptions.Invalidate();
+                yield return new WaitForSeconds(2.5f);
+                Afflictions.SetStatus(Status.Hot, 0f);
+                Afflictions.SetStatus(Status.Cold, 0f);
+                int burns = TorchItem.Burns;
+                float heatBefore = Afflictions.GetCurrentStatus(Status.Hot);
+                local.Fall(TorchItem.KnockdownMarked);
+                yield return null;
+                float down = local.data.fallSeconds;
+                float burned = Afflictions.GetCurrentStatus(Status.Hot) - heatBefore;
+                float expected = TorchItem.HeatNow;
+                Check(worse ? "a teammate's burning hit burns 20 with ascent 14's rule (14), and knocks down for 2 s" : "a teammate's burning hit burns 10 and knocks down for 2 s (9)",
+                    TorchItem.Burns == burns + 1 && Mathf.Abs(burned - expected) < 0.001f && Mathf.Abs(down - TorchItem.Knockdown) < 0.05f,
+                    $"+{burned * 100f:0.#} heat (expected {expected * 100f:0.#}), knocked down {down:0.00} s");
+            }
+            worseRule.Value = worseSaved;
+            HostOptions.Invalidate();
+            Afflictions.SetStatus(Status.Hot, 0f);
+            Protect(true);
+            yield return new WaitForSeconds(2.5f);
+
+            // The last of the fuel: the swing uses it up and the Torch goes out.
+            local.data.currentStamina = 1f;
+            flame.fuel = 2f;
+            swings = TorchItem.Swings;
+            inHand.StartUseSecondary();
+            inHand.CancelUseSecondary();
+            yield return new WaitForSeconds(0.5f);
+            Check("a swing with less than 4 s of fuel left uses it up, and the Torch goes out and cannot swing",
+                TorchItem.Swings == swings + 1 && flame.fuel <= 0f && !flame.lit && !inHand.CanUseSecondary(),
+                $"swings {TorchItem.Swings - swings}, fuel {flame.fuel:0.0} s, lit {flame.lit}, second use offered {inHand.CanUseSecondary()}");
+            yield return new WaitForSeconds(StickItem.SwingSeconds);
+            yield return PutAway(torch);
+        }
+        finally
+        {
+            worseRule.Value = worseSaved;
+            HostOptions.Invalidate();
+            Protect(true);
+            undo();
+            if (zombie != null && zombie.GetPhotonView() != null)
+            {
+                PhotonNetwork.Destroy(zombie);
+            }
             local.data.lookValues = look;
         }
     }
