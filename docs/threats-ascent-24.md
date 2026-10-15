@@ -1,7 +1,7 @@
 # Threats at ascent 24
 
 Every value below is from PEAK 2.6.b (read from the game code and the game data) and from
-Ultimate Ascent 1.1.2's rules. Status amounts use the stamina bar's scale: **100 = the whole bar**. A rule
+Ultimate Ascent 1.2.0's rules. Status amounts use the stamina bar's scale: **100 = the whole bar**. A rule
 marked *(17)* comes from that ascent; ascent 24 contains every ascent up to 24. Ultimate Ascent's
 numbers are what lands on the bar, ascent 15's boost included; below ascent 15 the same rules land
 them without that boost, so they are always lower there. Distances are the game's own units,
@@ -15,7 +15,7 @@ called metres here as in the mod; the game's altitude display counts one unit as
 | Passing out | When statuses fill more than 99% of the bar for **5 s** (the faint timer; it runs back at the same speed when the bar drops below 99%). | Same timer, but passing out is **instant death** *(24)*. A checkpoint flag still saves you, for **10 curse** *(14)*; it puts back exactly the statuses you had when you planted it. |
 | Fall damage | ×2 from ascent 1. | Fall damage also makes you **60 drowsy** *(12)*; with your 20 curse *(19)* that is 80, so a fall that hurts for **20 or more** (less with other statuses on the bar) fills it → **fatal** *(24)* unless you cure it within the faint timer. Fall damage drops all your items, backpack included *(13)*. |
 | Status strength | — | Cold and drowsiness ×1.3, heat ×1.5, spores ×1.65, poison ×1.75 *(15)*, on everything. The exact numbers below are tuned so that they land as given, this boost included. |
-| Explosions | Knockback, a knock-down and the explosion's own status. | Every explosion: status ×2, knockback ×3–4, knock-down ×3 **and drowsiness up to passing out** *(17)* → at 24 being knocked down by an explosion kills. (Mines and the Gloom ghost land exact amounts instead of ×2; a Shroomberry's spore burst is not treated as an explosion.) |
+| Explosions | Knockback, a knock-down and the explosion's own status. | Every explosion: status ×2, knockback ×3–4, knock-down ×3 **and drowsiness up to passing out** *(17)* → at 24 being knocked down by an explosion kills. (Mines and the Gloom ghost land exact amounts instead of ×2; a Shroomberry's spore burst is not treated as an explosion; a cooked Energy Drink's burst knocks nobody out, and a cooked Toxic Drink's is not treated as an explosion.) |
 | Cooking | Campfires (the portable stove too), lava and explosions cook items; cooking takes a food's poison away. | Campfires, lava and explosions char what they cook **to ruin** on the first cooking *(17)*; cooking no longer removes poison *(14)*. |
 | Food and items | As listed per item. | Hunger and extra stamina from food ×0.5, what status items cure ×0.6 *(14)*; what they cost you (a Napberry's sleep, a Scorchberry's heat) stays the game's, except the exact amounts in **Food** below *(15)*. |
 | Touch hazards (anything that hurts on contact) | Own values. | Damage ×2, at least 2 cold/heat *(17)*; urchins, thorny vines, spiked fences, lava streams and petrifying stones have exact values (below). Climbing ice rock ×2; magma rock burns and petrifying stones petrify while you climb them. Status emitters that add a status (spore clouds, heat fields) ×4. |
@@ -103,6 +103,7 @@ leave a cloud that bursts again every 0.5 s for 11 s, with the same falloff.
 | Waking / chasing | wakes when you look at it within 20 m; chases from 10 m; sprints after 3 s within 10 m; lunges within 4 m | wakes from **30 m** and **chases at once**, at its normal speed |
 | Bite | 10 injury, 10 spores + 0.5/s for 60 s (30), stunned 3 s | spores ×1.65 (bite 15 on the bar, then ≈0.8/s), stunned **4 s** |
 | Lifetime | dies after 120 s awake | **300 s** |
+| Ritual Dagger | can't be used on a zombie | stabbed in the back (as a teammate must be), a zombie dies after **8** stabs *(14)* (5 from ascent 9) and leaves a skeleton; nobody gets anything, and the dagger is kept |
 
 ### Beetles (root bugs)
 | | Game | Ultimate Ascent at 24 |
@@ -215,7 +216,7 @@ amount of extra stamina; most effects start 3 s after eating.
 |---|---|---|
 | Heat above the river | up to 1.2 every 0.1 s at the surface, fading over 10 m (≈8/s on the bar) | ×1.5 *(15)* (≈12/s) |
 | Touching the river | 25 injury + 25 heat (at most 1/s), pushed up | **100 injury and 200 heat** → bar full at once → **fatal** *(24)* |
-| River height | fixed | **rises and falls ±8 m about once a minute** *(18)*, the same for everyone |
+| River height | rises and falls 6.3 m (779 → 785.3) every 72 s: low for about 30 s, rising for about 20 s, about 10 s at the top, falling for about 13 s | **rises and falls 14 m (779 → 793) every 61 s** *(18)*: low for about 21 s, rising for about 16 s, about 16 s near the top, falling for about 9 s; above the game's highest level for 28 s of each cycle; the same for everyone |
 | Lava flows (streams) | 20 injury + 50 heat per touch (1/s), knockback 1000 | **50 injury + 100 heat** → bar full → **fatal** |
 | Lava pillars | knockback 1000 + 10 heat (cliffs 5) | heat ×1.5 |
 | Magma rocks (Caldera and Kiln) | 2.5 heat per touch while standing on them (every 0.75 s); heat field 1/s within 11 m; climbing them does nothing extra | touch **7.5** *(17, 15)*; field ×4 ×1.5 = 6/s nominal, **5/s** on the bar; **climbing them burns 2.5 heat every 0.3 s** (≈8.3/s), on top of touching, like ice rocks' cold |
@@ -259,7 +260,7 @@ amount of extra stamina; most effects start 3 s after eating.
 ### Sleep fog
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
-| Gloom fog | 0.9 drowsiness/s (lit bell towers protect, and so does a lit Portable Stove within 7 m — but because of a game bug, for the scouts present when it was placed only after it burned out, and then for good) | ×1.3 *(15)*; drowsiness heals at 1 a second in the Gloom (game: 2.5) *(16)*, at night too (there is no night here); the stove bug is fixed: a stove protects while it burns, **30 s** *(14)*, and not after |
+| Gloom fog | 0.9 drowsiness/s (lit bell towers protect, and so does a lit Portable Stove within 7 m — but because of a game bug, for the scouts present when it was placed only after it burned out, and then for good) | **2.5 drowsiness/s** *(18)* (×1.3 *(15)* below 18); drowsiness heals at 1 a second in the Gloom (game: 2.5) *(16)*, at night too (there is no night here); the stove bug is fixed: a stove protects while it burns, **30 s** *(14)*, and not after |
 | Early Worm (eaten) | removes 100 drowsiness, 5 hunger | removes **50** *(14)*, 2.5 hunger *(14)* |
 
 ### Frogs
@@ -364,6 +365,8 @@ Petrification heals only 10 per campfire lighting *(16)*, and revives keep it *(
 | Thorny vines (Tropics) | 10 poison per touch (at most 1/s), knockback 1000 that can cause fall damage | **60 poison per touch**, knockback **1500**; a fall from the knockback → fatal *(12, 24)* |
 | Poison ivy (Tropics) | 3.5 poison per touch (2.5 on the bar), at most 1/s | at least 15 *(17)* × 1.75 → **25 per touch** |
 | Mandrake (pulled out of the ground) | while anyone awake is within 10 m it screams for 3 s every 0.75–2 s: 5 drowsiness × falloff 8 times per scream (40 up close), only for players whose own sound is on; eaten raw: 10 hunger, numb 60 s; cooked: no scream, −25 curse | up to **75 per scream** *(17)* (the game's 40 at 15–16); players whose own sound is off get half, up to **37.5** *(17)* (none at 15–16, as in the game); eaten raw: 5 hunger, numb 60 s and **30 spores** *(14)*; cooked: −15 curse, but every way to cook it chars it to ruin *(17)* |
-| Snowballs (Alpine) | holding one does nothing; thrown (or rolled) into a scout fast enough, it bonks them: knocked down 1 s and pushed | holding one chills **2.5/s**; a bonk gives **30 cold** and knocks down **2 s** *(14)* |
+| Snowballs (Alpine) | holding one does nothing; thrown (or rolled) into a scout fast enough, it bonks them: knocked down 1 s and pushed | holding one chills **2.5/s** *(17)*; a bonk gives **30 cold** and knocks down **2 s** *(14)* |
+| A teammate's Stone (beach, Tropics, Roots) | cut from the game | lies on the ground from ascent 9; hitting a scout at **10 m/s** or more (a throw charged a third of the way, or a fall from 5 m) knocks them down **2 s** and injures **20** *(17)*; it shatters on any impact that hard |
+| A teammate's Stick (beach, Tropics, Roots) | cut from the game | lies on the ground from ascent 9; a swing (33% of the swinger's stamina) knocks down every scout and zombie a kick would reach (**2.5 m**, 55° ahead) for **3 s**, without injury |
 | A teammate's Blowgun | the dart clears your statuses (except curse), then +120 drowsiness: with the starting 10 curse you fall asleep | the clear keeps 25% of each status ("Nerfed Revives") *(14)*, then **155 drowsiness** (120 × 1.3 *(15)*): with 20 curse that is 175 → pass out → **death** *(24)* |
-| The sun | only the Mesa's sun is hot; sunscreen, an open parasol or a glider held overhead keep it off | hot everywhere except the Alpine *(23)*: outside the Mesa **0.75 heat/s** in direct sunlight (0.5 × 1.5 *(15)*), the Mesa's sun is the game's ×1.5; whatever you shield yourself with roasts: clean for 5 s, heavy smoke for 15 s, then burned (parasols 1.5× as long, the Mesa's sun twice as fast) — in the Mesa's midday sun from *(18)*, everywhere *(23)*; **sunscreen lets a quarter of the heat through** *(14)* |
+| The sun | only the Mesa's sun is hot; sunscreen, an open parasol or a glider held overhead keep it off | hot everywhere except the Alpine *(23)*: outside the Mesa **0.75 heat/s** in direct sunlight (0.5 × 1.5 *(15)*), the Mesa's midday sun burns **6 heat/s** *(18)* (the game's ×1.5 *(15)* below 18); whatever you shield yourself with roasts: clean for 5 s, heavy smoke for 15 s, then burned (parasols 1.5× as long, the Mesa's sun twice as fast) — in the Mesa's midday sun from *(18)*, everywhere *(23)*; **sunscreen lets a quarter of the heat through** *(14)* |

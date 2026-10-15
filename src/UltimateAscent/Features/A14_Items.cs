@@ -16,7 +16,7 @@ namespace UltimateAscent.Features;
 /// <list type="bullet">
 /// <item>Raw food: an egg (the Caldera's and the Gloom's) or a tick eaten raw poisons for 5 at once.</item>
 /// <item>Sunscreen keeps off only 75% of the sun's heat (the game: all of it), in the Mesa and under
-/// ascent 23's sun alike.</item>
+/// ascent 23's sun alike, and of ascent 18's snowstorm heat by day.</item>
 /// <item>A heat pack warms for 20 s (the game: 60 s).</item>
 /// <item>The Scoutmaster's Bugle sends him after his target for 180 s (the game: 120 s).</item>
 /// <item>A Bounce Fungus pad gives back 2.5 stamina per bounce (the game: 10).</item>
@@ -30,12 +30,12 @@ namespace UltimateAscent.Features;
 /// <item>Rope spools hold half the rope: 25 segments, at most 20 in one rope (the game: 50 and 40).</item>
 /// <item>Thrown Shelf and Cloud Fungus fly as if 1.5 times as heavy, a Warp Fungus as if 1.35 times
 /// (the throw speed divided by that).</item>
-/// <item>A Magic Bean's vine grows at most 15 m (the game: 20 m); standing on it sticks 2.5 thorns a
-/// second into you, and each 2.5 works its way out again 30 s later.</item>
+/// <item>A Magic Bean's vine grows at most 15 m (the game: 20 m); standing on it or climbing it sticks
+/// 2.5 thorns into you every 3 s, and each 2.5 works its way out again 30 s later.</item>
 /// <item>Placed pitons are the Alps' cracking pitons, 30% sturdier: they hold for 1.3-6.5 s of hanging
 /// (the Alps': 1-5 s), then crack five times (the Alps': four) and break.</item>
 /// <item>A snowball that bonks a scout gives 30 cold and knocks them down for 2 s (the game: no cold,
-/// 1 s); holding one chills 2.5 a second.</item>
+/// 1 s). Holding one chills from ascent 17 (see A17_Hazards).</item>
 /// <item>A Remedy Fungus's cloud lasts 8 s (the game: 15 s). The Anti-Zooka's bubble is 8 m across and
 /// lasts 40 s (the game: 10 m, 60 s). A Portable Stove burns for 30 s (the game: 60 s).</item>
 /// <item>The Book of Bones: becoming a skeleton costs 50 curse, 35 after its cure (its curse is not
@@ -48,7 +48,7 @@ namespace UltimateAscent.Features;
 /// keeps 10% of every status (crab included) instead of the 25% revives keep.</item>
 /// <item>The Ritual Dagger turns the teammate it is used on into a zombie instead of killing them.</item>
 /// <item>Pandora's Lunchbox can hand out the crab status too.</item>
-/// <item>A lit Lantern takes 1.5 cold a second off the scouts within 4.5 m of it (the game: 2.5); a lit
+/// <item>A lit Lantern takes 2 cold a second off the scouts within 4.5 m of it (the game: 2.5); a lit
 /// Faerie Lantern 2.5 a second of each of cold, injury, poison, drowsiness and heat (the game: 5).</item>
 /// </list>
 /// </summary>
@@ -67,7 +67,7 @@ internal static class A14_Items
 
     internal const string EggName = "Egg";
 
-    /// <summary>The share of the sun's heat that gets through sunscreen.</summary>
+    /// <summary>The share of the heat that gets through sunscreen (the sun's, and a snowstorm's by day).</summary>
     internal const float SunscreenLeak = 0.25f;
 
     internal const float HeatPackSeconds = 20f;
@@ -103,6 +103,9 @@ internal static class A14_Items
     internal const string EnergyDrinkName = "Energy Drink";
     internal const string BigLollipopName = "Big Lollipop";
 
+    /// <summary>The Big Lollipop, or the Pink Lollipop (the same candy in another look and name).</summary>
+    internal static bool IsBigLollipop(string name) => name == BigLollipopName || name == PinkLollipop.ItemName;
+
     /// <summary>The Energy Drink's walking bonus (+30%; the game: +50%).</summary>
     internal const float EnergyDrinkWalking = 0.3f;
 
@@ -120,9 +123,9 @@ internal static class A14_Items
     /// <summary>How many times as heavy each fungus flies when thrown: its throw speed is divided by this.</summary>
     private static readonly (string prefab, float heavier)[] HeavyFungus = { ("ShelfShroom", 1.5f), ("CloudFungus", 1.5f), ("WarpFungus", 1.35f) };
 
-    /// <summary>A Magic Bean's vine: share of the game's longest vine, thorns per second while standing on it, and how long each 2.5 of them stays in.</summary>
+    /// <summary>A Magic Bean's vine: share of the game's longest vine, seconds on it (standing or climbing) per 2.5 thorns, and how long each 2.5 of them stays in.</summary>
     private const float BeanVineLength = 0.75f;
-    private const float BeanVineThorns = 0.025f;
+    internal const float BeanThornEvery = 3f;
     private const float BeanThornSeconds = 30f;
 
     private const float SnowballCold = 0.3f;
@@ -133,8 +136,6 @@ internal static class A14_Items
     /// any other knock-down (the game sends only the seconds) and add the cold on their own client.
     /// </summary>
     private const float SnowballKnockdownMarked = SnowballKnockdown + 0.0004f;
-
-    private const float HeldSnowballCold = 0.025f;
 
     internal const string MandrakeName = "Mandrake";
     internal const float MandrakeSpores = 0.3f;
@@ -159,7 +160,7 @@ internal static class A14_Items
     private const string FaerieLanternName = "Faerie Lantern";
 
     /// <summary>What a lit Lantern takes off a second: cold (the game: 2.5).</summary>
-    internal const float LanternWarmth = 0.015f;
+    internal const float LanternWarmth = 0.02f;
 
     /// <summary>What a lit Faerie Lantern takes off a second, of each of its statuses (the game: 5).</summary>
     internal const float FaerieLanternHealing = 0.025f;
@@ -196,7 +197,7 @@ internal static class A14_Items
     /// <summary>The Cursed Skull's clear is being applied right now (on this client).</summary>
     internal static bool InCursedSkull => cursedSkullScope > 0;
 
-    /// <summary>Whether sunscreen still lets some of the sun's heat through.</summary>
+    /// <summary>Whether sunscreen still lets some of the heat through.</summary>
     internal static bool SunscreenLeaks => On;
 
     [HarmonyPatch(typeof(Action_RestoreHunger), nameof(Action_RestoreHunger.RunAction))]
@@ -273,7 +274,7 @@ internal static class A14_Items
                 energyDrinkScope++;
                 __state = true;
             }
-            else if (name == BigLollipopName && __instance.affliction is Affliction_InfiniteStamina rush &&
+            else if (IsBigLollipop(name) && __instance.affliction is Affliction_InfiniteStamina rush &&
                      rush.drowsyAffliction is Affliction_AdjustDrowsyOverTime crash && crash.statusPerSecond > 0f)
             {
                 Overrides.Set(crash, nameof(Affliction.totalTime), LollipopDrowsySeconds);
@@ -354,11 +355,11 @@ internal static class A14_Items
 
     /// <summary>When each 2.5 of the Magic Bean's thorns went into the local scout, oldest first.</summary>
     private static readonly Queue<float> beanThorns = new Queue<float>();
-    private static float beanThornsOwed;
+    private static float beanVineSeconds;
 
     /// <summary>
-    /// Called every frame: a held snowball chills; a Magic Bean's vine sticks thorns into whoever stands
-    /// on it, and they work their way out again.
+    /// Called every frame: a Magic Bean's vine sticks thorns into whoever stands on it or climbs it, and
+    /// they work their way out again.
     /// </summary>
     internal static void Tick()
     {
@@ -369,11 +370,6 @@ internal static class A14_Items
             return;
         }
         CharacterAfflictions afflictions = local.refs.afflictions;
-        Item held = local.data.currentItem;
-        if (held != null && held.TryGetComponent(out Snowball _))
-        {
-            ExactStatus.Add(afflictions, Cold, A15_StrongerAilments.FromAscent15(Cold, HeldSnowballCold * Time.deltaTime), "held snowball");
-        }
         bool changed = false;
         int added = 0;
         float now = Time.time;
@@ -383,12 +379,12 @@ internal static class A14_Items
             changed = true;
         }
         // Like the game's thorns, none for an invincible scout or a skeleton.
-        if (!local.data.isInvincible && !local.data.isSkeleton && StandsOnBeanVine(local))
+        if (!local.data.isInvincible && !local.data.isSkeleton && OnBeanVine(local))
         {
-            beanThornsOwed += BeanVineThorns * Time.deltaTime;
-            while (beanThornsOwed >= A15_StrongerAilments.Step)
+            beanVineSeconds += Time.deltaTime;
+            while (beanVineSeconds >= BeanThornEvery)
             {
-                beanThornsOwed -= A15_StrongerAilments.Step;
+                beanVineSeconds -= BeanThornEvery;
                 beanThorns.Enqueue(now);
                 added++;
             }
@@ -410,8 +406,14 @@ internal static class A14_Items
         }
     }
 
-    private static bool StandsOnBeanVine(Character character)
+    /// <summary>The scout stands on a Magic Bean's vine or climbs it (the wall it holds on to is the vine).</summary>
+    internal static bool OnBeanVine(Character character)
     {
+        if (character.data.isClimbing)
+        {
+            Collider wall = character.data.climbHit.collider;
+            return wall != null && wall.GetComponentInParent<MagicBeanVine>() != null;
+        }
         if (!character.data.isGrounded)
         {
             return false;
@@ -430,7 +432,7 @@ internal static class A14_Items
     /// <summary>All of the bean's thorns come out at once (death, a checkpoint flag, the end of the climb).</summary>
     private static void ClearBeanThorns(CharacterAfflictions afflictions)
     {
-        beanThornsOwed = 0f;
+        beanVineSeconds = 0f;
         if (beanThorns.Count == 0)
         {
             return;

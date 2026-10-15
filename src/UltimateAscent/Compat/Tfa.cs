@@ -17,8 +17,8 @@ namespace UltimateAscent.Compat;
 /// the mod keeps working.
 /// <list type="bullet">
 /// <item>FINAL ASCENT stacks every biome into the vanilla segments; TFA's stage tracking tells
-/// where the scouts really are, and its biome offsets tell where the Caldera (and its lava tide)
-/// was moved to.</item>
+/// where the scouts really are, its biome offsets tell where the Caldera (and its lava tide) was
+/// moved to, and its cold-night count tells where the nights end.</item>
 /// <item>Apocalypse mode: TFA decides how hard its own events are, so this mod's rules leave them
 /// alone. What TFA's code does to a scout (<see cref="Causing"/>), what its events spawn
 /// (<see cref="Spawned"/>) and, for what cannot be traced, the weather TFA is running
@@ -53,6 +53,7 @@ internal static class Tfa
     private static PropertyInfo iceFogDrawing;
     private static MethodInfo terrainComeBack;
     private static bool terrainFailed;
+    private static MethodInfo coldNightReached;
 
     internal static bool Present => present ??= Chainloader.PluginInfos.ContainsKey(Guid) && Bind();
 
@@ -77,6 +78,9 @@ internal static class Tfa
             // Optional: without it, leaving FINAL ASCENT by wrapping around leaves the TerrainRandomiser mod as TFA set it.
             Type terrain = AccessTools.TypeByName(Ns + "FinalAscentTerrainRandomiser");
             terrainComeBack = terrain != null ? AccessTools.Method(terrain, "ComeBack") : null;
+            // Optional (TFA 2.9 on): how far FINAL ASCENT has come for the cold nights; without it the progress points count.
+            Type coldNight = AccessTools.TypeByName(Ns + "FinalAscentColdNight");
+            coldNightReached = coldNight != null ? AccessTools.Method(coldNight, "Reached", new[] { typeof(MountainProgressHandler) }) : null;
 
             if (finalAscent == null || finalAscentActive == null || placeCurrent == null || placeInRun == null || apocalypseActive == null || builderOffsets == null || weatherApplied == null)
             {
@@ -250,7 +254,7 @@ internal static class Tfa
                 {
                     continue;
                 }
-                if (behaviour is PhotonView view && view.InstantiationData is object[] data && data.Length > 0 && data[0] is string tag && tag.StartsWith(SpawnTag, StringComparison.Ordinal))
+                if (behaviour is PhotonView view && Tagged(view))
                 {
                     result = true;
                     break;
@@ -264,6 +268,17 @@ internal static class Tfa
         }
         spawned.Add(self, new StrongBox<bool>(result));
         return result;
+    }
+
+    /// <summary>
+    /// Spawned over the network by one of TFA's events (tagged "FA_..."), on every player's game. For
+    /// what is a scout itself, such as the zombies of its Blood Moon, which <see cref="Spawned"/> does
+    /// not look into.
+    /// </summary>
+    internal static bool Tagged(PhotonView view)
+    {
+        return assembly != null && !broken && view != null && view.InstantiationData is object[] data && data.Length > 0
+            && data[0] is string tag && tag.StartsWith(SpawnTag, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -319,6 +334,22 @@ internal static class Tfa
             default: return false;
         }
         return true;
+    }
+
+    /// <summary>
+    /// How far the climb has come for the cold nights, counted the way the game's night cold counts it.
+    /// FINAL ASCENT has ten progress points instead of five, so the game's "before point 3" would end
+    /// the nights at its Alpine; TFA (2.9 on) counts there in segments instead, which ends them at its
+    /// Mesa's campfire, where its Caldera begins.
+    /// </summary>
+    internal static int ColdNightReached(MountainProgressHandler progress)
+    {
+        int reached = progress.maxProgressPointReached;
+        if (!FinalAscentActive || coldNightReached == null)
+        {
+            return reached;
+        }
+        return Guard(() => (int)coldNightReached.Invoke(null, new object[] { progress }), reached);
     }
 
     private static bool TryGetVolcanoOffset(out Vector3 offset)

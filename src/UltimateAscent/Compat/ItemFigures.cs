@@ -15,11 +15,11 @@ namespace UltimateAscent.Compat;
 /// included.
 /// <list type="bullet">
 /// <item>Food: half the hunger (14), none from ticks.</item>
-/// <item>Status changes: cures at 60% (the Early Worm 50%; 14), what they add with ascent 15's boost,
+/// <item>Status changes: cures at 60% (the Early Worm and the Green Clusterberry's poison 50%; 14), what they add with ascent 15's boost,
 /// the exact Napberry, Scorchberry, Green Kingberry and Shroomberry amounts (15).</item>
 /// <item>Extra stamina: half (14). Poisonous food: its exact total (15) or the boosted poison.</item>
 /// <item>Effects: the Energy Drink's 50 crash and the boost on other crashes (15), the Big Lollipop's
-/// crash (14), every drowsiness over time (14), the Heat Pack's 20 s (14), the gems' numbers (14).</item>
+/// crash (14), every drowsiness over time (14), the Heat Pack's 20 s and the Wonderberry's 6 s (14), the gems' numbers (14).</item>
 /// <item>Weight (for Item Stats, which reads the raw field): the rules' weight, in custom runs too
 /// (the Lightweight Parasol weighs nothing there as well).</item>
 /// </list>
@@ -168,12 +168,17 @@ internal static class ItemFigures
         const CharacterAfflictions.STATUSTYPE drowsy = CharacterAfflictions.STATUSTYPE.Drowsy;
         switch (affliction)
         {
+            case Affliction_FasterBoi toxic when worse && name == ToxicDrink.ItemName:
+                Set(toxic.totalTime, ToxicDrink.SecondsWorse, v => toxic.totalTime = v);
+                Set(toxic.moveSpeedMod, ToxicDrink.SpeedWorse - 1f, v => toxic.moveSpeedMod = v);
+                Set(toxic.climbSpeedMod, ToxicDrink.SpeedWorse - 1f, v => toxic.climbSpeedMod = v);
+                break;
             case Affliction_FasterBoi rush when stronger:
                 float crash = name == A14_Items.EnergyDrinkName ? A14_Items.EnergyDrinkCrash : rush.drowsyOnEnd * A15_StrongerAilments.Factor(drowsy);
                 Set(rush.drowsyOnEnd, crash, v => rush.drowsyOnEnd = v);
                 break;
             case Affliction_InfiniteStamina sugar when worse && sugar.drowsyAffliction is Affliction_AdjustDrowsyOverTime sugarCrash && sugarCrash.statusPerSecond > 0f:
-                if (name == A14_Items.BigLollipopName)
+                if (A14_Items.IsBigLollipop(name))
                 {
                     Set(sugarCrash.totalTime, A14_Items.LollipopDrowsySeconds, v => sugarCrash.totalTime = v);
                     Set(sugarCrash.statusPerSecond, A15_StrongerAilments.FromAscent15(drowsy, A14_Items.LollipopDrowsiness) / A14_Items.LollipopDrowsySeconds,
@@ -189,6 +194,9 @@ internal static class ItemFigures
                 break;
             case Affliction_AdjustColdOverTime warmth when worse && name == A14_Items.HeatPackName:
                 Set(warmth.totalTime, A14_Items.HeatPackSeconds, v => warmth.totalTime = v);
+                break;
+            case Affliction_InfiniteStamina berryRush when worse && name == WildFoods.WonderberryName && berryRush.drowsyAffliction == null:
+                Set(berryRush.totalTime, WildFoods.WonderberryRushWorse, v => berryRush.totalTime = v);
                 break;
         }
     }

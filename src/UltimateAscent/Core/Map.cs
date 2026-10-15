@@ -182,14 +182,15 @@ internal static class Map
     /// <summary>
     /// Day and night only matter below the Caldera and the Gloom; from there on (and in the Kiln, the
     /// Citadel and the Peak) there is no night for this mod's rules. Like the game's own night cold it
-    /// goes by the furthest point of the climb reached.
+    /// goes by the furthest point of the climb reached, counted as the night cold counts it (with True
+    /// Final Ascent's FINAL ASCENT: up to its Mesa's campfire, see <see cref="Compat.Tfa.ColdNightReached"/>).
     /// </summary>
     internal static bool DayNightApplies
     {
         get
         {
             MountainProgressHandler progress = Singleton<MountainProgressHandler>.Instance;
-            return progress != null && progress.maxProgressPointReached < 3;
+            return progress != null && Compat.Tfa.ColdNightReached(progress) < 3;
         }
     }
 

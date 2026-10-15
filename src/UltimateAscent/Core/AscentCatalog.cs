@@ -175,6 +175,16 @@ internal static class AscentCatalog
     {
         [Features.A14_Items.LightweightParasolKey] = "Lightweight Parasol",
         [Features.ClimbingChalkItem.NameKey] = "Climbing Chalk",
+        [Features.WildFoods.WonderberryNameKey] = "Wonderberry",
+        [Features.ToxicDrink.NameKey] = "Toxic Drink",
+        [Features.PinkLollipop.NameKey] = "Pink Lollipop",
+        [Features.VanillaScoutCookies.SwitchKey] = "Vanilla Scout Cookies",
+    };
+
+    /// <summary>What the use button does, for items whose use the game has no word for (shown as written).</summary>
+    internal static readonly Dictionary<string, string> Prompts = new Dictionary<string, string>
+    {
+        [Features.StickItem.SwingPrompt] = "swing",
     };
 
     private static void AddTexts()
@@ -193,6 +203,13 @@ internal static class AscentCatalog
         foreach (KeyValuePair<string, string> name in ItemNames)
         {
             Put(table, name.Key, name.Value.ToUpperInvariant());
+        }
+        foreach (KeyValuePair<string, string> prompt in Prompts)
+        {
+            if (!table.ContainsKey(prompt.Key.ToUpperInvariant()))
+            {
+                Put(table, prompt.Key, prompt.Value);
+            }
         }
         textsAdded = true;
     }

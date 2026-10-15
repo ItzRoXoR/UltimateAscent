@@ -20,7 +20,7 @@ namespace UltimateAscent.Features;
 /// with the other items (<see cref="CustomRunItems"/>), and its switch there decides.</item>
 /// <item>It has three uses (a use bar like the game's other multi-use items); from ascent 14 two, as
 /// that ascent takes two uses per use of every item. Each use takes 2 s. For 16 s, climbing (walls,
-/// ropes and vines alike) costs 75% of its stamina; from ascent 14, 85% for 12 s. Another use restarts
+/// ropes and vines alike) costs 60% of its stamina; from ascent 14, 75% for 12 s. Another use restarts
 /// the time.</item>
 /// <item>Cooking darkens it but gives it none of the game's food changes (extra stamina, poison once
 /// incinerated); a burned chalk (cooked three times or more) can no longer be used.</item>
@@ -51,15 +51,15 @@ internal static class ClimbingChalkItem
     private const string UsePrompt = "use";
 
     /// <summary>The share of climbing stamina it costs while chalked, and for how long.</summary>
-    private const float Stamina = 0.75f;
-    private const float Seconds = 16f;
+    internal const float Stamina = 0.6f;
+    internal const float Seconds = 16f;
 
     /// <summary>How many times one chalk can be used (ascent 14's two uses per use leave two).</summary>
     internal const int Uses = 3;
 
     /// <summary>From ascent 14.</summary>
-    private const float WorseStamina = 0.85f;
-    private const float WorseSeconds = 12f;
+    internal const float WorseStamina = 0.75f;
+    internal const float WorseSeconds = 12f;
 
     /// <summary>
     /// The rub (the user's clip without its silent first second, its rubbing played twice so it fills
@@ -424,7 +424,7 @@ internal static class ClimbingChalkItem
     /// removed; it keeps its particles, its look and its 4 s self-removal. It bursts from a small ball
     /// around the scout instead of the bottle's cone.
     /// </summary>
-    private static GameObject DustTemplate()
+    internal static GameObject DustTemplate()
     {
         if (dustTemplate != null || dustFailed)
         {
@@ -655,7 +655,7 @@ internal static class ClimbingChalkItem
     }
 
     /// <summary>A 16-bit PCM WAV, as shipped in this DLL, as an AudioClip.</summary>
-    private static AudioClip ReadWav(byte[] wav, string name)
+    internal static AudioClip ReadWav(byte[] wav, string name)
     {
         if (wav.Length < 12 || Encoding.ASCII.GetString(wav, 0, 4) != "RIFF" || Encoding.ASCII.GetString(wav, 8, 4) != "WAVE")
         {

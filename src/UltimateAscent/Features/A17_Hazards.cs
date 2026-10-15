@@ -15,7 +15,8 @@ namespace UltimateAscent.Features;
 /// Ascent 17 (13DDA): hazards are more dangerous. Every hazard is worse; some are uniquely worse.
 /// Jellyfish, urchins, bees, beetles, cacti, dynamite, spiders, ticks, tumbleweeds, mushroom
 /// zombies, explosions, banana peels, rickety bridges, lava, eruptions, hazardous rocks, poison
-/// clouds and spore emitters. Burned items burn the hands holding them (<see cref="BurnedItems"/>).
+/// clouds and spore emitters. Burned items burn the hands holding them (<see cref="BurnedItems"/>),
+/// and holding a snowball chills.
 /// Ticks and bee ambushes (<see cref="A17_BeeAmbush"/>) only happen in the Tropics.
 /// </summary>
 internal static class A17_Hazards
@@ -58,6 +59,25 @@ internal static class A17_Hazards
     /// <summary>Falling into lava: 100 injury and 200 heat (the game: 25 and 25).</summary>
     private const float LavaInjury = 1f;
     private const float LavaHeat = 2f;
+
+    /// <summary>Holding a snowball: 2.5 cold a second (the game: none).</summary>
+    private const float HeldSnowballCold = 0.025f;
+
+    /// <summary>Called every frame: a snowball held in the hand chills.</summary>
+    internal static void Tick()
+    {
+        Character local = Character.localCharacter;
+        if (!On || local == null || local.data.dead)
+        {
+            return;
+        }
+        Item held = local.data.currentItem;
+        if (held != null && held.TryGetComponent(out Snowball _))
+        {
+            ExactStatus.Add(local.refs.afflictions, CharacterAfflictions.STATUSTYPE.Cold,
+                A15_StrongerAilments.FromAscent15(CharacterAfflictions.STATUSTYPE.Cold, HeldSnowballCold * Time.deltaTime), "held snowball");
+        }
+    }
 
     private static void Slip(Character character, float fallMultiplier, float hipMultiplier)
     {
@@ -1046,8 +1066,8 @@ internal static class A17_Hazards
     /// <summary>Mushroom zombies wake from 30 m (the game: 20 m)...</summary>
     private const float ZombieWakeDistance = 30f;
 
-    /// <summary>...a bite stuns you for 4 s (the game: 3 s)...</summary>
-    private const float ZombieStunSeconds = 4f;
+    /// <summary>...a bite knocks you down for 4 s (the game: 3 s)...</summary>
+    internal const float ZombieStunSeconds = 4f;
 
     /// <summary>...and a zombie lives for 300 s once awake (the game: 120 s).</summary>
     private const float ZombieLifetime = 300f;
@@ -1055,7 +1075,7 @@ internal static class A17_Hazards
     /// <summary>Up to 12 zombies are awake at once (the game: 1).</summary>
     private const int MaxZombies = 12;
 
-    /// <summary>Mushroom zombies wake from 30 m, chase at once (at their normal speed), stun for 4 s and last 300 s.</summary>
+    /// <summary>Mushroom zombies wake from 30 m, chase at once (at their normal speed) and last 300 s; their bite is <see cref="ZombieBite"/>.</summary>
     [HarmonyPatch(typeof(MushroomZombieSpawner), nameof(MushroomZombieSpawner.Spawn))]
     private static class Zombies
     {
@@ -1066,12 +1086,39 @@ internal static class A17_Hazards
             {
                 return;
             }
-            Overrides.Set(zombie, nameof(MushroomZombie.attackHeightDelta), Overrides.Original(zombie, "height", zombie.attackHeightDelta) * 2f);
-            Overrides.Set(zombie, nameof(MushroomZombie.biteStunTime), ZombieStunSeconds);
             Overrides.Set(zombie, nameof(MushroomZombie.distanceBeforeWakeup), ZombieWakeDistance);
             Overrides.Set(zombie, nameof(MushroomZombie.distanceToEnable), Mathf.Max(Overrides.Original(zombie, "enable", zombie.distanceToEnable), ZombieWakeDistance));
             Overrides.Set(zombie, nameof(MushroomZombie.distanceBeforeChase), 0f);
             Overrides.Set(zombie, nameof(MushroomZombie.lifetime), ZombieLifetime);
+        }
+    }
+
+    /// <summary>
+    /// A mushroom zombie's bite knocks you down for 4 s. The game reads the knock-down on the bitten
+    /// scout's own game, from that game's copy of the zombie (the zombie is set up on the host's only),
+    /// so it is set there for the bite. Zombies that rose from scouts and TFA's keep the game's 3 s.
+    /// </summary>
+    [HarmonyPatch(typeof(MushroomZombieBiteCollider), "OnTriggerEnter")]
+    private static class ZombieBite
+    {
+        private static void Prefix(MushroomZombieBiteCollider __instance, out float? __state)
+        {
+            __state = null;
+            MushroomZombie zombie = __instance.parentZombie;
+            if (On && zombie != null && zombie.isNPCZombie && !Compat.Tfa.Tagged(zombie.photonView))
+            {
+                __state = zombie.biteStunTime;
+                zombie.biteStunTime = ZombieStunSeconds;
+            }
+        }
+
+        private static Exception Finalizer(MushroomZombieBiteCollider __instance, float? __state, Exception __exception)
+        {
+            if (__state.HasValue && __instance.parentZombie != null)
+            {
+                __instance.parentZombie.biteStunTime = __state.Value;
+            }
+            return __exception;
         }
     }
 
@@ -1244,7 +1291,8 @@ internal static class A17_Hazards
     }
 
     // ---- Explosions: double status, much stronger knockback, 3x longer knock-down that also knocks you out.
-    // Some bursts land exact targets instead (amounts given as they land on the bar, before falloff).
+    // Some bursts land exact targets instead (amounts given as they land on the bar, before falloff). A cooked
+    // Energy Drink's burst is all of that but the knock-out.
 
     /// <summary>Poison mines: up to 50 poison (the game: 20), then up to 5 every 0.5 s in their cloud for 11 s (the game: 2.5).</summary>
     private const float PoisonMineBurst = 0.5f;
@@ -1367,27 +1415,56 @@ internal static class A17_Hazards
         return false;
     }
 
+    /// <summary>The burst a cooked Energy Drink lets out when drunk: its own copy of the game's (see <see cref="OwnEnergyDrinkBurst"/>).</summary>
+    internal const string EnergyDrinkBurstName = "VFX_EnergyDrinkBurst";
+
+    /// <summary>A cooked Energy Drink's burst: an explosion, but one that knocks nobody out.</summary>
+    internal static bool IsEnergyDrinkBurst(AOE aoe) => aoe.name.StartsWith(EnergyDrinkBurstName, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Gives the Energy Drink its own copy of the burst it lets out cooked (the game's balloon pop with
+    /// knockback), so its burst can be told from the explosions that knock you out.
+    /// </summary>
+    internal static void OwnEnergyDrinkBurst()
+    {
+        if (!ItemDatabase.TryGetItem(ToxicDrink.EnergyDrinkPrefab, out Item energy) || energy == null || !energy.TryGetComponent(out Action_Spawn burst) || burst.objectToSpawn == null)
+        {
+            Plugin.Log.LogWarning("The Energy Drink's burst was not found; from ascent 17 it knocks the drinker out like an explosion.");
+            return;
+        }
+        burst.objectToSpawn = ModItems.Keep(burst.objectToSpawn, EnergyDrinkBurstName);
+    }
+
     [HarmonyPatch(typeof(AOE), nameof(AOE.Explode))]
     private static class Explosions
     {
         [ThreadStatic] internal static int Depth;
         [ThreadStatic] internal static string ExactSource;
+        [ThreadStatic] internal static bool KnocksNobodyOut;
 
         internal struct Scope
         {
             internal bool entered;
             internal string previous;
+            internal bool previousKnocksNobodyOut;
         }
 
         private static void Prefix(AOE __instance, out Scope __state)
         {
-            // A Shroomberry's spore burst has its own numbers (ascent 14), not an explosion's; True Final
-            // Ascent's blasts (its mines, its cactus rain's dynamite) keep TFA's.
-            __state = new Scope { entered = OnFor(__instance) && !A14_Shroomberries.IsSporeBurst(__instance) && !Compat.Tfa.Causing, previous = ExactSource };
+            // A Shroomberry's spore burst has its own numbers (ascent 14), not an explosion's, and a cooked Toxic
+            // Drink's burst is no explosion; True Final Ascent's blasts (its mines, its cactus rain's dynamite)
+            // keep TFA's. A cooked Energy Drink's burst is an explosion that knocks nobody out.
+            __state = new Scope
+            {
+                entered = OnFor(__instance) && !A14_Shroomberries.IsSporeBurst(__instance) && !ToxicDrink.IsBurst(__instance) && !Compat.Tfa.Causing,
+                previous = ExactSource,
+                previousKnocksNobodyOut = KnocksNobodyOut,
+            };
             if (__state.entered)
             {
                 Depth++;
                 ExactSource = Retune(__instance) ? "aoe:" + __instance.name : null;
+                KnocksNobodyOut = IsEnergyDrinkBurst(__instance);
             }
         }
 
@@ -1397,6 +1474,7 @@ internal static class A17_Hazards
             {
                 Depth--;
                 ExactSource = __state.previous;
+                KnocksNobodyOut = __state.previousKnocksNobodyOut;
             }
             return __exception;
         }
@@ -1448,7 +1526,10 @@ internal static class A17_Hazards
                 return;
             }
             seconds *= 3f;
-            KnockOut(__instance);
+            if (!Explosions.KnocksNobodyOut)
+            {
+                KnockOut(__instance);
+            }
         }
     }
 

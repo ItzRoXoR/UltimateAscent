@@ -9,7 +9,10 @@ namespace UltimateAscent.Features;
 /// The config's "New Items" switch (the host's): off, the mod's new items stay out of regular runs,
 /// as when their switches are off on the Custom Run screen (custom runs keep those switches): the
 /// Climbing Chalk does not spawn, and wherever the game would spawn the Roots parasol (the
-/// Lightweight Parasol from ascent 9) the regular Parasol spawns instead, with the same odds.
+/// Lightweight Parasol from ascent 9) the regular Parasol spawns instead, with the same odds. The
+/// newer items check the switch themselves (<see cref="AutoParachute"/>, <see cref="WarpCompass"/>, <see cref="VanillaScoutCookies"/>,
+/// <see cref="WildFoods"/>, <see cref="GroundItems"/>). The wild ones never spawn in suitcases, so the
+/// Custom Run screen has no switch for them: in custom runs too this switch is theirs (<see cref="WildOn"/>).
 /// </summary>
 internal static class NewItems
 {
@@ -17,6 +20,9 @@ internal static class NewItems
 
     /// <summary>Switched off, in a regular run from ascent 9.</summary>
     private static bool Off => !RunSettings.IsCustomRun && Rules.InExtraAscent && !HostOptions.NewItemsOn;
+
+    /// <summary>The wild new items (the wild foods, the Stone and the Stick) are out: from ascent 9 and in custom runs, unless the switch is off.</summary>
+    internal static bool WildOn => HostOptions.NewItemsOn && (Rules.InExtraAscent || (Rules.InRun && RunSettings.IsCustomRun));
 
     /// <summary>Spawning checks every candidate here first (luggage and ground spawns alike).</summary>
     [HarmonyPatch(typeof(Item), nameof(Item.IsValidToSpawn))]

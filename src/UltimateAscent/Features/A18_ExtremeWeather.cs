@@ -8,11 +8,16 @@ namespace UltimateAscent.Features;
 /// <summary>
 /// Ascent 18 (13DDA): weather is more extreme, including the lava in the Caldera.
 /// <list type="bullet">
-/// <item>Wind storms blow 2x (Roots: over 3x) harder; rain makes the ground and walls very slippery
+/// <item>Wind storms blow 1.5x (Roots: 2.5x) harder; rain makes the ground and walls very slippery
 /// and, while you are airborne under open sky, pulls you down harder (an extra 40 m/s², 60 in the
 /// Tropics: about twice, in the Tropics three times, the pull of a normal jump); snowstorms chill 20%
-/// more in the Alpine segment and at night, and scorch you by day elsewhere.</item>
-/// <item>Tornadoes spawn every 20-120 s and pull four times as hard (in the Mesa they also make you drowsy).</item>
+/// more in the Alpine segment and at night, and scorch you by day elsewhere, a heat only sunscreen keeps
+/// off (from ascent 14 all but a quarter of it). While a snowstorm blows where you are, no sun burns
+/// through it: the scorching sun (the Mesa's, and ascent 23's everywhere) neither heats you nor roasts
+/// what shields you.</item>
+/// <item>Tornadoes spawn every 20-120 s; one that catches you spins, drags and lifts you 2.5 times as
+/// hard (in the Mesa it also makes you drowsy).</item>
+/// <item>The Mesa's midday sun burns 6 heat a second; the Gloom's fog makes you 2.5 drowsy a second.</item>
 /// <item>The Caldera's lava river rises and falls like a tide, synchronised for everyone.</item>
 /// <item>The fog becomes poisonous and three times as strong (see <see cref="FogSphereRules"/>).</item>
 /// <item>Cold nights chill 1.5 times as fast. In the Alpine, the first and the last quarter of the
@@ -32,7 +37,28 @@ internal static class A18_ExtremeWeather
     internal const float RainPull = 40f;
     internal const float TropicsRainPull = 60f;
 
+    /// <summary>How much harder a tornado spins, drags and lifts the scouts it has caught.</summary>
+    internal const float TornadoPull = 2.5f;
+
+    /// <summary>The Mesa's midday sun, a second (the game: about 1.6, 2.4 with ascent 15's boost).</summary>
+    internal const float MesaSunHeat = 0.06f;
+
+    /// <summary>The Gloom's fog, a second (the game: 0.9, 1.17 with ascent 15's boost).</summary>
+    internal const float GloomFogDrowsiness = 0.025f;
+
+    private static float mesaSunTime;
+
+    /// <summary>The last frame a snowstorm blew on the local scout (the game applies a storm only while it blows where the scout is).</summary>
+    private static int snowstormFrame = -10;
+
     private static bool On => Rules.Enabled(Lvl.ExtremeWeather);
+
+    /// <summary>
+    /// A snowstorm blows where the local scout is (this frame or the last), so the scorching sun does not burn
+    /// through it (see <see cref="MesaSun"/> and A23_HotSun); the storm's own daytime heat takes its place. The
+    /// two meet where ascent 25's storms reach the sun.
+    /// </summary>
+    internal static bool SnowstormHidesSun => On && Time.frameCount - snowstormFrame <= 1;
 
     /// <summary>
     /// The game applies the night cold from inside the status update; every cold added there is
@@ -104,13 +130,30 @@ internal static class A18_ExtremeWeather
             {
                 return false;
             }
-            if (!On || character == null || !Map.Ready || DayNightManager.instance == null || !IsStorm(__instance))
+            if (character == null || !Map.Ready || DayNightManager.instance == null || !IsStorm(__instance))
             {
                 return true;
             }
             Segment segment = Map.CurrentSegment;
             Place place = Map.CurrentPlace;
             string name = __instance.name;
+            if (name == "SnowStorm")
+            {
+                snowstormFrame = Time.frameCount;
+            }
+
+            if (name == "SnowStorm" && Rules.Enabled(Lvl.AllWeather))
+            {
+                // Ascent 25, "at slightly less effect": outside the Alpine the snowstorm is gentler (with
+                // ascent 18's rule or without it).
+                bool alpine = place == Place.Alpine;
+                Overrides.Set(__instance, nameof(WindChillZone.windForce), alpine ? 20f : 12f);
+                Overrides.Set(__instance, nameof(WindChillZone.statusApplicationPerSecond), alpine ? 0.07f : 0.01f);
+            }
+            if (!On)
+            {
+                return true;
+            }
 
             if (name == "WindStorm")
             {
@@ -124,13 +167,6 @@ internal static class A18_ExtremeWeather
                     force = 0f;
                 }
                 Overrides.Set(__instance, nameof(WindChillZone.windForce), force);
-            }
-            else if (name == "SnowStorm" && Rules.Enabled(Lvl.AllWeather))
-            {
-                // "At slightly less effect": outside the Alpine the snowstorm is gentler.
-                bool alpine = place == Place.Alpine;
-                Overrides.Set(__instance, nameof(WindChillZone.windForce), alpine ? 20f : 12f);
-                Overrides.Set(__instance, nameof(WindChillZone.statusApplicationPerSecond), alpine ? 0.07f : 0.01f);
             }
 
             __instance.windPlayerFactor = WindChillZone.GetWindIntensityAtPoint(character.Center, __instance.lightVolumeSampleThreshold_lower, __instance.lightVolumeSampleThreshold_margin);
@@ -147,7 +183,15 @@ internal static class A18_ExtremeWeather
                 }
                 else if (segment != Segment.Caldera)
                 {
-                    character.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Hot, amount);
+                    // Only sunscreen keeps this heat off (from ascent 14 all but a quarter); a parasol or a glider does not.
+                    if (!character.data.wearingSunscreen)
+                    {
+                        character.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Hot, amount);
+                    }
+                    else if (A14_Items.SunscreenLeaks)
+                    {
+                        character.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Hot, amount * A14_Items.SunscreenLeak);
+                    }
                 }
             }
             else if (__instance.statusApplicationPerSecond > 0f)
@@ -234,16 +278,109 @@ internal static class A18_ExtremeWeather
         }
     }
 
+    /// <summary>
+    /// A tornado that has caught a scout spins, drags and lifts them 2.5 times as hard. The force itself is
+    /// scaled: the game ignores the random multipliers when both are the same.
+    /// </summary>
     [HarmonyPatch(typeof(Character), nameof(Character.AddForce), typeof(Vector3), typeof(float), typeof(float))]
     private static class TornadoForce
     {
-        private static void Prefix(ref float minRandomMultiplier, ref float maxRandomMultiplier)
+        private static void Prefix(ref Vector3 move)
         {
             if (TornadoGrip.Depth > 0)
             {
-                minRandomMultiplier *= 4f;
-                maxRandomMultiplier *= 4f;
+                move *= TornadoPull;
             }
+        }
+    }
+
+    /// <summary>
+    /// The Mesa's midday sun (the game's own, in its box over the Mesa, while the sun is at full strength and
+    /// nothing shades the scout from it) burns 6 heat a second, exactly as it lands on the bar. An open
+    /// parasol or a glider held overhead still keeps it off, and sunscreen too (but for the quarter ascent 14
+    /// lets through); a snowstorm blowing on the scout hides it. Not while True Final Ascent runs a weather;
+    /// in its Apocalypse mode TFA switches the game's sun off and burns with its own.
+    /// </summary>
+    [HarmonyPatch(typeof(HotSun), nameof(HotSun.Update))]
+    private static class MesaSun
+    {
+        private static bool Prefix(HotSun __instance)
+        {
+            if (!On || !Application.isPlaying || Compat.Tfa.WeatherRunning)
+            {
+                return true;
+            }
+            if (SnowstormHidesSun)
+            {
+                return false;
+            }
+            __instance.bounds.center = __instance.transform.position;
+            __instance.bounds.size = __instance.transform.localScale;
+            Character local = Character.localCharacter;
+            DayNightManager clock = DayNightManager.instance;
+            if (local == null || clock == null || clock.sun == null || !__instance.bounds.Contains(local.Center) || clock.sun.intensity < 5f)
+            {
+                return false;
+            }
+            RaycastHit shade = HelperFunctions.LineCheck(local.Center + clock.sun.transform.forward * -1000f, local.Center, HelperFunctions.LayerType.AllPhysical);
+            if (shade.transform != null && shade.transform.root != local.transform.root)
+            {
+                return false;
+            }
+            mesaSunTime += Time.deltaTime;
+            if (mesaSunTime <= __instance.rate)
+            {
+                return false;
+            }
+            float seconds = mesaSunTime;
+            mesaSunTime = 0f;
+            Item held = local.data.currentItem;
+            if (held != null && ((held.TryGetComponent(out Parasol parasol) && parasol.isOpen) || held.gliderHold))
+            {
+                return false;
+            }
+            float heat = MesaSunHeat * seconds;
+            if (local.data.wearingSunscreen)
+            {
+                if (!A14_Items.SunscreenLeaks)
+                {
+                    return false;
+                }
+                heat *= A14_Items.SunscreenLeak;
+            }
+            ExactStatus.Add(local.refs.afflictions, CharacterAfflictions.STATUSTYPE.Hot, heat, "mesa sun");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The Gloom's fog (the game's own sleepy fog over the Gloom, not the Citadel's rising gloom) makes the
+    /// scouts whose heads are in it 2.5 drowsy a second, exactly as it lands on the bar; the game's safe
+    /// zones (lit bell towers, campfires, stoves, candles, Faerie Lanterns) still keep it off.
+    /// </summary>
+    [HarmonyPatch(typeof(Peak.StatusFieldGloom), nameof(Peak.StatusFieldGloom.TickStatus))]
+    private static class GloomFog
+    {
+        private static bool Prefix(Peak.StatusFieldGloom __instance)
+        {
+            Character local = Character.localCharacter;
+            if (!On || local == null || __instance.GetComponentInParent<LavaRising>() != null)
+            {
+                return true;
+            }
+            if (RunSettings.GetValue(RunSettings.SETTINGTYPE.Hazard_SleepyGloom) == 0)
+            {
+                return false;
+            }
+            ExactStatus.Add(local.refs.afflictions, CharacterAfflictions.STATUSTYPE.Drowsy, GloomFogDrowsiness * Time.deltaTime, "gloom fog");
+            if (__instance.additionalStatuses != null)
+            {
+                foreach (Peak.StatusFieldBase.StatusFieldStatus other in __instance.additionalStatuses)
+                {
+                    local.refs.afflictions.AdjustStatus(other.statusType, __instance.statusAmountPerSecond * Time.deltaTime);
+                }
+            }
+            return false;
         }
     }
 

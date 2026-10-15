@@ -11,7 +11,7 @@ namespace UltimateAscent.Features;
 
 /// <summary>
 /// Ascent 14 (13DDA): items are worse.
-/// Food and stamina items give half, healing gives 60%, cure-alls only partly cure, consumables
+/// Food and stamina items give half, healing gives 60% (the Green Clusterberry's poison cure half), cure-alls only partly cure, consumables
 /// lose two uses at a time, ropes are shorter, chain/balloons weaker, energy drinks slower,
 /// the lollipop's crash is 85 drowsiness, cooking no longer removes poison or spores, eating a scorpion
 /// poisons you, parasols make you fall faster, gliders drain more stamina, letting go of a rescue
@@ -53,6 +53,11 @@ internal static class A14_WorseItems
         {
             // True Final Ascent hands the worms out as its Sleep Fog's cure; they work as TFA meant.
             return 1f;
+        }
+        if (action.statusType == CharacterAfflictions.STATUSTYPE.Poison && WildFoods.IsGreenClusterberry(action.item))
+        {
+            // The Green Clusterberry takes off 15 poison (the game: 30).
+            return Mathf.Min(1f, WildFoods.GreenClusterberryCureWorse / -action.changeAmount);
         }
         return earlyWorm ? EarlyWormShare : CureShare;
     }
@@ -265,7 +270,7 @@ internal static class A14_WorseItems
     {
         private static void Prefix(Affliction_FasterBoi __instance)
         {
-            if (On)
+            if (On && !ToxicDrink.IsBoost(__instance))
             {
                 // The Energy Drink itself: walking only +30%, and from ascent 15 a crash of exactly 50 drowsiness.
                 // Other speed boosts keep at most 13DDA's +60% walking (the game's are +50% now) and +70% climbing.

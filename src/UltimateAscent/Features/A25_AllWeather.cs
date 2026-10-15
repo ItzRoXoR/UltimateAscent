@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using HarmonyLib;
 using UltimateAscent.Core;
@@ -17,12 +18,14 @@ namespace UltimateAscent.Features;
 /// is why 13DDA only ever had one of rain or wind. Storms a map has are woken up and moved out of
 /// their biome so they run everywhere; storms a map lacks are rebuilt (see <see cref="StormFactory"/>).</item>
 /// <item>Every storm covers the whole mountain and makes the ground slippery; wind and snow pause
-/// 30-90 s between storms (snow pauses 60-120 s in the Gloom).</item>
+/// 30-90 s between storms. Outside the Alpine the snowstorm is gentler (see A18_ExtremeWeather's storms,
+/// which apply it with or without ascent 18).</item>
 /// <item>Extra tornadoes roam near the scouts (see <see cref="ExtraTornadoes"/>).</item>
 /// <item>The Kiln/Citadel and everything after it keep their normal weather.</item>
 /// <item>Weather stays calm for 30 s after waking up (see <see cref="WeatherGrace"/>).</item>
-/// <item>With True Final Ascent's Apocalypse mode the weather is TFA's business: its Apocalypse
-/// weather runs as TFA runs it, plus the extra tornadoes.</item>
+/// <item>With True Final Ascent's Apocalypse mode, TFA's weather events run as TFA runs them; between
+/// them this ascent's rain, wind and snowstorms run as above (TFA would keep the game's storms quiet the
+/// whole time, so its hush steps aside then). The extra tornadoes roam throughout.</item>
 /// </list>
 /// </summary>
 internal static class A25_AllWeather
@@ -51,15 +54,21 @@ internal static class A25_AllWeather
     /// <summary>The Kiln/Citadel, the Peak and the Nadir keep their normal weather.</summary>
     internal static bool Excluded => On && Map.Ready && !Map.InLowerMountain;
 
-    /// <summary>True while this mod drives the vanilla storm zones.</summary>
-    internal static bool DrivesVanillaWeather => On && !Excluded && !Compat.Tfa.ApocalypseActive;
+    /// <summary>True while this mod drives the vanilla storm zones (with TFA's Apocalypse: between its weather events).</summary>
+    internal static bool DrivesVanillaWeather => On && !Excluded && !TfaWeather;
+
+    /// <summary>TFA's Apocalypse is running one of its weather events: the weather is TFA's alone.</summary>
+    private static bool TfaWeather => Compat.Tfa.ApocalypseActive && Compat.Tfa.WeatherRunning;
+
+    /// <summary>With TFA's Apocalypse, between its weather events: this ascent's storms run, and TFA's hush of the game's storms stands aside.</summary>
+    internal static bool RunsInApocalypseBreak => DrivesVanillaWeather && Compat.Tfa.ApocalypseActive;
 
     internal static bool IsCreated(WindChillZone zone) => zone != null && created.Contains(zone);
 
     /// <summary>Returns true when the zone must stay calm right now (grace period or excluded segment).</summary>
     internal static bool SuppressZone(WindChillZone zone)
     {
-        if (zone == null || !On || Compat.Tfa.ApocalypseActive)
+        if (zone == null || !On || TfaWeather)
         {
             return false;
         }
@@ -255,6 +264,48 @@ internal static class A25_AllWeather
                 WeatherPhases.Apply(__instance);
             }
             return true;
+        }
+    }
+
+    /// <summary>
+    /// With TFA's Apocalypse, TFA keeps every one of the game's storms quiet ("only one weather"): it
+    /// skips their clock, statuses, push and updates while this says so, and switches off any that blows
+    /// (<see cref="TfaSweep"/>). Between its weather events this ascent's storms run instead.
+    /// </summary>
+    [HarmonyPatch]
+    private static class TfaHush
+    {
+        private static MethodBase TargetMethod()
+        {
+            Type quiet = Compat.Tfa.Present ? AccessTools.TypeByName("TrueFinalAscent.FinalAscentWindStormQuiet") : null;
+            return quiet != null ? AccessTools.PropertyGetter(quiet, "Hushed") : null;
+        }
+
+        private static bool Prepare() => TargetMethod() != null;
+
+        private static void Postfix(ref bool __result)
+        {
+            if (__result && RunsInApocalypseBreak)
+            {
+                __result = false;
+            }
+        }
+    }
+
+    [HarmonyPatch]
+    private static class TfaSweep
+    {
+        private static MethodBase TargetMethod()
+        {
+            Type storm = Compat.Tfa.Present ? AccessTools.TypeByName("TrueFinalAscent.FinalAscentWindStorm") : null;
+            return storm != null ? AccessTools.Method(storm, "HushVanilla") : null;
+        }
+
+        private static bool Prepare() => TargetMethod() != null;
+
+        private static bool Prefix()
+        {
+            return !RunsInApocalypseBreak;
         }
     }
 

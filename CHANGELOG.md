@@ -1,5 +1,90 @@
 # Changelog
 
+## 1.2.0
+
+For PEAK 2.6.b.
+
+* New item: the Auto-Parachute, the game's cut item, is worn in the backpack slot (slot 4) instead of
+  a backpack. It turns up where the Jetpack does, as rarely (Mythic), from ascent 9, opens by itself
+  after 1.5 s of falling and saves you from the fall. Three charges (from ascent 14 a save takes two);
+  with the last one it is gone. Its own switch on the Custom Run screen.
+* New item: the Warp Compass, the game's cut item, from ascent 9. It turns up only in Ancient
+  Luggage and in the Ancient Statues, as rarely as the Ritual Dagger, and never in solo. One use: it
+  warps you to a teammate who has stood on solid ground for a second, onto free ground beside them
+  (the game's compass put you inside the teammate: in the wall they climbed, or in the air with
+  them); with no such teammate nothing happens and the use is kept. Its own switch among the Custom
+  Run screen's mystical items.
+* New item: the Toxic Drink, an energy drink in a toxic-green can. It turns up only in Ancient Luggage
+  and in the Ancient Statues, as rarely as the Faerie Lantern, from ascent 9. Drunk, it makes you walk
+  and climb 5 times as fast for 10 s (from ascent 14: 4 times for 8 s), then poisons you for 4 over
+  5 s (8). Cooked, it bursts when drunk, like a cooked Energy Drink (a knock-down and a push; ascent 17
+  does not take the burst for an explosion), and no poison follows. It sounds like the Energy Drink
+  sped up 1.5 times. Its own switch among the Custom Run screen's mystical items.
+* New: the Pink Lollipop, the Big Lollipop in pink and white with its effects, takes half of the Big
+  Lollipop's spawns from ascent 9. Its own switch on the Custom Run screen, after the Big Lollipop's.
+* New: the game's unused Vanilla Scout Cookies take half of the Scout Cookies' spawns from ascent 9,
+  with the same name and effects.
+* New: three cut foods grow in the wild from ascent 9: the Wonderberry (20 hunger, 10 s of infinite
+  stamina) on 0.2% of the Crispberry bushes, the Green Clusterberry (10 hunger, removes 30 poison) on
+  thorny vines as often as each of the other Clusterberries, the Weird Shroom (10 hunger, glows for
+  60 s) in mushroom patches as often as the Cluster Shroom. The Weird Shroom's glow, broken in the
+  game, works. From ascent 14 the Wonderberry gives 6 s of infinite stamina and the Green
+  Clusterberry removes 15 poison (both restore half the hunger, like all food there).
+* New: Stones and Sticks lie on the ground from ascent 9, up to 20 of each on the beach and 20 of
+  each in the Tropics or the Roots. A Stone thrown hard at a scout knocks them down for 2 s and
+  injures them for 10 (20 from ascent 17); it shatters on any hard impact, with a rock smash and a
+  small gray dust cloud. Swinging a Stick costs 33% stamina and knocks down for 3 s, without hurting
+  them, every scout and zombie a kick would reach in front of you.
+* New: from ascent 9 the Ritual Dagger works on mushroom zombies, the Roots' and scouts who turned
+  into zombies. Stabbed in the back (as a teammate must be), a zombie dies after 5 stabs (8 from
+  ascent 14) and leaves a skeleton. Stabbing a zombie gives nobody anything, and the dagger is kept.
+* New: from ascent 9 the Lantern turns up in the suitcases of every part of the climb up to the
+  Caldera and the Gloom (the game: only the Tropics' and the Alpine's).
+* Config: "New Items" covers the new items too. The wild foods, Stones and Sticks have no switch on
+  the Custom Run screen (they never spawn in suitcases), so in custom runs too they follow "New
+  Items".
+* Custom Run screen: the Vanilla Scout Cookies have their own switch, after the Scout Cookies' (they
+  followed the Scout Cookies' switch). With both on they take half of the Scout Cookies' spawns, with
+  the Scout Cookies off all of them.
+* Climbing Chalk: climbing costs 60% of its stamina while chalked (was 75%), 75% from ascent 14 (was
+  85%). It is held upright like the Granola Bar, the hands round its lower front corners (it was held
+  by the middle of its sides, the placeholder cube's grip).
+* Ascent 14: a Magic Bean's vine sticks 2.5 thorns into you every 3 s instead of every second, and
+  now also while you climb it (it was only while you stood on it).
+* Ascent 14: a lit Lantern takes 2 cold a second off the scouts near it (was 1.5; game: 2.5).
+* Ascent 17: holding a snowball chills you (2.5 cold a second); this was part of ascent 14. A snowball
+  that hits a scout still gives 30 cold and a 2 s knock-down from ascent 14.
+* Ascent 17: the burst of a cooked Energy Drink no longer knocks the drinker out (it took it for an
+  explosion: drowsiness up to passing out, death at ascent 24). It still pushes and knocks down as
+  hard as an explosion.
+* Ascent 18: the Caldera's lava river rises 14 m (779 to 793) instead of 16 m. The game's own rise
+  and fall, which ascent 18 replaces, is about 6 m.
+* Ascent 18: the Mesa's midday sun burns 6 heat a second (the game: about 1.6, 2.4 with ascent 15),
+  and the Gloom's fog makes you 2.5 drowsy a second (the game: 0.9, 1.17 with ascent 15). A tornado
+  that catches you spins, drags and lifts you 2.5 times as hard.
+* Ascent 18: only sunscreen keeps off a snowstorm's heat by day outside the Alpine (nothing did; an
+  open parasol or a glider still does not), from ascent 14 all but a quarter of it. While a
+  snowstorm blows on you the sun does not burn through it: the Mesa's sun and ascent 23's neither
+  heat you nor roast what shields you, so the storm's heat is the only heat then. Storms reach the
+  sun at ascent 25.
+* Ascent 25 with True Final Ascent's Apocalypse mode: the rain, wind and snowstorms run in the breaks
+  between TFA's weather events (TFA kept the game's storms quiet the whole time); during one, the
+  weather is TFA's alone. The tornadoes roam throughout, as before.
+* Fixed: ascent 17's 4 s knock-down from a mushroom zombie's bite only worked for the host; everyone
+  else was knocked down for the game's 3 s.
+* Fixed: ascent 18's stronger tornadoes did nothing (they were meant to be 4 times as hard).
+* Fixed: ascent 25's gentler snowstorms outside the Alpine only applied with ascent 18 switched on;
+  with it off, snowstorms everywhere chilled at the Alpine's full strength.
+* Fixed: on the Custom Run screen the mystical items ran past the bottom of their panel once the mod's
+  items made the lists longer; the rows of both lists get just short enough for everything to fit.
+* Fixed: on the Custom Run screen the Rope Spool's switch sat on the dotted line above the mystical
+  items and could not be clicked there (the Climbing Chalk and the Lightweight Parasol make the item
+  list one row longer). The line and the mystical items now move down to make room.
+* Fixed, with True Final Ascent 2.9: in FINAL ASCENT the mod's nights ended at the Alpine (its map
+  has ten progress points instead of five). They now end where TFA ends its cold nights, at the
+  Mesa's campfire, so ascent 22's drowsiness that doesn't heal at night also applies on the Alpine's
+  and the Mesa's nights there.
+
 ## 1.1.2
 
 For PEAK 2.6.b.

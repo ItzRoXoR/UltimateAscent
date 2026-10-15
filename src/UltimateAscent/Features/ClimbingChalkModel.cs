@@ -14,8 +14,8 @@ namespace UltimateAscent.Features;
 /// The Climbing Chalk is in the game files but has only Unity's placeholder cube for a model (and
 /// is never handed out). It gets a chalk bag instead: a low-poly mesh coloured by a 4 x 3 palette,
 /// both shipped inside this DLL. The prefab's "Cube" child keeps its place, its 0.28 scale and its
-/// renderer; its mesh, material and box collider change, and the hands' grip points (Hand_L, Hand_R,
-/// set for the cube) move in to the bag's sides. The bag is drawn with the game's own item shader
+/// renderer; its mesh, material and box collider change, and the hands hold it like the Granola Bar (see
+/// <see cref="ChalkBag"/>). The bag is drawn with the game's own item shader
 /// (a copy of the Backpack's fabric material), so it is lit like the other items: Unity's Lit, the
 /// cube's material, left it a flat cut-out in the shade. Cooking darkens the bag like any item. In a
 /// backpack it is shown larger than the game's half size, since the bag is smaller than the cube.
@@ -40,12 +40,8 @@ internal static class ClimbingChalkModel
     /// <summary>Matte, like the model's own material (roughness 0.88).</summary>
     private const float Smoothness = 0.12f;
 
-    /// <summary>
-    /// How far a grip point sits outside the surface it holds: a scout's hand reaches about this far
-    /// inward from its grip point (measured in game on the cube's grips, whose hands hovered 7.5 cm
-    /// off the bag).
-    /// </summary>
-    private const float HandReach = 0.07f;
+    /// <summary>Where it is held (from the eyes: up, forward), a little closer than the Granola Bar since it is smaller.</summary>
+    internal static readonly Vector3 HeldAt = new Vector3(0f, 0.06f, 0.78f);
 
     /// <summary>
     /// In a backpack or fanny pack the game shows every item at half its size; the bag is smaller than
@@ -57,10 +53,20 @@ internal static class ClimbingChalkModel
     private static Material material;
     private static bool failed;
 
+
     /// <summary>Every chalk the game creates (on the ground, in a hand) gets the bag.</summary>
     [HarmonyPatch(typeof(Item), nameof(Item.Awake))]
     private static class ChalkBag
     {
+        /// <summary>The game's Awake keeps the hold it finds there (it eases the item in from 0.7 m to it), so it is set first.</summary>
+        private static void Prefix(Item __instance)
+        {
+            if (!failed && ClimbingChalkItem.IsChalk(__instance))
+            {
+                __instance.defaultPos = HeldAt;
+            }
+        }
+
         private static void Postfix(Item __instance)
         {
             if (failed || !ClimbingChalkItem.IsChalk(__instance))
@@ -81,20 +87,25 @@ internal static class ClimbingChalkModel
                 box.center = mesh.bounds.center;
                 box.size = mesh.bounds.size;
             }
-            // The hands hold the bag's sides (left and right of it along the item's x).
-            Bounds bag = mesh.bounds;
-            float scale = child.localScale.x;
-            Grip(__instance.transform.Find("Hand_L"), child.localPosition.x + bag.min.x * scale - HandReach);
-            Grip(__instance.transform.Find("Hand_R"), child.localPosition.x + bag.max.x * scale + HandReach);
+            Hold(__instance);
         }
 
-        private static void Grip(Transform hand, float x)
+        /// <summary>
+        /// Held like the game's Granola Bar: upright, the hands round the bag's lower front corners (the Granola
+        /// Bar's own hand poses) and the bag rising above them. The cube's grip held it by the middle of its sides.
+        /// </summary>
+        private static void Hold(Item item)
         {
-            if (hand != null)
+            Transform left = item.transform.Find("Hand_L");
+            Transform right = item.transform.Find("Hand_R");
+            if (left == null || right == null)
             {
-                Vector3 position = hand.localPosition;
-                hand.localPosition = new Vector3(x, position.y, position.z);
+                return;
             }
+            left.localPosition = new Vector3(-0.12f, -0.09f, -0.09f);
+            left.localEulerAngles = new Vector3(276.7f, 263.3f, 293.3f);
+            right.localPosition = new Vector3(0.124f, -0.09f, -0.09f);
+            right.localEulerAngles = new Vector3(276.7f, 96.7f, 66.7f);
         }
     }
 

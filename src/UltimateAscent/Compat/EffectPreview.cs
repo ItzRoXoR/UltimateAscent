@@ -23,6 +23,7 @@ namespace UltimateAscent.Compat;
 /// fuel (14).</item>
 /// <item>Lighting a campfire takes 10 petrification off (16); cannibalism costs 25 curse and 50
 /// poison (11, 28.6 below 15); suitcases hurt (21; the clown chest's trick is random, so not shown).</item>
+/// <item>The Ritual Dagger aimed at a zombie (9+) gives nothing, so nothing is previewed.</item>
 /// </list>
 /// </summary>
 internal static class EffectPreview
@@ -309,6 +310,23 @@ internal static class EffectPreview
             {
                 float reduction = (float)petrifyReduction.GetValue(__result);
                 petrifyReduction.SetValue(__result, Mathf.Min(reduction, A16_CampfirePetrify.PetrifyHealed));
+            }
+        }
+    }
+
+    /// <summary>The Ritual Dagger aimed at a zombie gives nothing (from ascent 9, see <see cref="ZombieDagger"/>): no preview.</summary>
+    [HarmonyPatch]
+    private static class DaggerOnZombie
+    {
+        private static bool Prepare() => Present;
+
+        private static MethodBase TargetMethod() => Method("Preview.RitualDaggerPreviewCalculator", "IsUsable", typeof(Item));
+
+        private static void Postfix(ref bool __result)
+        {
+            if (__result && ZombieDagger.AimedAtZombie)
+            {
+                __result = false;
             }
         }
     }

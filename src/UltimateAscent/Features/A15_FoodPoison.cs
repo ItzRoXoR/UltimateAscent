@@ -60,6 +60,9 @@ internal static class A15_FoodPoison
     /// <summary>The game's natural recovery is running (on this thread).</summary>
     [ThreadStatic] private static int recovering;
 
+    /// <summary>The game's natural recovery is running (it clears poison effects too, which is no cure).</summary>
+    internal static bool Recovering => recovering > 0;
+
     internal static void Reset()
     {
         meals.Clear();

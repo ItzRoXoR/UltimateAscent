@@ -24,6 +24,7 @@ internal static class RunLifecycle
         A17_BananaDarkness.Reset,
         A17_Looker.Reset,
         A15_FoodPoison.Reset,
+        ToxicDrink.Reset,
         A14_Items.Reset,
         ClimbingChalkItem.Reset,
         ClimbingChalkHands.Reset,
@@ -35,6 +36,7 @@ internal static class RunLifecycle
         A25_AllWeather.Reset,
         ExtraTornadoes.Reset,
         Compat.Tfa.Reset,
+        WildFoods.OnMapLoaded,
     };
 
     internal static void OnSceneChanged(Scene next)

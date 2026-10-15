@@ -27,7 +27,8 @@ namespace UltimateAscent.Features;
 /// </list>
 /// Burned items burn your hands from ascent 17 on (<see cref="BurnedItems"/>). While True Final
 /// Ascent runs an Apocalypse weather the sun rules rest, heat and roasting alike, the way TFA rests
-/// More Ascents' sun: its weather, its own sun events included, is TFA's to tune.
+/// More Ascents' sun: its weather, its own sun events included, is TFA's to tune. They rest too while a
+/// snowstorm blows where the scout is (ascent 18: no sun burns through one, see A18_ExtremeWeather).
 /// </summary>
 internal static class A23_HotSun
 {
@@ -76,7 +77,7 @@ internal static class A23_HotSun
         Character local = Character.localCharacter;
         Item roasted = null;
         if (local != null && local.data != null && !local.data.dead && !local.inAirport && Map.Ready && !Map.InAlpine &&
-            DayNightManager.instance != null && DayNightManager.instance.sun != null && !Compat.Tfa.WeatherRunning)
+            DayNightManager.instance != null && DayNightManager.instance.sun != null && !Compat.Tfa.WeatherRunning && !A18_ExtremeWeather.SnowstormHidesSun)
         {
             float intensity = DayNightManager.instance.sun.intensity;
             bool scorching = Rules.Enabled(Lvl.HotSun) && intensity > 1f;
