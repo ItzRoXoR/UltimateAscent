@@ -22,7 +22,7 @@ namespace UltimateAscent.Compat;
 /// it ruins the food at once; from 14 it keeps poison and spores.</item>
 /// <item>A Remedy Fungus cloud lasts 8 s, so it heals less (14); feeding the Jetpack gives 35% less
 /// fuel (14).</item>
-/// <item>Lighting a campfire takes 10 petrification off (16); cannibalism costs 25 curse and 50
+/// <item>Lighting a campfire takes 10 petrification off (17); cannibalism costs 25 curse and 50
 /// poison (11, 28.6 below 15); suitcases hurt (21; the clown chest's trick is random, so not shown).</item>
 /// <item>The Ritual Dagger aimed at a zombie (9+) gives nothing, so nothing is previewed.</item>
 /// <item>Scout's Generosity aimed at the Warp Compass or the Toxic Drink costs what a mystical item costs
@@ -309,10 +309,10 @@ internal static class EffectPreview
 
         private static void Postfix(object __result)
         {
-            if (__result != null && Rules.Enabled(Lvl.SlowRecovery))
+            if (__result != null && Rules.Enabled(Lvl.HotCampfires))
             {
                 float reduction = (float)petrifyReduction.GetValue(__result);
-                petrifyReduction.SetValue(__result, Mathf.Min(reduction, A16_CampfirePetrify.PetrifyHealed));
+                petrifyReduction.SetValue(__result, Mathf.Min(reduction, A17_CampfirePetrify.PetrifyHealed));
             }
         }
     }

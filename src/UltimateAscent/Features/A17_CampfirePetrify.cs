@@ -5,10 +5,10 @@ using UltimateAscent.Core;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// Ascent 16: lighting a campfire takes only 10 petrification off the scouts beside it (the game: 20).
-/// (The slower heat and drowsiness recovery of this ascent lives in <see cref="StatusRecovery"/>.)
+/// Ascent 17: lighting a campfire takes only 10 petrification off the scouts beside it (the game: 20).
+/// (This ascent's extremely hot campfires live in <see cref="A17_HotCampfires"/>.)
 /// </summary>
-internal static class A16_CampfirePetrify
+internal static class A17_CampfirePetrify
 {
     internal const float PetrifyHealed = 0.1f;
 
@@ -19,7 +19,7 @@ internal static class A16_CampfirePetrify
     {
         private static void Prefix()
         {
-            lighting = Rules.Enabled(Lvl.SlowRecovery);
+            lighting = Rules.Enabled(Lvl.HotCampfires);
         }
 
         private static Exception Finalizer(Exception __exception)

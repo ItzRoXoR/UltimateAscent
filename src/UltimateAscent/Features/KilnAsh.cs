@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using HarmonyLib;
 using UltimateAscent.Core;
@@ -11,7 +12,9 @@ namespace UltimateAscent.Features;
 /// ground rumbles and the ash comes in over 5 s, fills the Kiln for 15 s, burning everyone in it for 3 heat a
 /// second (45 in all) (as it lands from ascent 15 on; below 15 without that ascent's boost), and clears again within 2 s.
 /// Everyone gets it at the same moment: it keeps the time of the lava's rise, which the game keeps the same
-/// for everyone. Scouts still in the Caldera are not in it. Each scout sees it around themselves: dark smoke
+/// for everyone. Scouts still in the Caldera are not in it. At the top of the Kiln (as high as its lava ever
+/// rises, or higher) it does not burn. Within 3 m of a petrifying stone it neither shows nor burns: the
+/// haze clears within half a second and the smoke and flakes around fade. Each scout sees it around themselves: dark smoke
 /// billowing and ash flakes drifting down (the game's cooking smoke, made big and dark), and the air grown
 /// hazy from 3 m on (the game's fog sphere, the rising fog's, ash grey; while True Final Ascent's Ice Fog has
 /// the sphere, the smoke and the flakes still show).
@@ -39,6 +42,23 @@ internal static class KilnAsh
     internal static readonly Color AshColour = new Color(0.36f, 0.33f, 0.31f, 0f);
 
     private const string HeatSource = "kiln ash";
+
+    /// <summary>Within this distance of a petrifying stone (from any part of the scout) the ash neither shows nor burns.</summary>
+    internal const float StoneShelter = 3f;
+
+    /// <summary>How quickly the haze clears and comes back when a scout steps up to a petrifying stone or away from it.</summary>
+    private const float ShelterFadeSeconds = 0.5f;
+
+    private static Collider[] stones;
+    private static readonly HashSet<Collider> stoneSet = new HashSet<Collider>();
+    private static int stoneLayers;
+    private static float stonesSearched = float.NegativeInfinity;
+    private static readonly Collider[] nearby = new Collider[128];
+    private static float shelterFade;
+    private static ParticleSystem.Particle[] fading;
+
+    /// <summary>The local scout is within 3 m of a petrifying stone, where the ash neither shows nor burns.</summary>
+    internal static bool Sheltered { get; private set; }
 
     private static LavaRising lava;
     private static Bounds kiln;
@@ -79,6 +99,11 @@ internal static class KilnAsh
         lastPhase = -1f;
         saved = null;
         Drawn = 0f;
+        stones = null;
+        stoneSet.Clear();
+        stonesSearched = float.NegativeInfinity;
+        shelterFade = 0f;
+        Sheltered = false;
     }
 
     /// <summary>The Kiln's rising lava (on a volcano map), whose plane covers the Kiln.</summary>
@@ -111,6 +136,77 @@ internal static class KilnAsh
         }
         return position.x >= kiln.min.x && position.x <= kiln.max.x && position.z >= kiln.min.z && position.z <= kiln.max.z
             && position.y >= rising.lava.position.y - 5f;
+    }
+
+    /// <summary>At the top of the Kiln: as high as its lava ever rises, or higher. The ash does not burn there.</summary>
+    internal static bool AtTop(Vector3 position)
+    {
+        LavaRising rising = KilnLava();
+        return rising != null && rising.topTransform != null && position.y >= rising.topTransform.position.y;
+    }
+
+    /// <summary>The petrifying stones' colliders (looked for again, at most every 5 s, while none are known).</summary>
+    internal static IReadOnlyList<Collider> Stones
+    {
+        get
+        {
+            if ((stones == null || stones.Length == 0 || stones[0] == null) && Time.time - stonesSearched >= 5f)
+            {
+                stonesSearched = Time.time;
+                IEnumerable<Component> parts = UnityEngine.Object.FindObjectsByType<CollisionModifier>(FindObjectsSortMode.None).Where(m => m.applyPetrify).Cast<Component>()
+                    .Concat(UnityEngine.Object.FindObjectsByType<ClimbModifierSurface>(FindObjectsSortMode.None).Where(m => m.applyPetrify).Cast<Component>());
+                stones = parts.SelectMany(part => part.GetComponentsInChildren<Collider>()).Where(c => !c.isTrigger).Distinct().ToArray();
+                stoneSet.Clear();
+                stoneSet.UnionWith(stones);
+                stoneLayers = stones.Aggregate(0, (mask, c) => mask | 1 << c.gameObject.layer);
+            }
+            return stones ?? (IReadOnlyList<Collider>)Array.Empty<Collider>();
+        }
+    }
+
+    /// <summary>Some part of the scout (from the lower foot to the head) is within <paramref name="reach"/> of a petrifying stone.</summary>
+    internal static bool NearStone(Character character, float reach = StoneShelter)
+    {
+        IReadOnlyList<Collider> found = Stones;
+        if (found.Count == 0)
+        {
+            return false;
+        }
+        Vector3 head = character.Head;
+        Vector3 hip = character.Center;
+        Rigidbody footR = character.GetBodypartRig(BodypartType.Foot_R);
+        Rigidbody footL = character.GetBodypartRig(BodypartType.Foot_L);
+        Vector3 feet = footR != null && footL != null ? (footR.position.y < footL.position.y ? footR.position : footL.position) : hip - (head - hip);
+        float far = reach + Mathf.Max(Vector3.Distance(hip, head), Vector3.Distance(hip, feet));
+        bool close = false;
+        foreach (Collider stone in found)
+        {
+            if (stone != null && stone.enabled && stone.gameObject.activeInHierarchy && stone.bounds.SqrDistance(hip) <= far * far)
+            {
+                close = true;
+                break;
+            }
+        }
+        if (!close)
+        {
+            return false;
+        }
+        int count = Physics.OverlapCapsuleNonAlloc(feet, head, reach, nearby, stoneLayers, QueryTriggerInteraction.Ignore);
+        Collider[] touching = nearby;
+        if (count >= nearby.Length)
+        {
+            // More of the map around than the buffer holds: all of it.
+            touching = Physics.OverlapCapsule(feet, head, reach, stoneLayers, QueryTriggerInteraction.Ignore);
+            count = touching.Length;
+        }
+        for (int i = 0; i < count; i++)
+        {
+            if (stoneSet.Contains(touching[i]))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// <summary>The Kiln's lava rising now (on a volcano map, in the Kiln), whose time the ash and the eruptions keep.</summary>
@@ -155,13 +251,15 @@ internal static class KilnAsh
         Character local = Character.localCharacter;
         float phase = Phase;
         bool here = local != null && !local.data.dead && phase >= 0f && InKiln(local.Center);
-        Drawn = here ? Thickness(phase) : 0f;
+        Sheltered = here && NearStone(local);
+        shelterFade = Mathf.MoveTowards(shelterFade, Sheltered ? 1f : 0f, Time.deltaTime / ShelterFadeSeconds);
+        Drawn = here ? Thickness(phase) * (1f - shelterFade) : 0f;
         if (here && lastPhase >= 0f && lastPhase < Period - Seconds - WarningSeconds && phase >= Period - Seconds - WarningSeconds)
         {
             Rumble(local);
         }
         lastPhase = phase;
-        if (here && phase >= Period - Seconds)
+        if (here && phase >= Period - Seconds && !Sheltered && !AtTop(local.Center))
         {
             CharacterAfflictions.STATUSTYPE hot = CharacterAfflictions.STATUSTYPE.Hot;
             ExactStatus.Add(local.refs.afflictions, hot, A15_StrongerAilments.FromAscent15(hot, Heat) * Time.deltaTime, HeatSource);
@@ -187,15 +285,48 @@ internal static class KilnAsh
             smoke.transform.position = view.position;
             flakes.transform.position = view.position + Vector3.up * 3f;
         }
+        float thickness = Sheltered ? 0f : Drawn;
         ParticleSystem.EmissionModule smokeRate = smoke.emission;
-        smokeRate.rateOverTimeMultiplier = SmokeRate * Drawn;
+        smokeRate.rateOverTimeMultiplier = SmokeRate * thickness;
         ParticleSystem.EmissionModule flakeRate = flakes.emission;
-        flakeRate.rateOverTimeMultiplier = FlakeRate * Drawn;
+        flakeRate.rateOverTimeMultiplier = FlakeRate * thickness;
+        if (Sheltered)
+        {
+            Fade(smoke);
+            Fade(flakes);
+        }
         if (Drawn > 0f && !smoke.isPlaying)
         {
             smoke.Play(true);
             flakes.Play(true);
         }
+    }
+
+    /// <summary>Beside a petrifying stone the smoke and the flakes already around fade away (within about a second).</summary>
+    private static void Fade(ParticleSystem system)
+    {
+        if (system.particleCount == 0)
+        {
+            return;
+        }
+        int most = system.main.maxParticles;
+        if (fading == null || fading.Length < most)
+        {
+            fading = new ParticleSystem.Particle[most];
+        }
+        int count = system.GetParticles(fading);
+        float keep = Mathf.Exp(-Time.deltaTime / 0.2f);
+        for (int i = 0; i < count; i++)
+        {
+            Color32 colour = fading[i].startColor;
+            colour.a = (byte)(colour.a * keep);
+            fading[i].startColor = colour;
+            if (colour.a == 0)
+            {
+                fading[i].remainingLifetime = 0f;
+            }
+        }
+        system.SetParticles(fading, count);
     }
 
     private static bool MakeCloud()

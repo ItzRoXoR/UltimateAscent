@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.3.1
+
+For PEAK 2.6.b.
+
+* The Kiln's hot ash (ascent 18) does not burn at the top of the Kiln (as high as its lava rises, or
+  higher), and within 3 m of a petrifying stone it neither shows nor burns: the haze clears within half a
+  second and the smoke and flakes around fade.
+* Ascent 17: lighting a campfire takes only 10 petrification off (the game: 20) from ascent 17, with the
+  extremely hot campfires; it started at 16.
+* Ascent 17: the Gloom's big ghost comes every 30 s (was 50 s; the game: 60-180 s), counted while none is out.
+* Ascent 18: the Caldera's lava river rises 14.5 m (779 to 793.5; was 15 m).
+
 ## 1.3.0
 
 For PEAK 2.6.b.

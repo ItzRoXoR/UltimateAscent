@@ -9,7 +9,7 @@ using GloomSafeZone = global::Peak.GloomSafeZone;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// Ascent 17: the Gloom's big ghost. It comes every 50 s (the game: 60-180 s) for the scout who
+/// Ascent 17: the Gloom's big ghost. It comes every 30 s (the game: 60-180 s) for the scout who
 /// leads, alone or in a group (the game: only someone alone), lives 50 s (the game: 30 s) and
 /// explodes 1.5 s after it arms (the game: 2.1 s). Its burst chills for 60 and blinds for 80 s
 /// (see <see cref="A17_Hazards"/>). Lit bell towers push it back out of blast range of the scouts
@@ -19,7 +19,7 @@ internal static class A17_GloomGhost
 {
     private static bool On => Rules.Enabled(Lvl.Hazards);
 
-    private const float SpawnSeconds = 50f;
+    private const float SpawnSeconds = 30f;
     private const float Lifetime = 50f;
     private const float ArmSeconds = 1.5f;
 

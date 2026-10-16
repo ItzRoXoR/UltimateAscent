@@ -20,7 +20,7 @@
   .\tools\smoketest.ps1 -Profile FinalAscent -Ascent 20 -SkipBuild -KeepApocalypse
   .\tools\smoketest.ps1 -Profile FinalAscent -Apocalypse -Only TFA   (Apocalypse on for the test: TFA's events)
   .\tools\smoketest.ps1 -Clean -Only chalk     (only the run steps whose names contain "chalk")
-  .\tools\smoketest.ps1 -Biome K -Only Kiln    (on the next map with the Caldera and the Kiln)
+  .\tools\smoketest.ps1 -Biome V -Only Kiln    (on the next map with the Caldera and the Kiln)
 #>
 param(
     [string]$Profile = 'FinalAscent',

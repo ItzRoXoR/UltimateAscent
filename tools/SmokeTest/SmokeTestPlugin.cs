@@ -27,8 +27,8 @@ namespace UltimateAscent.SmokeTest;
 /// "--ua-smoketest-ascent=N" picks the ascent (default 25) and "--ua-smoketest-noapocalypse" switches
 /// True Final Ascent's Apocalypse mode off for this session (in memory only); "--ua-smoketest-only=a,b"
 /// runs only the run steps whose names contain one of the words (for quick checks of one rule);
-/// "--ua-smoketest-biome=K" plays the next map whose biomes include that letter (the game's own map
-/// codes: S shore, T tropics, A alpine, M mesa, K the Caldera and the Kiln) instead of today's.
+/// "--ua-smoketest-biome=V" plays the next map whose biomes include that letter (the game's own map
+/// codes: S shore, T tropics or R roots, A alpine or M mesa, V the Caldera and the Kiln) instead of today's.
 /// Results go to the BepInEx log and to BepInEx/UltimateAscent.SmokeTest.txt; the game quits at the end.
 /// </summary>
 [BepInPlugin(Guid, "Ultimate Ascent Smoke Test", "1.0.0")]
@@ -2560,7 +2560,7 @@ internal sealed class Runner : MonoBehaviour
             yield return null;
         }
         local.data.lookValues = look;
-        Check("the Caldera's lava river rises and falls 15 m, from 779 to 794 (18)", Mathf.Abs(lowest - 779f) < 0.1f && Mathf.Abs(highest - 794f) < 0.1f,
+        Check("the Caldera's lava river rises and falls 14.5 m, from 779 to 793.5 (18)", Mathf.Abs(lowest - 779f) < 0.1f && Mathf.Abs(highest - 793.5f) < 0.1f,
             $"lowest {lowest:0.00} at {lowAt:0} s, highest {highest:0.00} at {highAt:0} s, watched {Watch:0} s");
     }
 
@@ -7491,12 +7491,42 @@ internal sealed class Runner : MonoBehaviour
         local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, standAt, false);
         yield return new WaitForSeconds(1f);
         int saves = NoRunSave.Skipped;
+        // Lighting takes petrification off the scouts beside it: 10 from ascent 17, the game's 20 below.
+        int petrifyBefore = local.data.petrifyAmount;
+        Shield(true);
+        local.data.SetPetrify(40);
         Step("light the first campfire", () => campfire.Interact_CastFinished(local));
         float end = Time.realtimeSinceStartup + 30f;
         while (fog.currentID == 0 && Time.realtimeSinceStartup < end)
         {
             yield return null;
         }
+        bool lessPetrify = Rules.Enabled(Lvl.HotCampfires);
+        int healed = 40 - local.data.petrifyAmount;
+        Check(lessPetrify ? "lighting a campfire takes 10 petrification off (17)" : "lighting a campfire takes the game's 20 petrification off below ascent 17",
+            healed == (lessPetrify ? 10 : 20), $"ascent {target}: {healed} of 40 taken off");
+        if (lessPetrify)
+        {
+            // The game's first frame of the lit fire once more, with Ascent 17 switched off in memory: the game's 20, at 16 too.
+            BepInEx.Configuration.ConfigEntry<bool> rule = UltimateAscent.Plugin.AscentSwitches[Lvl.HotCampfires];
+            bool ruleSaved = rule.Value;
+            local.data.SetPetrify(40);
+            try
+            {
+                rule.Value = false;
+                campfire.fireHasStarted = false;
+                yield return null;
+                yield return null;
+                healed = 40 - local.data.petrifyAmount;
+            }
+            finally
+            {
+                rule.Value = ruleSaved;
+            }
+            Check("with Ascent 17 off, lighting a campfire takes the game's 20 petrification off (16)", healed == 20, $"{healed} of 40 taken off, ascent 16 {Rules.Enabled(Lvl.SlowRecovery)}");
+        }
+        local.data.SetPetrify(petrifyBefore);
+        Protect(true);
         int segment = Singleton<MapHandler>.Instance.currentSegment;
         Check("lighting the first campfire moves on to the second segment and its fog", campfire.Lit && segment == (int)Segment.Tropics && fog.currentID == segment,
             $"lit {campfire.Lit}, segment {segment}, fog start {fog.currentID}, place {Map.CurrentPlace}; the game's run save skipped {NoRunSave.Skipped - saves} time(s)");
@@ -8041,6 +8071,10 @@ internal sealed class Runner : MonoBehaviour
             return room >= 5;
         }
         Vector3 ledge = Vector3.zero;
+        // The petrifying stones, within 3 m of which the ash neither shows nor burns.
+        HashSet<Collider> stoneSet = new HashSet<Collider>(KilnAsh.Stones);
+        bool StoneWithin(Vector3 ground, float reach) =>
+            Physics.OverlapCapsule(ground + Vector3.up * 0.2f, ground + Vector3.up * 1.7f, reach, ~0, QueryTriggerInteraction.Ignore).Any(stoneSet.Contains);
         // Away from anything that heats (magma rocks' heat fields reach 11 m, more with their fade).
         List<Vector3> heaters = FindObjectsByType<StatusEmitter>(FindObjectsSortMode.None)
             .Where(e => e != null && e.statusType == Status.Hot && e.amount > 0f).Select(e => e.transform.position).ToList();
@@ -8052,7 +8086,8 @@ internal sealed class Runner : MonoBehaviour
                 {
                     Vector3 from = new Vector3(centre.x, rising.lava.position.y + height, centre.z) + Quaternion.Euler(0f, angle, 0f) * Vector3.forward * radius;
                     RaycastHit hit = HelperFunctions.LineCheck(from, from + Vector3.down * 25f, HelperFunctions.LayerType.TerrainMap);
-                    if (hit.transform != null && hit.normal.y > 0.8f && hit.distance > 2f && KilnAsh.InKiln(hit.point) && heaters.All(h => Vector3.Distance(h, hit.point) > 18f) && Open(hit.point))
+                    if (hit.transform != null && hit.normal.y > 0.8f && hit.distance > 2f && KilnAsh.InKiln(hit.point) && heaters.All(h => Vector3.Distance(h, hit.point) > 18f) && Open(hit.point)
+                        && !StoneWithin(hit.point, 6f))
                     {
                         ledge = hit.point + Vector3.up * 1.2f;
                     }
@@ -8215,9 +8250,145 @@ internal sealed class Runner : MonoBehaviour
                 eruptions.Count > 0 && spots.All(spot => spot.EndsWith("True", StringComparison.Ordinal)) && eruptedAt.All(p => p >= 1.9f && p <= 10f) && burningWithAsh == 0
                 && outAt.Count > 0 && outAt.All(p => p <= comesAt && comesAt - p <= 10f),
                 $"{eruptions.Count} eruptions in {Time.time - beforeStart:0} s: {string.Join("; ", spots)}; out at {string.Join(", ", outAt.Select(p => p.ToString("0.0") + " s"))} into the minute (the ash comes at {comesAt:0} s); frames with an eruption burning while the ash came or burned: {burningWithAsh}");
+            // The next surge: from the ledge to beside a petrifying stone (where it neither shows nor burns), then to the
+            // top of the Kiln (as high as its lava rises, or higher: it shows there but does not burn).
+            float top = rising.topTransform != null ? rising.topTransform.position.y : float.NaN;
+            Vector3 besideStone = Vector3.zero;
+            Vector3 stoneCentre = Vector3.zero;
+            foreach (Collider stone in stoneSet.OrderBy(s => Mathf.Abs(s.bounds.center.y - ledge.y)))
+            {
+                Bounds b = stone.bounds;
+                for (float x = b.min.x - 3f; x <= b.max.x + 3f && besideStone == Vector3.zero; x += 1f)
+                {
+                    for (float z = b.min.z - 3f; z <= b.max.z + 3f && besideStone == Vector3.zero; z += 1f)
+                    {
+                        Vector3 from = new Vector3(x, b.max.y + 5f, z);
+                        RaycastHit hit = HelperFunctions.LineCheck(from, from + Vector3.down * (b.size.y + 15f), HelperFunctions.LayerType.TerrainMap);
+                        if (hit.transform != null && !stoneSet.Contains(hit.collider) && hit.normal.y > 0.75f && KilnAsh.InKiln(hit.point) && !KilnAsh.AtTop(hit.point + Vector3.up)
+                            && HelperFunctions.LineCheck(hit.point + Vector3.up * 0.3f, hit.point + Vector3.up * 2.5f, HelperFunctions.LayerType.TerrainMap).transform == null
+                            && StoneWithin(hit.point, 2f) && !StoneWithin(hit.point, 1f))
+                        {
+                            besideStone = hit.point + Vector3.up * 1.2f;
+                            stoneCentre = b.center;
+                        }
+                    }
+                }
+                if (besideStone != Vector3.zero)
+                {
+                    break;
+                }
+            }
+            Vector3 atTop = Vector3.zero;
+            List<float> topGround = new List<float>();
+            if (!float.IsNaN(top) && plane != null)
+            {
+                Bounds kb = plane.bounds;
+                float nearest = float.MaxValue;
+                for (float x = kb.min.x; x <= kb.max.x; x += 4f)
+                {
+                    for (float z = kb.min.z; z <= kb.max.z; z += 4f)
+                    {
+                        Vector3 from = new Vector3(x, top + 150f, z);
+                        RaycastHit hit = HelperFunctions.LineCheck(from, from + Vector3.down * 200f, HelperFunctions.LayerType.TerrainMap);
+                        if (hit.transform == null || hit.point.y < top - 30f)
+                        {
+                            continue;
+                        }
+                        topGround.Add(hit.point.y);
+                        float off = new Vector2(x - rising.topTransform.position.x, z - rising.topTransform.position.z).magnitude;
+                        if (hit.point.y >= top && hit.normal.y > 0.75f && KilnAsh.InKiln(hit.point) && off < nearest && !StoneWithin(hit.point, 6f))
+                        {
+                            nearest = off;
+                            atTop = hit.point + Vector3.up * 1.2f;
+                        }
+                    }
+                }
+            }
+            Info("the ground at the top of the Kiln", $"its lava rises to {top:0.0}; ground found from {top - 30f:0} up, by height above the lava's top: "
+                + string.Join(", ", topGround.GroupBy(y => Mathf.FloorToInt((y - top) / 5f) * 5).OrderBy(g => g.Key).Select(g => $"{g.Key:+0;-0;0}..{g.Key + 5:+0;-0;0} m: {g.Count()}"))
+                + $" (points every 4 m); standing at the top at {atTop:F1}");
+            if (besideStone == Vector3.zero || atTop == Vector3.zero)
+            {
+                Fail("a spot beside a petrifying stone and one at the top of the Kiln", $"beside a stone {besideStone != Vector3.zero}, at the top {atTop != Vector3.zero} (the lava rises to {top:0.0}; {stoneSet.Count} stone colliders)");
+            }
+            else
+            {
+                float burnFrom = KilnAsh.Period - KilnAsh.Seconds;
+                while (KilnAsh.Phase < 0f || KilnAsh.Phase > comesAt - 1f)
+                {
+                    Eruptions();
+                    yield return null;
+                }
+                while (KilnAsh.Phase < burnFrom + 2f)
+                {
+                    Eruptions();
+                    yield return null;
+                }
+                int smokeBefore = KilnAsh.SmokeParticles;
+                float drawnBefore = KilnAsh.Drawn;
+                local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, besideStone, false);
+                yield return new WaitForSeconds(0.3f);
+                local.data.lookValues = HelperFunctions.DirectionToLook(stoneCentre - local.Head);
+                HeatSources.Clear();
+                HeatSources.On = true;
+                float shelterStart = Time.time;
+                bool alwaysSheltered = true;
+                float drawnAfter = 0f;
+                bool stoneShot = false;
+                while (Time.time - shelterStart < 4.2f)
+                {
+                    Eruptions();
+                    alwaysSheltered &= KilnAsh.Sheltered;
+                    if (Time.time - shelterStart > 0.6f)
+                    {
+                        drawnAfter = Mathf.Max(drawnAfter, KilnAsh.Drawn);
+                    }
+                    if (!stoneShot && Time.time - shelterStart > 3f)
+                    {
+                        stoneShot = true;
+                        Screenshot("kiln-ash-beside-stone");
+                    }
+                    yield return null;
+                }
+                float shelteredHeat = HeatSources.Totals.TryGetValue("KilnAsh.Tick", out float fromAsh) ? fromAsh : 0f;
+                int smokeAfter = KilnAsh.SmokeParticles;
+                bool burningThen = KilnAsh.Burning;
+                Check("within 3 m of a petrifying stone the ash neither shows nor burns: the haze clears, the smoke and ash fade away (18)",
+                    drawnBefore > 0.9f && smokeBefore > 100 && alwaysSheltered && drawnAfter <= 0f && smokeAfter == 0 && shelteredHeat == 0f && burningThen,
+                    $"on the ledge drawn {drawnBefore:0.00} with {smokeBefore} particles; beside the stone (1-2 m from it) for 4.2 s: sheltered all along {alwaysSheltered}, drawn after 0.6 s at most {drawnAfter:0.00}, {smokeAfter} particles left, {shelteredHeat * 100f:0.#} heat from the ash, the ash still burning elsewhere {burningThen}");
+                local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, atTop, false);
+                yield return new WaitForSeconds(0.8f);
+                local.data.lookValues = look;
+                HeatSources.Clear();
+                float topStart = Time.time;
+                float drawnTop = 1f;
+                bool alwaysAtTop = true;
+                int smokeTop = 0;
+                bool topShot = false;
+                while (Time.time - topStart < 4f && KilnAsh.Phase >= burnFrom)
+                {
+                    Eruptions();
+                    drawnTop = Mathf.Min(drawnTop, KilnAsh.Drawn);
+                    alwaysAtTop &= KilnAsh.AtTop(local.Center);
+                    smokeTop = Mathf.Max(smokeTop, KilnAsh.SmokeParticles);
+                    if (!topShot && Time.time - topStart > 2f)
+                    {
+                        topShot = true;
+                        Screenshot("kiln-ash-top");
+                    }
+                    yield return null;
+                }
+                float topSeconds = Time.time - topStart;
+                float topHeat = HeatSources.Totals.TryGetValue("KilnAsh.Tick", out float fromAshTop) ? fromAshTop : 0f;
+                HeatSources.On = false;
+                Check("at the top of the Kiln (as high as its lava rises, or higher) the ash shows but does not burn (18)",
+                    alwaysAtTop && drawnTop > 0.9f && smokeTop > 100 && topHeat == 0f && topSeconds > 3f,
+                    $"at {local.Center:F1} ({local.Center.y - top:+0.0;-0.0} m from the lava's top) for {topSeconds:0.0} s: at the top all along {alwaysAtTop}, drawn at least {drawnTop:0.00}, up to {smokeTop} particles, {topHeat * 100f:0.#} heat from the ash");
+            }
         }
         finally
         {
+            HeatSources.On = false;
             bingBong.Value = bingBongSaved;
             HostOptions.Invalidate();
             Shield(false);

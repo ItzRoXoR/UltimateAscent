@@ -1,7 +1,7 @@
 # Threats at ascent 24
 
 Every value below is from PEAK 2.6.b (read from the game code and the game data) and from
-Ultimate Ascent 1.3.0's rules. Status amounts use the stamina bar's scale: **100 = the whole bar**. A rule
+Ultimate Ascent 1.3.1's rules. Status amounts use the stamina bar's scale: **100 = the whole bar**. A rule
 marked *(17)* comes from that ascent; ascent 24 contains every ascent up to 24. Ultimate Ascent's
 numbers are what lands on the bar, ascent 15's boost included; below ascent 15 the same rules land
 them without that boost, so they are always lower there. Distances are the game's own units,
@@ -216,7 +216,7 @@ amount of extra stamina; most effects start 3 s after eating.
 |---|---|---|
 | Heat above the river | up to 1.2 every 0.1 s at the surface, fading over 10 m (≈8/s on the bar) | ×1.5 *(15)* (≈12/s) |
 | Touching the river | 25 injury + 25 heat (at most 1/s), pushed up | **100 injury and 200 heat** → bar full at once → **fatal** *(24)* |
-| River height | rises and falls 6.3 m (779 → 785.3) every 72 s: low for about 30 s, rising for about 20 s, about 10 s at the top, falling for about 13 s | **rises and falls 15 m (779 → 794) every 61 s** *(18)*: low for about 21 s, rising for about 16 s, about 16 s near the top, falling for about 9 s; above the game's highest level for 28 s of each cycle; the same for everyone |
+| River height | rises and falls 6.3 m (779 → 785.3) every 72 s: low for about 30 s, rising for about 20 s, about 10 s at the top, falling for about 13 s | **rises and falls 14.5 m (779 → 793.5) every 61 s** *(18)*: low for about 21 s, rising for about 16 s, about 16 s near the top, falling for about 9 s; above the game's highest level for 28 s of each cycle; the same for everyone |
 | Lava flows (streams) | 20 injury + 50 heat per touch (1/s), knockback 1000 | **50 injury + 100 heat** → bar full → **fatal** |
 | Lava pillars | knockback 1000 + 10 heat (cliffs 5) | heat ×1.5 |
 | Magma rocks (Caldera and Kiln) | 2.5 heat per touch while standing on them (every 0.75 s); heat field 1/s within 11 m; climbing them does nothing extra | touch **7.5** *(17, 15)*; field ×4 ×1.5 = 6/s nominal, **5/s** on the bar; **climbing them burns 2.5 heat every 0.3 s** (≈8.3/s), on top of touching, like ice rocks' cold |
@@ -230,7 +230,7 @@ amount of extra stamina; most effects start 3 s after eating.
 | Touching the lava | 25 injury + 25 heat (at most 1/s), pushed up | **100 injury and 200 heat** → **fatal** *(24)* |
 | Burning (magma) rocks | as in the Caldera | as in the Caldera |
 | Heat recovery | 1.3 a second, after 8 s | **0.5 a second** *(16)* |
-| Hot ash | — | once a minute once the lava rises: 5 s of rumbling as the air thickens, then **3 heat a second** for 15 s (**45** in all) *(18)*, everywhere in the Kiln |
+| Hot ash | — | once a minute once the lava rises: 5 s of rumbling as the air thickens, then **3 heat a second** for 15 s (**45** in all) *(18)*, everywhere in the Kiln below its top (where the lava stops rising: it shows there but does not burn); within **3 m of a petrifying stone** it neither shows nor burns |
 | Eruptions | none | **once a minute** a column of fire (the Caldera's eruption: heat ×4 ×1.5, the bar fills on the first tick) breaks out 18–32 m from one of the scouts *(17)*, taking turns with the hot ash, never with it, at most 10 s apart: 2–9.5 s after the ash clears, burning 30 s |
 
 ### Petrifying stones (crystals and petrified rock, in the Kiln and elsewhere)
@@ -246,7 +246,7 @@ amount of extra stamina; most effects start 3 s after eating.
 ### The big ghost
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
-| Spawn | every 60–180 s (counted while no ghost is out) near a scout who is alone (nobody within 15 m), 30 m ahead (±10) | **every 50 s**, for the leading scout **alone or in a group** |
+| Spawn | every 60–180 s (counted while no ghost is out) near a scout who is alone (nobody within 15 m), 30 m ahead (±10) | **every 30 s**, for the leading scout **alone or in a group** |
 | Attack | rolls toward the nearest scout; arms within 1 m, explodes 2.1 s later (get 1.3 m away within 1.5 s to stop it); lives 30 s | explodes **1.5 s** after arming (no way back after ≈1.1 s); lives **50 s** |
 | Defence | lit bell towers (11 m) repel it and burn it (3 s) | lit bell towers push it back until it is out of blast range of the scouts they protect (11 + 10 m), and **do not burn it**; it cannot arm while pushed |
 | Explosion (within 10 m) | **blind 20 s**, cold 35, knockback 1600 (tilted up), knocked down 4 s, landing damage capped at 7.5 for 8 s | **blind 80 s**, **60 cold**, knockback ×3–4, knocked down 12 s **and drowsiness up to passing out** → **fatal** *(24)* |
@@ -352,7 +352,7 @@ The poisonous Button, Cluster and Bugle Shrooms look like the safe ones of the s
 
 ## Scout statue gems
 The four gems from the scout statues can be used again and again while your petrification is under 100.
-Petrification heals only 10 per campfire lighting *(16)*, and revives keep it *(19)*.
+Petrification heals only 10 per campfire lighting *(17)*, and revives keep it *(19)*.
 
 | Gem | Game | Ultimate Ascent at 24 |
 |---|---|---|
