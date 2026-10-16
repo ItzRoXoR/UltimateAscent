@@ -30,7 +30,7 @@ internal static class Lvl
     internal const int WorseItems = 14;
     // 13DDA: cold, drowsy, poison and heat apply more.
     internal const int StrongerAilments = 15;
-    // 13DDA + More Ascents: heat heals slower in the Caldera/Kiln (0.6/s), drowsiness in the
+    // 13DDA + More Ascents: heat heals slower in the Caldera/Kiln (0.5/s), drowsiness in the
     // Gloom/Citadel (1/s); lighting a campfire takes off less petrification.
     internal const int SlowRecovery = 16;
     // 13DDA: hazards are more dangerous.

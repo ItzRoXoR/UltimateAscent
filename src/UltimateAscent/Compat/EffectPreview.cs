@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using BepInEx.Bootstrap;
 using HarmonyLib;
+using Peak;
 using UltimateAscent.Core;
 using UltimateAscent.Features;
 using UnityEngine;
@@ -24,6 +25,8 @@ namespace UltimateAscent.Compat;
 /// <item>Lighting a campfire takes 10 petrification off (16); cannibalism costs 25 curse and 50
 /// poison (11, 28.6 below 15); suitcases hurt (21; the clown chest's trick is random, so not shown).</item>
 /// <item>The Ritual Dagger aimed at a zombie (9+) gives nothing, so nothing is previewed.</item>
+/// <item>Scout's Generosity aimed at the Warp Compass or the Toxic Drink costs what a mystical item costs
+/// (<see cref="MysticalItems"/>).</item>
 /// </list>
 /// </summary>
 internal static class EffectPreview
@@ -327,6 +330,28 @@ internal static class EffectPreview
             if (__result && ZombieDagger.AimedAtZombie)
             {
                 __result = false;
+            }
+        }
+    }
+
+    /// <summary>Scout's Generosity aimed at the Warp Compass or the Toxic Drink: a mystical item's cost (<see cref="MysticalItems"/>).</summary>
+    [HarmonyPatch]
+    private static class MysticalClone
+    {
+        private static bool Prepare() => Present;
+
+        private static MethodBase TargetMethod() => Method("Preview.DynamicPetrifyPreview", "ComputeClone", typeof(Action_CloneSelectedItem));
+
+        private static void Postfix(Action_CloneSelectedItem action, ref float __result)
+        {
+            if (__result <= 0f || action == null || Interaction.instance == null)
+            {
+                return;
+            }
+            Interaction.instance.DoInteractableRaycasts(out IInteractible aimed, action.range);
+            if (aimed is Item target && MysticalItems.CountsAsMystical(target))
+            {
+                __result = action.petrifyMystical / 100f;
             }
         }
     }

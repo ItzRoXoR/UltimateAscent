@@ -10,8 +10,8 @@ namespace UltimateAscent.Features;
 /// waiting for the scouts to move on), from the beach until the Caldera or the Gloom; it changes
 /// no fog from there on (with True Final Ascent's FINAL ASCENT, whose Caldera comes before its
 /// Gloom, that means until the Caldera).
-/// The Kiln's lava starts after 30 seconds and rises in 700 seconds; the Citadel's gloom starts
-/// after 30 seconds as well, and it and the Nadir's ghosts rise 2.5 times as fast.
+/// The Kiln's lava and the Citadel's gloom start after 30 seconds and reach the top in 700 seconds;
+/// the Nadir's ghosts rise 2.5 times as fast.
 /// </summary>
 internal static class A09_FogAndKiln
 {
@@ -93,7 +93,7 @@ internal static class A09_FogAndKiln
         }
     }
 
-    /// <summary>Kiln lava: 30 s wait, 700 s rise. Citadel gloom: 30 s wait; it and the Nadir ghosts rise 2.5x as fast.</summary>
+    /// <summary>Kiln lava and Citadel gloom: 30 s wait, 700 s rise. The Nadir ghosts rise 2.5x as fast.</summary>
     [HarmonyPatch(typeof(LavaRising), nameof(LavaRising.Update))]
     private static class FasterRisingHazards
     {
@@ -115,7 +115,7 @@ internal static class A09_FogAndKiln
             {
                 return;
             }
-            float travel = kilnLava ? Mathf.Min(700f, original) : original / 2.5f;
+            float travel = nadirGhosts ? original / 2.5f : Mathf.Min(700f, original);
             if (!nadirGhosts && __instance.initialWaitTime != 30f)
             {
                 Overrides.Set(__instance, nameof(LavaRising.initialWaitTime), Mathf.Min(30f, Overrides.Original(__instance, "initialWaitTime", __instance.initialWaitTime)));

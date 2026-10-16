@@ -9,7 +9,8 @@ namespace UltimateAscent.Features;
 
 /// <summary>
 /// Ascent 23 (13DDA + More Ascents, plus a new rule): the sun is hot everywhere except the Alpine,
-/// and whatever you hold up to shield yourself from it is roasted.
+/// up to the Caldera and the Gloom (from there on it is the game's sun again), and whatever you hold up
+/// to shield yourself from it is roasted.
 /// <list type="bullet">
 /// <item>Standing in direct sunlight adds heat (the Mesa keeps its own, stronger sun). Sunscreen
 /// still protects, though from ascent 14 a quarter of the heat gets through (<see cref="A14_Items"/>).
@@ -33,6 +34,9 @@ namespace UltimateAscent.Features;
 internal static class A23_HotSun
 {
     private const float HeatPerSecond = 0.005f;
+
+    /// <summary>Ascent 23's scorching sun applies where the scouts are: on, and not yet at the Caldera or the Gloom.</summary>
+    internal static bool ScorchingHere => Rules.Enabled(Lvl.HotSun) && A09_FogAndKiln.BeforeTheVolcano;
 
     /// <summary>How long an item takes to burn in the sun, and the share of it before it starts smoking (5 of 20 s).</summary>
     private const float BurnSeconds = 20f;
@@ -80,7 +84,7 @@ internal static class A23_HotSun
             DayNightManager.instance != null && DayNightManager.instance.sun != null && !Compat.Tfa.WeatherRunning && !A18_ExtremeWeather.SnowstormHidesSun)
         {
             float intensity = DayNightManager.instance.sun.intensity;
-            bool scorching = Rules.Enabled(Lvl.HotSun) && intensity > 1f;
+            bool scorching = ScorchingHere && intensity > 1f;
             bool mesaSun = Rules.Enabled(Lvl.ExtremeWeather) && Map.InMesa && intensity >= MesaSunIntensity;
             if (scorching || mesaSun)
             {
@@ -280,7 +284,7 @@ internal static class A23_HotSun
 
     private static ParticleSystem smokeTemplate;
 
-    private static ParticleSystem SmokeTemplate()
+    internal static ParticleSystem SmokeTemplate()
     {
         if (smokeTemplate != null)
         {

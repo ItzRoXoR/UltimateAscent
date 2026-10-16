@@ -20,6 +20,7 @@
   .\tools\smoketest.ps1 -Profile FinalAscent -Ascent 20 -SkipBuild -KeepApocalypse
   .\tools\smoketest.ps1 -Profile FinalAscent -Apocalypse -Only TFA   (Apocalypse on for the test: TFA's events)
   .\tools\smoketest.ps1 -Clean -Only chalk     (only the run steps whose names contain "chalk")
+  .\tools\smoketest.ps1 -Biome K -Only Kiln    (on the next map with the Caldera and the Kiln)
 #>
 param(
     [string]$Profile = 'FinalAscent',
@@ -30,6 +31,7 @@ param(
     [switch]$KeepApocalypse,
     [switch]$Apocalypse,
     [string]$Only = '',
+    [string]$Biome = '',
     [int]$TimeoutSeconds = 960,
     [string]$ProfilesDir = "$env:APPDATA\r2modmanPlus-local\PEAK\profiles",
     [string]$SteamExe = 'C:\Program Files (x86)\Steam\steam.exe'
@@ -81,6 +83,7 @@ $arguments = @('-applaunch', '3527290', '--doorstop-enabled', 'true', '--doorsto
 if ($Apocalypse) { $arguments += '--ua-smoketest-apocalypse' }
 elseif (-not $KeepApocalypse) { $arguments += '--ua-smoketest-noapocalypse' }
 if ($Only) { $arguments += "--ua-smoketest-only=$Only" }
+if ($Biome) { $arguments += "--ua-smoketest-biome=$Biome" }
 $launched = Get-Date
 Write-Host "Starting PEAK ($(if ($Clean) { 'clean profile' } else { "profile $Profile" }), ascent $Ascent)..."
 Start-Process $SteamExe -ArgumentList $arguments

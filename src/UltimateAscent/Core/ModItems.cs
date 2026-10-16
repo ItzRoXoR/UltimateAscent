@@ -29,11 +29,11 @@ internal static class ModItems
         Features.A17_Hazards.OwnEnergyDrinkBurst,
         Features.AutoParachute.Build,
         Features.WildFoods.Build,
-        Features.VanillaScoutCookies.Build,
+        Features.VanillaWafers.Build,
         Features.StoneItem.Build,
         Features.StickItem.Build,
         Features.WarpCompass.Build,
-        Features.PinkLollipop.Build,
+        Features.CherryLollipop.Build,
         Features.ToxicDrink.Build,
         Features.TorchItem.Build,
     };

@@ -12,7 +12,7 @@ namespace UltimateAscent.Features;
 /// scouts within 6 m (8 m) and the low gravity after it lasts 2 s (3 s).</item>
 /// <item>Scout's Ambition (yellow): 6 s of infinite stamina for the scouts around you (8 s), 35
 /// petrification per use (30).</item>
-/// <item>Scout's Tenacity (blue): heals up to 40 (60) and gives 5 s of invincibility (10 s); it costs
+/// <item>Scout's Tenacity (blue): heals up to 40 (60) and gives 8 s of invincibility (10 s); it costs
 /// 1.5 petrification per point it heals, 20 to 60 (the game: half a point, 10 to 30).</item>
 /// <item>Scout's Generosity (green): cloning costs 35 petrification (25), 60 for a mystical item (45).</item>
 /// </list>
@@ -20,6 +20,9 @@ namespace UltimateAscent.Features;
 internal static class A14_Gems
 {
     private static bool On => Rules.Enabled(Lvl.WorseItems);
+
+    /// <summary>Scout's Tenacity's invincibility (the game: 10 s).</summary>
+    internal const float TenacitySeconds = 8f;
 
     /// <summary>A petrification amount for the game's AddStatus, which drops anything short of a whole point.</summary>
     private static float Points(int points) => points / 100f + 0.0001f;
@@ -145,7 +148,7 @@ internal static class A14_Gems
         }
         if (gem.invincibilityAffliction != null)
         {
-            Overrides.Set(gem.invincibilityAffliction, nameof(Affliction.totalTime), 5f);
+            Overrides.Set(gem.invincibilityAffliction, nameof(Affliction.totalTime), TenacitySeconds);
         }
         // Full healing (40) costs the maximum (60).
         Overrides.Set(gem, nameof(Action_HealingGem.healingToPetrifyRatio), 1.5f);

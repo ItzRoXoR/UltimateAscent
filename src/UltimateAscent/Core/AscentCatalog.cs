@@ -177,8 +177,20 @@ internal static class AscentCatalog
         [Features.ClimbingChalkItem.NameKey] = "Climbing Chalk",
         [Features.WildFoods.WonderberryNameKey] = "Wonderberry",
         [Features.ToxicDrink.NameKey] = "Toxic Drink",
-        [Features.PinkLollipop.NameKey] = "Pink Lollipop",
-        [Features.VanillaScoutCookies.SwitchKey] = "Vanilla Scout Cookies",
+        [Features.CherryLollipop.NameKey] = "Cherry Lollipop",
+        [Features.VanillaWafers.NameKey] = "Vanilla Wafers",
+    };
+
+    /// <summary>The Russian for the names above and the prompts below (the game's style: berries named like its own "-ика" berries; prompts in the infinitive); every other language shows the English.</summary>
+    internal static readonly Dictionary<string, string> Russian = new Dictionary<string, string>
+    {
+        [Features.A14_Items.LightweightParasolKey] = "Легкий зонтик",
+        [Features.ClimbingChalkItem.NameKey] = "Магнезия",
+        [Features.WildFoods.WonderberryNameKey] = "Чудника",
+        [Features.ToxicDrink.NameKey] = "Токсичный напиток",
+        [Features.CherryLollipop.NameKey] = "Вишневый леденец",
+        [Features.VanillaWafers.NameKey] = "Ванильные вафли",
+        [Features.StickItem.SwingPrompt] = "ударить",
     };
 
     /// <summary>What the use button does, for items whose use the game has no word for (shown as written).</summary>
@@ -202,25 +214,25 @@ internal static class AscentCatalog
         }
         foreach (KeyValuePair<string, string> name in ItemNames)
         {
-            Put(table, name.Key, name.Value.ToUpperInvariant());
+            Put(table, name.Key, name.Value.ToUpperInvariant(), Russian.TryGetValue(name.Key, out string russian) ? russian.ToUpperInvariant() : null);
         }
         foreach (KeyValuePair<string, string> prompt in Prompts)
         {
             if (!table.ContainsKey(prompt.Key.ToUpperInvariant()))
             {
-                Put(table, prompt.Key, prompt.Value);
+                Put(table, prompt.Key, prompt.Value, Russian.TryGetValue(prompt.Key, out string russian) ? russian : null);
             }
         }
         textsAdded = true;
     }
 
-    private static void Put(Dictionary<string, List<string>> table, string key, string text)
+    private static void Put(Dictionary<string, List<string>> table, string key, string text, string russian = null)
     {
         int languages = Enum.GetValues(typeof(LocalizedText.Language)).Length;
         List<string> values = new List<string>(languages);
         for (int i = 0; i < languages; i++)
         {
-            values.Add(text);
+            values.Add(i == (int)LocalizedText.Language.Russian && russian != null ? russian : text);
         }
         table[key.ToUpperInvariant()] = values;
     }

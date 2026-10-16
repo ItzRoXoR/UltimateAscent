@@ -26,7 +26,9 @@ namespace UltimateAscent.Features;
 /// Lightweight Parasol from ascent 9 and in custom runs (see <see cref="IsLightweightParasol"/>).</item>
 /// <item>The Energy Drink speeds your walking up by 30% (see A14_WorseItems' energy-drink rule); from
 /// ascent 15 its crash brings 50 drowsiness. The Big Lollipop's drowsiness comes over 12 s and adds up
-/// to 85 (the game: 33 over 10 s).</item>
+/// to 85 (the game: 33 over 10 s). The Cherry Lollipop's speed boost is the Energy Drink's (walking +30%),
+/// without its crash; its drowsiness is the Big Lollipop's.</item>
+/// <item>Fortified Milk makes you invincible for 12 s, 20 s cooked (the game: 15 s and 25 s).</item>
 /// <item>Rope spools hold half the rope: 25 segments, at most 20 in one rope (the game: 50 and 40).</item>
 /// <item>Thrown Shelf and Cloud Fungus fly as if 1.5 times as heavy, a Warp Fungus as if 1.35 times
 /// (the throw speed divided by that).</item>
@@ -102,9 +104,14 @@ internal static class A14_Items
 
     internal const string EnergyDrinkName = "Energy Drink";
     internal const string BigLollipopName = "Big Lollipop";
+    internal const string FortifiedMilkName = "Fortified Milk";
 
-    /// <summary>The Big Lollipop, or the Pink Lollipop (the same candy in another look and name).</summary>
-    internal static bool IsBigLollipop(string name) => name == BigLollipopName || name == PinkLollipop.ItemName;
+    /// <summary>Fortified Milk's invincibility, and cooked (the game: 15 s and 25 s).</summary>
+    internal const float MilkSeconds = 12f;
+    internal const float MilkSecondsCooked = 20f;
+
+    /// <summary>The Big Lollipop, or the Cherry Lollipop (the same candy in another look and name).</summary>
+    internal static bool IsBigLollipop(string name) => name == BigLollipopName || name == CherryLollipop.ItemName;
 
     /// <summary>The Energy Drink's walking bonus (+30%; the game: +50%).</summary>
     internal const float EnergyDrinkWalking = 0.3f;
@@ -189,10 +196,14 @@ internal static class A14_Items
     internal const float CursedSkullResidue = 0.1f;
 
     [ThreadStatic] private static int energyDrinkScope;
+    [ThreadStatic] private static int cherryScope;
     [ThreadStatic] private static int cursedSkullScope;
 
     /// <summary>An Energy Drink's effect is being applied right now (on this client).</summary>
     internal static bool InEnergyDrink => energyDrinkScope > 0;
+
+    /// <summary>A Cherry Lollipop's effects are being applied right now (its boost is the Energy Drink's, without the crash).</summary>
+    internal static bool InCherryLollipop => cherryScope > 0;
 
     /// <summary>The Cursed Skull's clear is being applied right now (on this client).</summary>
     internal static bool InCursedSkull => cursedSkullScope > 0;
@@ -257,9 +268,9 @@ internal static class A14_Items
     [HarmonyPatch(typeof(Action_ApplyAffliction), nameof(Action_ApplyAffliction.RunAction))]
     private static class ItemAfflictions
     {
-        private static void Prefix(Action_ApplyAffliction __instance, out bool __state)
+        private static void Prefix(Action_ApplyAffliction __instance, out int __state)
         {
-            __state = false;
+            __state = 0;
             if (!On)
             {
                 return;
@@ -272,21 +283,37 @@ internal static class A14_Items
             else if (name == EnergyDrinkName)
             {
                 energyDrinkScope++;
-                __state = true;
+                __state = 1;
             }
-            else if (IsBigLollipop(name) && __instance.affliction is Affliction_InfiniteStamina rush &&
-                     rush.drowsyAffliction is Affliction_AdjustDrowsyOverTime crash && crash.statusPerSecond > 0f)
+            else if (name == FortifiedMilkName && __instance.affliction is Affliction_Invincibility milk)
             {
-                Overrides.Set(crash, nameof(Affliction.totalTime), LollipopDrowsySeconds);
-                Overrides.Set(crash, nameof(Affliction_AdjustDrowsyOverTime.statusPerSecond), LollipopDrowsiness / LollipopDrowsySeconds);
+                // This can's own effect (cooking lengthened it on this can): as long as this ascent gives.
+                milk.totalTime = BurnedItems.CookedLevel(__instance.item) > 0 ? MilkSecondsCooked : MilkSeconds;
+            }
+            else if (IsBigLollipop(name))
+            {
+                if (name == CherryLollipop.ItemName)
+                {
+                    cherryScope++;
+                    __state = 2;
+                }
+                if (__instance.affliction is Affliction_InfiniteStamina rush && rush.drowsyAffliction is Affliction_AdjustDrowsyOverTime crash && crash.statusPerSecond > 0f)
+                {
+                    Overrides.Set(crash, nameof(Affliction.totalTime), LollipopDrowsySeconds);
+                    Overrides.Set(crash, nameof(Affliction_AdjustDrowsyOverTime.statusPerSecond), LollipopDrowsiness / LollipopDrowsySeconds);
+                }
             }
         }
 
-        private static Exception Finalizer(bool __state, Exception __exception)
+        private static Exception Finalizer(int __state, Exception __exception)
         {
-            if (__state)
+            if (__state == 1)
             {
                 energyDrinkScope--;
+            }
+            else if (__state == 2)
+            {
+                cherryScope--;
             }
             return __exception;
         }

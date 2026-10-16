@@ -6,7 +6,7 @@ namespace UltimateAscent.Features;
 
 /// <summary>
 /// Ascent 18: the Caldera's lava river rises and falls on 13DDA's tide curve, from the game's lowest
-/// level up 14 m (the game's own animation, which this replaces, rises 6.3 m). The host publishes
+/// level up 15 m (the game's own animation, which this replaces, rises 6.3 m). The host publishes
 /// a phase anchor (run, phase, network time, running) as a room property and every client
 /// computes the same lava height from the shared network clock, so the lava is where everybody
 /// sees it, including late joiners.
@@ -22,10 +22,10 @@ internal static class CalderaTide
     private const double SlowEnd = 1.85;
     private const double SlowSpeed = 0.15;
 
-    /// <summary>Middle of the tide on the regular map and how far it swings: 779 to 793, the game's lowest
-    /// river level and 14 m above it (13DDA: 779 to 795).</summary>
-    internal const float RegularCenter = 786f;
-    private const float Amplitude = 7f;
+    /// <summary>Middle of the tide on the regular map and how far it swings: 779 to 794, the game's lowest
+    /// river level and 15 m above it (13DDA: 779 to 795).</summary>
+    internal const float RegularCenter = 786.5f;
+    private const float Amplitude = 7.5f;
 
     private sealed class Anchor
     {

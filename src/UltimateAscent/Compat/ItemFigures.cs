@@ -17,9 +17,11 @@ namespace UltimateAscent.Compat;
 /// <item>Food: half the hunger (14), none from ticks.</item>
 /// <item>Status changes: cures at 60% (the Early Worm and the Green Clusterberry's poison 50%; 14), what they add with ascent 15's boost,
 /// the exact Napberry, Scorchberry, Green Kingberry and Shroomberry amounts (15).</item>
-/// <item>Extra stamina: half (14). Poisonous food: its exact total (15) or the boosted poison.</item>
+/// <item>Extra stamina: half (14). Poisonous food: its exact total (15) or the boosted poison. The Toxic Drink's poison
+/// after its boost (shown on a poison action of its own that never runs): 8 a second with ascent 14's rule.</item>
 /// <item>Effects: the Energy Drink's 50 crash and the boost on other crashes (15), the Big Lollipop's
-/// crash (14), every drowsiness over time (14), the Heat Pack's 20 s and the Wonderberry's 6 s (14), the gems' numbers (14).</item>
+/// crash (14), every drowsiness over time (14), the Heat Pack's 20 s and the Wonderberry's 6 s (14), the gems' numbers (14),
+/// the Cherry Lollipop's 4 s and Fortified Milk's 12 s (20 s cooked) (14).</item>
 /// <item>Weight (for Item Stats, which reads the raw field): the rules' weight, in custom runs too
 /// (the Lightweight Parasol weighs nothing there as well).</item>
 /// </list>
@@ -123,6 +125,9 @@ internal static class ItemFigures
                 case Action_GiveExtraStamina stamina when worse:
                     Set(stamina.amount, stamina.amount * A14_WorseItems.ExtraStaminaShare, v => stamina.amount = v);
                     break;
+                case Action_InflictPoison toxic when ToxicDrink.ShowsPoison(toxic):
+                    Set(toxic.poisonPerSecond, ToxicDrink.PoisonNow / ToxicDrink.PoisonSeconds, v => toxic.poisonPerSecond = v);
+                    break;
                 case Action_InflictPoison poison when stronger && poison.inflictionTime > 0f:
                     float total = A15_FoodPoison.TryTotal(item, out float exact)
                         ? exact
@@ -130,12 +135,12 @@ internal static class ItemFigures
                     Set(poison.poisonPerSecond, total / poison.inflictionTime, v => poison.poisonPerSecond = v);
                     break;
                 case Action_ApplyAffliction apply:
-                    Affliction(apply.affliction, name, worse, stronger);
+                    Affliction(apply.affliction, name, worse, stronger, item);
                     if (apply.extraAfflictions != null)
                     {
                         foreach (Affliction extra in apply.extraAfflictions)
                         {
-                            Affliction(extra, name, worse, stronger);
+                            Affliction(extra, name, worse, stronger, item);
                         }
                     }
                     break;
@@ -163,11 +168,18 @@ internal static class ItemFigures
         return amount * A14_WorseItems.CureScale(status);
     }
 
-    private static void Affliction(Affliction affliction, string name, bool worse, bool stronger)
+    private static void Affliction(Affliction affliction, string name, bool worse, bool stronger, Item item)
     {
         const CharacterAfflictions.STATUSTYPE drowsy = CharacterAfflictions.STATUSTYPE.Drowsy;
+        if (worse && name == CherryLollipop.ItemName && (affliction is Affliction_InfiniteStamina || affliction is Affliction_FasterBoi))
+        {
+            Set(affliction.totalTime, CherryLollipop.SecondsWorse, v => affliction.totalTime = v);
+        }
         switch (affliction)
         {
+            case Affliction_Invincibility milk when worse && milk.isFromMilk:
+                Set(milk.totalTime, BurnedItems.CookedLevel(item) > 0 ? A14_Items.MilkSecondsCooked : A14_Items.MilkSeconds, v => milk.totalTime = v);
+                break;
             case Affliction_FasterBoi toxic when worse && name == ToxicDrink.ItemName:
                 Set(toxic.totalTime, ToxicDrink.SecondsWorse, v => toxic.totalTime = v);
                 Set(toxic.moveSpeedMod, ToxicDrink.SpeedWorse - 1f, v => toxic.moveSpeedMod = v);
@@ -186,7 +198,7 @@ internal static class ItemFigures
                 }
                 else
                 {
-                    Affliction(sugarCrash, name, worse, stronger);
+                    Affliction(sugarCrash, name, worse, stronger, item);
                 }
                 break;
             case Affliction_AdjustDrowsyOverTime sleepy when worse && sleepy.statusPerSecond > 0f:

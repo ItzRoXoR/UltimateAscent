@@ -1,5 +1,50 @@
 # Changelog
 
+## 1.3.0
+
+For PEAK 2.6.b.
+
+* The Kiln, new hazards. From ascent 18 hot ash fills it once a minute once its lava rises: 5 s of
+  rumbling as the air thickens, then dark smoke and drifting ash flakes all around and 3 heat a second
+  for 15 s, 45 in all, the same moment for everyone. From ascent 17 it erupts like the Caldera, taking
+  turns with the ash (never with it, at most 10 s apart): once a minute, 2-9.5 s after the ash clears, a
+  column of fire breaks out 18-32 m from one of the scouts in it and burns 30 s.
+* Cherry Lollipop (was the Pink Lollipop): gives the Big Lollipop's infinite stamina and the Energy
+  Drink's speed boost at once, for 6 s (4 s from ascent 14), from the first lick; then the Big Lollipop's
+  drowsiness, not the Energy Drink's crash.
+* Vanilla Wafers (the vanilla Scout Cookies, now with a name of their own in game): 5 hunger and 20 extra
+  stamina a bite (cooked: 10 and 30). Both renamed items' Custom Run switches keep their settings.
+* Toxic Drink: the poison after the boost is 4 a second for 5 s (8 a second from ascent 14), not 4 in
+  all; Item Stats and Effect Preview show it now. The can wears a cooked Energy Drink's tint, so the label
+  no longer glares, and its inventory icon is rendered again from that can.
+* Scout's Generosity clones the Warp Compass and the Toxic Drink at a mystical item's cost (the game: 45
+  petrification instead of 25; ascent 14: 60 instead of 35); Effect Preview shows that price.
+* Weird Shroom: 5 hunger (was the game's 10).
+* Auto-Parachute: after the landing the canopy folds away 3 times as fast. Its backpack wheel on the
+  ground said "loc: name_5" instead of "Wear Auto-Parachute".
+* Breaking free from a spider's web or a fly trap (from ascent 9): jumps while caught need no stamina and
+  cost none, and a jump pressed too early counts as soon as the next one can. The game counted them only
+  with stamina left, which ran out half way at the higher ascents, and dropped early presses.
+* Ascent 9: the Citadel's gloom reaches the top in 700 s, as the Kiln's lava (was 2.5 times as fast, 480 s).
+* Ascent 13: the items a fall drops pass through the scout who dropped them until the scout is clear of
+  them. The game makes them right beside the landing scout, whose tumbling body knocked them about, and
+  lets the item from the hand collide again after 0.5 s even if it is inside the scout by then, which
+  shoots it out at 10 m/s.
+* Ascent 14: Fortified Milk makes you invincible for 12 s, cooked 20 s (the game: 15 s, 25 s); Scout's
+  Tenacity for 8 s (was 5 s; the game: 10 s).
+* Ascent 16: heat heals at 0.5 a second in the Caldera and the Kiln (was 0.6; the game: 1.3).
+* Ascent 17: mushroom zombies run wherever they go, as when they lunge (the game: they walk until they
+  have chased you for 3 s). Slipping on a banana peel darkens the screen 3 s later (was at once), and
+  every sound is muffled while it lasts, as in True Final Ascent's Ice Fog. The Citadel's spike rollers,
+  swinging spike balls and wall saws move 1.5 times as fast, and its pressure plates fire 1.5 times as
+  soon (0.53 s after the step; the game: 0.8 s). A cactus ball held in the hand counts its doubled thorns
+  too (40 on the bar; it stayed at the game's 20).
+* Ascent 18: the Caldera's lava river rises 15 m (779 to 794; was 14 m).
+* Ascent 23: the scorching sun (its heat and its roasting of sun shields) stops at the Caldera and the Gloom.
+* Russian names for the new items (and the Torch's and the Stick's swing prompt).
+* The config file is no longer rewritten when the mod loads: an update only adds its new entries (with their
+  defaults), and entries an older version had stay as they are (they used to be removed).
+
 ## 1.2.1
 
 For PEAK 2.6.b.

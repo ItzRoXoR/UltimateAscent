@@ -45,6 +45,10 @@
       <HintPath>$(ManagedDir)\Zorro.Settings.Runtime.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="Sirenix.Serialization">
+      <HintPath>$(ManagedDir)\Sirenix.Serialization.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="PhotonUnityNetworking">
       <HintPath>$(ManagedDir)\PhotonUnityNetworking.dll</HintPath>
       <Private>false</Private>

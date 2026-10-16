@@ -39,6 +39,10 @@ internal static class AutoParachute
     private const string PackChild = "PChute";
     private const string ParachuteTag = "Parachute";
 
+    /// <summary>How much faster the canopy folds away after landing than in the game, which takes it away after 2 s.</summary>
+    internal const float FoldSpeed = 3f;
+    internal const float GameFoldSeconds = 2f;
+
     /// <summary>The pack on the back, as large against the back model as against the item.</summary>
     private const float BackScale = 0.8f;
 
@@ -276,6 +280,64 @@ internal static class AutoParachute
             if (__instance.backpackType == Type && template != null && __instance.character != null)
             {
                 __result = LocalizedText.GetText("SOMEONESPACK").Replace("@", LocalizedText.GetText("NAME_" + template.UIData.itemName)).Replace("#", __instance.character.characterName);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The backpack wheel of one on the ground: "Wear Auto-Parachute" (the game names the kind on its wear slice by
+    /// the kind's name key, which a fifth kind does not have: it showed "loc: name_5").
+    /// </summary>
+    [HarmonyPatch(typeof(BackpackWheel), nameof(BackpackWheel.Hover))]
+    private static class WheelName
+    {
+        private static void Postfix(BackpackWheel __instance, BackpackWheelSlice.SliceData sliceData)
+        {
+            if (__instance.backpackType == Type && template != null && sliceData.isBackpackWear && sliceData.backpackReference.type != BackpackReference.BackpackType.Equipped && __instance.chosenItemText != null)
+            {
+                __instance.chosenItemText.text = LocalizedText.GetText("WEAR").Replace("#", LocalizedText.GetText("NAME_" + template.UIData.itemName));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Once the scout lands, the canopy folds away 3 times as fast: the game plays its fold animation and takes it
+    /// away after 2 s, which looked too long. Every scout's game does this with its own copy.
+    /// </summary>
+    [HarmonyPatch(typeof(Parachute), nameof(Parachute.Close))]
+    private static class QuickFold
+    {
+        private static bool Prefix(Parachute __instance)
+        {
+            if (!__instance._closing && __instance.gameObject.activeInHierarchy)
+            {
+                __instance._closing = true;
+                __instance.StartCoroutine(Fold(__instance));
+            }
+            return false;
+        }
+
+        private static System.Collections.IEnumerator Fold(Parachute parachute)
+        {
+            Animator animator = parachute.GetComponent<Animator>();
+            animator.SetTrigger("Die");
+            animator.speed = FoldSpeed;
+            yield return new WaitForSeconds(GameFoldSeconds / FoldSpeed);
+            animator.speed = 1f;
+            parachute.gameObject.SetActive(false);
+            parachute._closing = false;
+        }
+    }
+
+    /// <summary>Opening again (which stops a fold half way) plays at the normal speed.</summary>
+    [HarmonyPatch(typeof(Parachute), nameof(Parachute.Open))]
+    private static class OpenAtNormalSpeed
+    {
+        private static void Prefix(Parachute __instance)
+        {
+            if (__instance.TryGetComponent(out Animator animator))
+            {
+                animator.speed = 1f;
             }
         }
     }

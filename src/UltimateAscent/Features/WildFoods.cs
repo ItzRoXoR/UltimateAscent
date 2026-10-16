@@ -19,7 +19,7 @@ namespace UltimateAscent.Features;
 /// 10 hunger and 6 s) on 0.2% of the berry bushes that grow Crispberries;</item>
 /// <item>the Green Clusterberry (10 hunger, removes 30 poison; from ascent 14 5 hunger and 15 poison) on
 /// thorny vines, as often as each of the other Clusterberries;</item>
-/// <item>the Weird Shroom (10 hunger, glows for 60 s) in mushroom patches, as often as the (safe) Cluster
+/// <item>the Weird Shroom (5 hunger, the game's 10; glows for 60 s) in mushroom patches, as often as the (safe) Cluster
 /// Shroom. Its glow works again: the game copies every effect before it applies it, and the copy lost
 /// the light the glow needs.</item>
 /// </list>
@@ -63,6 +63,9 @@ internal static class WildFoods
     private static Item wonderberry;
     private static Item greenClusterberry;
     private static Item weirdShroom;
+
+    /// <summary>The Weird Shroom's hunger (the game: 10).</summary>
+    internal const float WeirdShroomHunger = 0.05f;
     private static bool wonderberryLook;
     private static GameObject glowLight;
 
@@ -79,6 +82,10 @@ internal static class WildFoods
         }
         if (ItemDatabase.TryGetItem(WeirdShroomPrefab, out weirdShroom) && weirdShroom != null)
         {
+            foreach (Action_RestoreHunger food in weirdShroom.GetComponents<Action_RestoreHunger>())
+            {
+                food.restorationAmount = WeirdShroomHunger;
+            }
             Action_ApplyAffliction glow = weirdShroom.GetComponents<Action_ApplyAffliction>().FirstOrDefault(a => a.affliction is Affliction_Glowing);
             glowLight = glow != null ? ((Affliction_Glowing)glow.affliction).pointLightPref : null;
         }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
@@ -119,8 +120,8 @@ internal static class A17_Hazards
     }
 
     /// <summary>
-    /// Banana peels: a much harder slip (5x longer, 3x higher), and the screen darkens like when the
-    /// Scoutmaster comes for you, for 20 seconds (see <see cref="A17_BananaDarkness"/>).
+    /// Banana peels: a much harder slip (5x longer, 3x higher), and 3 seconds later the screen darkens like
+    /// when the Scoutmaster comes for you and the sound is muffled, for 20 seconds (see <see cref="A17_BananaDarkness"/>).
     /// </summary>
     [HarmonyPatch(typeof(BananaPeel), nameof(BananaPeel.RPCA_TriggerBanana))]
     private static class Banana
@@ -631,16 +632,34 @@ internal static class A17_Hazards
         }
     }
 
-    /// <summary>Cactus balls (Mesa) stick twice as many thorns into you.</summary>
+    /// <summary>Cactus balls (Mesa) stick twice as many thorns into you: 40 on the bar instead of 20...</summary>
     [HarmonyPatch(typeof(CactusBall), nameof(CactusBall.StickToCharacterLocal))]
     private static class CactusBalls
     {
         private static void Prefix(CactusBall __instance)
         {
-            if (OnFor(__instance))
+            DoubleThorns(__instance);
+        }
+    }
+
+    /// <summary>...and so does one held in the hand (picked up): the game counts the held one's own thorns as well, which stayed 20.</summary>
+    [HarmonyPatch(typeof(CharacterAfflictions), nameof(CharacterAfflictions.UpdateWeight))]
+    private static class HeldCactusBalls
+    {
+        private static void Prefix(CharacterAfflictions __instance)
+        {
+            if (__instance.character != null && __instance.character.data.currentStickyItem is CactusBall ball)
             {
-                Overrides.Set(__instance, nameof(StickyItemComponent.addThornsToStuckPlayer), (int)Overrides.Original(__instance, "thorns", __instance.addThornsToStuckPlayer) * 2);
+                DoubleThorns(ball);
             }
+        }
+    }
+
+    private static void DoubleThorns(CactusBall ball)
+    {
+        if (OnFor(ball))
+        {
+            Overrides.Set(ball, nameof(StickyItemComponent.addThornsToStuckPlayer), (int)Overrides.Original(ball, "thorns", ball.addThornsToStuckPlayer) * 2);
         }
     }
 
@@ -757,6 +776,9 @@ internal static class A17_Hazards
         tickBiomesLogged.Clear();
         latchingTicks.Clear();
         LastTickBite = -1000f;
+        kilnEruptionAt = -1f;
+        kilnEruptionMinute = -1;
+        kilnEruptedMinute = -1;
     }
 
     /// <summary>
@@ -1075,7 +1097,7 @@ internal static class A17_Hazards
     /// <summary>Up to 12 zombies are awake at once (the game: 1).</summary>
     private const int MaxZombies = 12;
 
-    /// <summary>Mushroom zombies wake from 30 m, chase at once (at their normal speed) and last 300 s; their bite is <see cref="ZombieBite"/>.</summary>
+    /// <summary>Mushroom zombies wake from 30 m, chase at once and last 300 s; they run (<see cref="ZombiesRun"/>), and their bite is <see cref="ZombieBite"/>.</summary>
     [HarmonyPatch(typeof(MushroomZombieSpawner), nameof(MushroomZombieSpawner.Spawn))]
     private static class Zombies
     {
@@ -1122,6 +1144,23 @@ internal static class A17_Hazards
         }
     }
 
+    /// <summary>
+    /// A mushroom zombie runs wherever it goes, as it does when it lunges (the game: it walks until it has chased
+    /// for 3 s, and runs only within 20 m of a scout it can see). Its own jump over a drop still stops the run for
+    /// that jump. Zombies that rose from scouts and TFA's keep the game's pace.
+    /// </summary>
+    [HarmonyPatch(typeof(MushroomZombie), "WalkTowards")]
+    private static class ZombiesRun
+    {
+        private static void Prefix(MushroomZombie __instance, ref bool forceSprint)
+        {
+            if (On && __instance.isNPCZombie && !Compat.Tfa.Tagged(__instance.photonView))
+            {
+                forceSprint = true;
+            }
+        }
+    }
+
     [HarmonyPatch(typeof(ZombieManager), nameof(ZombieManager.Update))]
     private static class MoreZombies
     {
@@ -1164,7 +1203,31 @@ internal static class A17_Hazards
         }
     }
 
-    /// <summary>The Caldera erupts more often.</summary>
+    /// <summary>
+    /// The Kiln erupts too: the Caldera's eruption (a column of fire), near one of the scouts in it, once a minute, taking
+    /// turns with the Kiln's ash (ascent 18) and never with it, at most 10 s apart: it breaks out 2-9.5 s after the ash has
+    /// cleared and burns for 30 s (the Caldera's: 35 s), so it is out by 39.5 s, before the next ash comes at 40 s.
+    /// Without ascent 18's ash, the same minutes.
+    /// </summary>
+    private const float KilnEruptionFrom = 2f;
+    private const float KilnEruptionTo = 9.5f;
+    internal const float KilnEruptionSeconds = 30f;
+
+    /// <summary>A Kiln eruption is out by this far into the minute (the ash's warning starts at 40 s).</summary>
+    internal const float KilnEruptionOutBy = 39.5f;
+
+    /// <summary>How far from the scout a Kiln eruption breaks out (its heat reaches 15 m).</summary>
+    private const float KilnEruptionNear = 18f;
+    private const float KilnEruptionFar = 32f;
+
+    private static float kilnEruptionAt = -1f;
+    private static int kilnEruptionMinute = -1;
+    private static int kilnEruptedMinute = -1;
+
+    /// <summary>
+    /// The Caldera erupts more often, and from the Kiln's start on the Kiln erupts as well (the host chooses
+    /// where and sends the game's own eruption message, as for the Caldera's).
+    /// </summary>
     [HarmonyPatch(typeof(EruptionSpawner), nameof(EruptionSpawner.Update))]
     private static class Eruptions
     {
@@ -1173,6 +1236,24 @@ internal static class A17_Hazards
             if (!On)
             {
                 return true;
+            }
+            int minute = KilnAsh.ClockMinute;
+            if (PhotonNetwork.IsMasterClient && Map.InVolcanoKiln && minute >= 0 && minute != kilnEruptedMinute)
+            {
+                if (minute != kilnEruptionMinute)
+                {
+                    kilnEruptionMinute = minute;
+                    kilnEruptionAt = UnityEngine.Random.Range(KilnEruptionFrom, KilnEruptionTo);
+                }
+                float phase = KilnAsh.ClockPhase;
+                if (phase >= kilnEruptionAt && phase <= KilnEruptionTo + 0.5f)
+                {
+                    kilnEruptedMinute = minute;
+                    if (KilnEruptionSpot(out Vector3 spot))
+                    {
+                        __instance.photonView.RPC("RPCA_SpawnEruption", RpcTarget.All, spot);
+                    }
+                }
             }
             if (PhotonNetwork.IsMasterClient && HelperFunctions.AnyPlayerInZRange(__instance.min.position.z, __instance.max.position.z))
             {
@@ -1188,6 +1269,52 @@ internal static class A17_Hazards
             }
             return false;
         }
+    }
+
+    /// <summary>A Kiln eruption burns 30 s, out before the ash comes (on every scout's game: each makes its own copy).</summary>
+    [HarmonyPatch(typeof(EruptionSpawner), nameof(EruptionSpawner.RPCA_SpawnEruption))]
+    private static class ShortKilnEruptions
+    {
+        private static void Postfix(Vector3 position)
+        {
+            if (!On || !KilnAsh.InKiln(position))
+            {
+                return;
+            }
+            float phase = KilnAsh.ClockPhase;
+            float seconds = phase >= 0f ? Mathf.Clamp(KilnEruptionOutBy - phase, 1f, KilnEruptionSeconds) : KilnEruptionSeconds;
+            foreach (RemoveAfterSeconds made in UnityEngine.Object.FindObjectsByType<RemoveAfterSeconds>(FindObjectsSortMode.None))
+            {
+                if (made != null && made.seconds > seconds && Vector3.Distance(made.transform.position, position) < 0.1f)
+                {
+                    made.seconds = seconds;
+                }
+            }
+        }
+    }
+
+    /// <summary>A spot on the ground 18-32 m from one of the scouts in the Kiln (on its level, give or take 25 m), inside the Kiln.</summary>
+    private static bool KilnEruptionSpot(out Vector3 spot)
+    {
+        spot = Vector3.zero;
+        Character[] inKiln = Character.AllCharacters.Where(c => c != null && !c.data.dead && KilnAsh.InKiln(c.Center)).ToArray();
+        if (inKiln.Length == 0)
+        {
+            return false;
+        }
+        Character scout = inKiln[UnityEngine.Random.Range(0, inKiln.Length)];
+        for (int attempt = 0; attempt < 12; attempt++)
+        {
+            Vector3 offset = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f) * Vector3.forward * UnityEngine.Random.Range(KilnEruptionNear, KilnEruptionFar);
+            Vector3 above = scout.Center + offset + Vector3.up * 15f;
+            RaycastHit ground = HelperFunctions.LineCheck(above, above + Vector3.down * 40f, HelperFunctions.LayerType.TerrainMap);
+            if (ground.transform != null && ground.normal.y > 0.5f && KilnAsh.InKiln(ground.point) && Mathf.Abs(ground.point.y - scout.Center.y) < 25f)
+            {
+                spot = ground.point;
+                return true;
+            }
+        }
+        return false;
     }
 
     /// <summary>Climbing a petrifying stone: 8 petrification a second, twice its touch (the game: its climbing effect is off).</summary>

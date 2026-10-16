@@ -18,7 +18,7 @@ namespace UltimateAscent.Features;
 /// <item>In a custom run each of them follows its own switch (on by default, like every item); the
 /// Parasol's switch no longer covers the Roots parasol.</item>
 /// <item>In a custom run the Roots parasol is the Lightweight Parasol (its name, no weight).</item>
-/// <item>The Pink Lollipop and the Vanilla Scout Cookies (each half of an item's spawns) have switches of
+/// <item>The Cherry Lollipop and the Vanilla Wafers (each half of an item's spawns) have switches of
 /// their own after their item's (see <see cref="VariantShare"/>); the Warp Compass and the Toxic Drink are
 /// listed among the mystical items.</item>
 /// <item>The extra switches make the item list longer; the dotted divider and the mystical items below it
@@ -55,13 +55,13 @@ internal static class CustomRunItems
                 Insert(items, parasol, ParasolPrefab);
             }
             // The variants that take half of an item's spawns, after their item (they are in no pool of their own).
-            if (PinkLollipop.Template != null)
+            if (CherryLollipop.Template != null)
             {
-                Insert(items, PinkLollipop.Template, PinkLollipop.LollipopPrefab);
+                Insert(items, CherryLollipop.Template, CherryLollipop.LollipopPrefab);
             }
-            if (ItemDatabase.TryGetItem(VanillaScoutCookies.VanillaPrefab, out Item vanilla) && vanilla != null)
+            if (ItemDatabase.TryGetItem(VanillaWafers.VanillaPrefab, out Item vanilla) && vanilla != null)
             {
-                Insert(items, vanilla, VanillaScoutCookies.CookiesPrefab);
+                Insert(items, vanilla, VanillaWafers.CookiesPrefab);
             }
             if (ToxicDrink.Template != null)
             {
@@ -94,19 +94,6 @@ internal static class CustomRunItems
         }
     }
 
-    /// <summary>The items that come from Ancient Luggage and the Ancient Statues only (the mystical items' places).</summary>
-    private static IEnumerable<Item> Mystical()
-    {
-        if (WarpCompass.Template != null)
-        {
-            yield return WarpCompass.Template;
-        }
-        if (ToxicDrink.Template != null)
-        {
-            yield return ToxicDrink.Template;
-        }
-    }
-
     /// <summary>
     /// The screen sorts the items into the regular and the mystical list by the game's "mystical" mark. The Warp
     /// Compass and the Toxic Drink come from where the mystical items come from, so they are marked for the
@@ -118,7 +105,7 @@ internal static class CustomRunItems
         private static void Prefix(out List<Item> __state)
         {
             __state = new List<Item>();
-            foreach (Item item in Mystical())
+            foreach (Item item in MysticalItems.Templates())
             {
                 if ((item.itemTags & Item.ItemTags.Mystical) == 0)
                 {
@@ -224,8 +211,7 @@ internal static class CustomRunItems
     }
 
     /// <summary>
-    /// The Roots parasol shares the Parasol's name and the Vanilla Scout Cookies the Scout Cookies'; their
-    /// switches show names of their own.
+    /// The Roots parasol shares the Parasol's name; its switch shows a name of its own.
     /// </summary>
     [HarmonyPatch(typeof(CustomOptionItemToggle), nameof(CustomOptionItemToggle.Init))]
     private static class LightweightParasolLabel
@@ -240,16 +226,12 @@ internal static class CustomRunItems
             {
                 __instance.text.SetIndex(A14_Items.LightweightParasolKey);
             }
-            else if (item.gameObject.name == VanillaScoutCookies.VanillaPrefab)
-            {
-                __instance.text.SetIndex(VanillaScoutCookies.SwitchKey);
-            }
         }
     }
 
     /// <summary>
-    /// In a custom run a variant that takes half of an item's spawns (the Pink Lollipop, the Vanilla Scout
-    /// Cookies) follows its own switch: with both on it takes half of them, with the item off all of them, with
+    /// In a custom run a variant that takes half of an item's spawns (the Cherry Lollipop, the Vanilla Wafers)
+    /// follows its own switch: with both on it takes half of them, with the item off all of them, with
     /// itself off none. Elsewhere: the share given.
     /// </summary>
     internal static float VariantShare(string itemPrefab, string variantPrefab, float share)
@@ -276,8 +258,8 @@ internal static class CustomRunItems
                 return;
             }
             string name = __instance.gameObject.name;
-            string variant = name == PinkLollipop.LollipopPrefab && PinkLollipop.Template != null ? PinkLollipop.PrefabName
-                : name == VanillaScoutCookies.CookiesPrefab ? VanillaScoutCookies.VanillaPrefab : null;
+            string variant = name == CherryLollipop.LollipopPrefab && CherryLollipop.Template != null ? CherryLollipop.PrefabName
+                : name == VanillaWafers.CookiesPrefab ? VanillaWafers.VanillaPrefab : null;
             if (variant != null && RunSettings.IsItemEnabled(variant) && (!__instance.TryGetComponent(out LootData loot) || loot.IsValidToSpawn()))
             {
                 __result = true;

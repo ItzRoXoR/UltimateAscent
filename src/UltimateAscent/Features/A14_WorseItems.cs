@@ -234,10 +234,10 @@ internal static class A14_WorseItems
         }
     }
 
-    /// <summary>A script that poisons or gives spores: cooking leaves it on from ascent 14.</summary>
+    /// <summary>A script that poisons or gives spores: cooking leaves it on from ascent 14 (a cooked Toxic Drink brings no poison at all).</summary>
     internal static bool Poisonous(MonoBehaviour script)
     {
-        return script is Action_InflictPoison ||
+        return (script is Action_InflictPoison && !ToxicDrink.ShowsPoison(script)) ||
                (script is Action_ModifyStatus status && status.changeAmount > 0f &&
                 (status.statusType == CharacterAfflictions.STATUSTYPE.Poison || status.statusType == CharacterAfflictions.STATUSTYPE.Spores));
     }
@@ -272,14 +272,15 @@ internal static class A14_WorseItems
         {
             if (On && !ToxicDrink.IsBoost(__instance))
             {
-                // The Energy Drink itself: walking only +30%, and from ascent 15 a crash of exactly 50 drowsiness.
-                // Other speed boosts keep at most 13DDA's +60% walking (the game's are +50% now) and +70% climbing.
-                bool energyDrink = A14_Items.InEnergyDrink;
+                // The Energy Drink itself: walking only +30%, and from ascent 15 a crash of exactly 50 drowsiness (the
+                // Cherry Lollipop's boost, the Energy Drink's, walks the same but has no crash). Other speed boosts keep
+                // at most 13DDA's +60% walking (the game's are +50% now) and +70% climbing.
+                bool energyDrink = A14_Items.InEnergyDrink || A14_Items.InCherryLollipop;
                 float walk = Overrides.Original(__instance, "walk", __instance.moveSpeedMod);
                 float climb = Overrides.Original(__instance, "climb", __instance.climbSpeedMod);
                 Overrides.Set(__instance, nameof(Affliction_FasterBoi.moveSpeedMod), energyDrink ? A14_Items.EnergyDrinkWalking : Mathf.Min(walk, 0.6f));
                 Overrides.Set(__instance, nameof(Affliction_FasterBoi.climbSpeedMod), Mathf.Min(climb, 0.7f));
-                if (energyDrink && Rules.Enabled(Lvl.StrongerAilments))
+                if (A14_Items.InEnergyDrink && Rules.Enabled(Lvl.StrongerAilments))
                 {
                     Overrides.Set(__instance, nameof(Affliction_FasterBoi.drowsyOnEnd), A15_StrongerAilments.Raw(CharacterAfflictions.STATUSTYPE.Drowsy, A14_Items.EnergyDrinkCrash));
                 }

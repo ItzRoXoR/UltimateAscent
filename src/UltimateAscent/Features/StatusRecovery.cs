@@ -9,7 +9,7 @@ namespace UltimateAscent.Features;
 /// <summary>
 /// The per-frame status update of the scouts, shared by several ascents:
 /// <list type="bullet">
-/// <item>Ascent 16: heat heals at 0.6 a second in the volcanic Caldera and Kiln (the game: 1.3); in
+/// <item>Ascent 16: heat heals at 0.5 a second in the volcanic Caldera and Kiln (the game: 1.3); in
 /// their variants (the Gloom and the Citadel) drowsiness heals at 1 a second (the game: 2.5).</item>
 /// <item>Ascent 22: unique effects. Poison and spores make you stumble, injuries slowly worsen,
 /// weight pulls you down faster, drowsiness does not heal at night (there is no night from the
@@ -26,7 +26,7 @@ namespace UltimateAscent.Features;
 [HarmonyPatch(typeof(CharacterAfflictions), nameof(CharacterAfflictions.UpdateNormalStatuses))]
 internal static class StatusRecovery
 {
-    private const float SlowHeatRecovery = 0.006f;
+    private const float SlowHeatRecovery = 0.005f;
     private const float SlowDrowsyRecovery = 0.01f;
     private const float DayDrowsyRecovery = 0.02f;
     private const float InjuryWorsening = 0.00033333f;

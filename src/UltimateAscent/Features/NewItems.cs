@@ -10,7 +10,7 @@ namespace UltimateAscent.Features;
 /// as when their switches are off on the Custom Run screen (custom runs keep those switches): the
 /// Climbing Chalk does not spawn, and wherever the game would spawn the Roots parasol (the
 /// Lightweight Parasol from ascent 9) the regular Parasol spawns instead, with the same odds. The
-/// newer items check the switch themselves (<see cref="AutoParachute"/>, <see cref="WarpCompass"/>, <see cref="VanillaScoutCookies"/>,
+/// newer items check the switch themselves (<see cref="AutoParachute"/>, <see cref="WarpCompass"/>, <see cref="VanillaWafers"/>,
 /// <see cref="WildFoods"/>, <see cref="GroundItems"/>). The wild ones never spawn in suitcases, so the
 /// Custom Run screen has no switch for them: in custom runs too this switch is theirs (<see cref="WildOn"/>).
 /// </summary>

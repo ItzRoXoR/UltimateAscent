@@ -84,8 +84,9 @@ internal static class FogSphereRules
 
     /// <summary>
     /// Colours the fog purple once it is poisonous (its tint is its material's one colour; its swirls
-    /// are textures). True Final Ascent's Ice Fog borrows the same sphere for its own fog (ice blue,
-    /// chilling, never the game's fog damage); it keeps its own colour.
+    /// are textures); ash grey while it draws the Kiln's ash (<see cref="KilnAsh"/>). True Final Ascent's
+    /// Ice Fog borrows the same sphere for its own fog (ice blue, chilling, never the game's fog damage);
+    /// it keeps its own colour.
     /// </summary>
     [HarmonyPatch(typeof(FogSphere), nameof(FogSphere.SetSharderVars))]
     private static class Tint
@@ -121,7 +122,7 @@ internal static class FogSphereRules
                 states.Add(__instance, state);
             }
             __instance.rend.GetPropertyBlock(state.original);
-            __instance.mpb.SetColor(TintColor, Purple);
+            __instance.mpb.SetColor(TintColor, KilnAsh.Drawing ? KilnAsh.AshColour : Purple);
             __instance.rend.SetPropertyBlock(__instance.mpb);
             state.applied = true;
         }

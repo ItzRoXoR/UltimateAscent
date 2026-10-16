@@ -11,7 +11,8 @@ namespace UltimateAscent.Features;
 /// <summary>
 /// The Toxic Drink: the Energy Drink's can in the player's own purple label. Drunk, it makes you
 /// walk and climb 5 times as fast for 10 s (4 times for 8 s with ascent 14's rule); when the boost is
-/// over it poisons you for 4 over 5 s (8 with ascent 14's rule, as it lands from ascent 15 on). Cooked,
+/// over it poisons you for 4 a second for 5 s (8 a second with ascent 14's rule, as it lands from ascent 15
+/// on). Its can looks the way a cooked Energy Drink's does (the game's first cooking tint). Cooked,
 /// it works like a cooked Energy Drink: it bursts when drunk (a knock-down and a push, never knocking you
 /// out or making you drowsy, as ascent 17's explosions would), and the poison is gone. Its drinking sound
 /// is the Energy Drink's, 1.5 times as fast. Everything else is the Energy Drink's: it cools you by 30
@@ -40,9 +41,9 @@ internal static class ToxicDrink
     internal const float SpeedWorse = 4f;
     internal const float SecondsWorse = 8f;
 
-    /// <summary>The poison once the boost is over, given over 5 s (with ascent 14's rule: as it lands from ascent 15 on).</summary>
-    internal const float Poison = 0.04f;
-    internal const float PoisonWorse = 0.08f;
+    /// <summary>The poison a second once the boost is over, for 5 s (with ascent 14's rule: as it lands from ascent 15 on).</summary>
+    internal const float PoisonPerSecond = 0.04f;
+    internal const float PoisonPerSecondWorse = 0.08f;
     internal const float PoisonSeconds = 5f;
 
     /// <summary>Its drinking sound: the Energy Drink's, played this much faster (and higher).</summary>
@@ -78,8 +79,8 @@ internal static class ToxicDrink
     internal static float SpeedNow => Worse ? SpeedWorse : Speed;
     internal static float SecondsNow => Worse ? SecondsWorse : Seconds;
 
-    /// <summary>The poison after the boost, as it lands on the bar.</summary>
-    internal static float PoisonNow => Worse ? A15_StrongerAilments.FromAscent15(CharacterAfflictions.STATUSTYPE.Poison, PoisonWorse) : Poison;
+    /// <summary>All the poison after the boost, as it lands on the bar.</summary>
+    internal static float PoisonNow => PoisonSeconds * (Worse ? A15_StrongerAilments.FromAscent15(CharacterAfflictions.STATUSTYPE.Poison, PoisonPerSecondWorse) : PoisonPerSecond);
 
     /// <summary>Poison doses still to come or running, on this game (for the tests).</summary>
     internal static int DosesPending => doses.Count;
@@ -87,6 +88,9 @@ internal static class ToxicDrink
     private static bool Allowed => RunSettings.IsCustomRun || (Rules.InExtraAscent && HostOptions.NewItemsOn);
 
     internal static bool IsToxic(Item item) => item != null && template != null && item.itemID == template.itemID;
+
+    /// <summary>The poison action the mods that show item effects read on it (it never runs itself).</summary>
+    internal static bool ShowsPoison(MonoBehaviour script) => script is Action_InflictPoison && IsToxic(script.GetComponent<Item>());
 
     /// <summary>The cooked drink's burst (its knock-down and push are the cooked Energy Drink's; ascent 17's explosions leave it alone).</summary>
     internal static bool IsBurst(Component component) => component != null && component.gameObject.name.StartsWith(BurstName, StringComparison.Ordinal);
@@ -128,6 +132,11 @@ internal static class ToxicDrink
         // detailed label it clashes with the label's own halftone and looks grainy, so that layer is plain. The
         // shader's two other paint layers stay.
         look.SetTexture(CheckerLayer, Texture2D.whiteTexture);
+        // The purple label shone too bright: the can wears the tint the game gives a can cooked once, and
+        // cooking darkens it from there.
+        Color tint = look.GetColor("_Tint") * ItemCooking.GetCookColor(1);
+        tint.a = look.GetColor("_Tint").a;
+        look.SetColor("_Tint", tint);
         can.sharedMaterial = look;
 
         // Its own boosts (as drunk, and the cooked one cooking switches to); neither ends in drowsiness. They last
@@ -146,6 +155,23 @@ internal static class ToxicDrink
         }
         // Cooking switches the boosts and lets the burst out, on this can's own parts.
         cooking.additionalCookingBehaviors = cooking.additionalCookingBehaviors.Select(behavior => OwnParts(drink, behavior)).ToArray();
+        // The poison after the boost runs on this mod's own timer (exact amounts). The mods that show what an item
+        // does (Item Stats, Effect Preview) read the game's poison action, so the can carries one with that poison
+        // that never runs itself (no trigger); cooking switches it off with the poison.
+        Action_InflictPoison shown = drink.gameObject.AddComponent<Action_InflictPoison>();
+        shown.inflictionTime = PoisonSeconds;
+        shown.poisonPerSecond = PoisonPerSecond;
+        shown.delay = Seconds;
+        CookingBehavior_DisableScripts disable = cooking.additionalCookingBehaviors.OfType<CookingBehavior_DisableScripts>().FirstOrDefault();
+        if (disable != null)
+        {
+            disable.scriptsToDisable = (disable.scriptsToDisable ?? new MonoBehaviour[0]).Concat(new MonoBehaviour[] { shown }).ToArray();
+        }
+        else
+        {
+            cooking.additionalCookingBehaviors = cooking.additionalCookingBehaviors
+                .Concat(new AdditionalCookingBehavior[] { new CookingBehavior_DisableScripts { scriptsToDisable = new MonoBehaviour[] { shown }, cookedAmountToTrigger = 1 } }).ToArray();
+        }
         // Its burst under its own name: ascent 17's explosions leave it alone (the cooked Energy Drink's pushes and knocks down as one).
         Action_Spawn burst = drink.GetComponent<Action_Spawn>();
         if (burst != null && burst.objectToSpawn != null)

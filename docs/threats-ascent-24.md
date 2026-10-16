@@ -1,7 +1,7 @@
 # Threats at ascent 24
 
 Every value below is from PEAK 2.6.b (read from the game code and the game data) and from
-Ultimate Ascent 1.2.1's rules. Status amounts use the stamina bar's scale: **100 = the whole bar**. A rule
+Ultimate Ascent 1.3.0's rules. Status amounts use the stamina bar's scale: **100 = the whole bar**. A rule
 marked *(17)* comes from that ascent; ascent 24 contains every ascent up to 24. Ultimate Ascent's
 numbers are what lands on the bar, ascent 15's boost included; below ascent 15 the same rules land
 them without that boost, so they are always lower there. Distances are the game's own units,
@@ -19,7 +19,7 @@ called metres here as in the mod; the game's altitude display counts one unit as
 | Cooking | Campfires (the portable stove too), lava and explosions cook items; cooking takes a food's poison away. | Campfires, lava and explosions char what they cook **to ruin** on the first cooking *(17)*; cooking no longer removes poison *(14)*. |
 | Food and items | As listed per item. | Hunger and extra stamina from food ×0.5, what status items cure ×0.6 *(14)*; what they cost you (a Napberry's sleep, a Scorchberry's heat) stays the game's, except the exact amounts in **Food** below *(15)*. |
 | Touch hazards (anything that hurts on contact) | Own values. | Damage ×2, at least 2 cold/heat *(17)*; urchins, thorny vines, spiked fences, lava streams and petrifying stones have exact values (below). Climbing ice rock ×2; magma rock burns and petrifying stones petrify while you climb them. Status emitters that add a status (spore clouds, heat fields) ×4. |
-| Recovery | Statuses heal over time after a short pause. | Heat heals 2.2× slower in the Caldera/Kiln (0.6 a second), drowsiness 2.5× slower in the Gloom/Citadel (1 a second) *(16)*; injuries **worsen** by 2 per minute, drowsiness does not heal at night (there is no night from the Caldera and the Gloom on), poison/spores make you stumble, heat drains stamina, cold slows you *(22)*; poison does not heal for 10 s after a tick bite *(17)*. |
+| Recovery | Statuses heal over time after a short pause. | Heat heals 2.6× slower in the Caldera/Kiln (0.5 a second), drowsiness 2.5× slower in the Gloom/Citadel (1 a second) *(16)*; injuries **worsen** by 2 per minute, drowsiness does not heal at night (there is no night from the Caldera and the Gloom on), poison/spores make you stumble, heat drains stamina, cold slows you *(22)*; poison does not heal for 10 s after a tick bite *(17)*. |
 | Revives | Scout statues at the end of each part of the climb revive the dead (or hand out an artifact if nobody died); a revive adds 15 curse *(game ascent 7)* and takes 75 petrification off. | **No revive statues** *(19)*; every other revive (scout effigy, skeleton, the Nadir) adds **15 curse**, also the ones that give the game's no status, and **keeps petrification** *(19)*. |
 | Curse | Every scout starts with 10 curse *(game ascent 7)*, so 90 of the bar is left for everything else. | **20 curse** at the start *(19)*, so 80 is left; every death curses the survivors; eating a scout costs 50 poison and 25 curse *(11)*. |
 
@@ -94,13 +94,13 @@ leave a cloud that bursts again every 0.5 s for 11 s, with the same falloff.
 | Trigger | drop on you when you pass under them (up to 50 m below, 2 m wide) | same |
 | Grab | Web +25 on the bar, knocked down 1 s, pulled up | **Web +40**, knocked down **1.5 s** |
 | Poison | 5 every 0.8 s, starting 2 s after the grab | **12 every 0.8 s** (on the bar 10, 12.5, 12.5, 12.5, 12.5, …: 12 on average, 15/s) |
-| Escape | each jump −5 web (5 jumps); a teammate frees you | 8 jumps; a teammate; or a **rescue grapple** that catches you pulls you out of the web |
+| Escape | each jump −5 web (5 jumps), only while you have stamina (each jump costs 5%, 7% from the game's ascent 6, and it does not come back while you keep jumping); a jump at most every 0.4 s, earlier presses lost; a teammate frees you | 8 jumps, **without stamina**, an early press counts as soon as the next jump can *(9)*; a teammate; or a **rescue grapple** that catches you pulls you out of the web |
 
 ### Mushroom zombies
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
 | Spawn | each zombie spot keeps its zombie with 33%; **1 zombie** awake on the map at a time | **up to 12** at a time |
-| Waking / chasing | wakes when you look at it within 20 m; chases from 10 m; sprints after 3 s within 10 m; lunges within 4 m | wakes from **30 m** and **chases at once**, at its normal speed |
+| Waking / chasing | wakes when you look at it within 20 m; chases from 10 m; sprints after 3 s within 10 m; lunges within 4 m | wakes from **30 m**, **chases at once** and **runs** all the way, as when it lunges |
 | Bite | 10 injury, 10 spores + 0.5/s for 60 s (30), stunned 3 s | spores ×1.65 (bite 15 on the bar, then ≈0.8/s), stunned **4 s** |
 | Lifetime | dies after 120 s awake | **300 s** |
 | Ritual Dagger | can't be used on a zombie | stabbed in the back (as a teammate must be), a zombie dies after **8** stabs *(14)* (5 from ascent 9) and leaves a skeleton; nobody gets anything, and the dagger is kept |
@@ -179,7 +179,7 @@ amount of extra stamina; most effects start 3 s after eating.
 |---|---|---|
 | Cactus | sticks an arm or leg (not head/torso) for up to 4 s, **1 thorn** = 5 on the bar | sticks **any body part**, **2 thorns** = 10 |
 | Thorns | pop out after 30 s solo / 120 s in multiplayer, or pull them out | **120 s** solo; in multiplayer they **never pop out**: pull them out |
-| Cactus ball | +20 on the bar while one is stuck to you | **+40** |
+| Cactus ball | +20 on the bar while one is stuck to you or in your hand | **+40**, held too |
 
 ### Scorpions
 | | Game | Ultimate Ascent at 24 |
@@ -216,7 +216,7 @@ amount of extra stamina; most effects start 3 s after eating.
 |---|---|---|
 | Heat above the river | up to 1.2 every 0.1 s at the surface, fading over 10 m (≈8/s on the bar) | ×1.5 *(15)* (≈12/s) |
 | Touching the river | 25 injury + 25 heat (at most 1/s), pushed up | **100 injury and 200 heat** → bar full at once → **fatal** *(24)* |
-| River height | rises and falls 6.3 m (779 → 785.3) every 72 s: low for about 30 s, rising for about 20 s, about 10 s at the top, falling for about 13 s | **rises and falls 14 m (779 → 793) every 61 s** *(18)*: low for about 21 s, rising for about 16 s, about 16 s near the top, falling for about 9 s; above the game's highest level for 28 s of each cycle; the same for everyone |
+| River height | rises and falls 6.3 m (779 → 785.3) every 72 s: low for about 30 s, rising for about 20 s, about 10 s at the top, falling for about 13 s | **rises and falls 15 m (779 → 794) every 61 s** *(18)*: low for about 21 s, rising for about 16 s, about 16 s near the top, falling for about 9 s; above the game's highest level for 28 s of each cycle; the same for everyone |
 | Lava flows (streams) | 20 injury + 50 heat per touch (1/s), knockback 1000 | **50 injury + 100 heat** → bar full → **fatal** |
 | Lava pillars | knockback 1000 + 10 heat (cliffs 5) | heat ×1.5 |
 | Magma rocks (Caldera and Kiln) | 2.5 heat per touch while standing on them (every 0.75 s); heat field 1/s within 11 m; climbing them does nothing extra | touch **7.5** *(17, 15)*; field ×4 ×1.5 = 6/s nominal, **5/s** on the bar; **climbing them burns 2.5 heat every 0.3 s** (≈8.3/s), on top of touching, like ice rocks' cold |
@@ -229,7 +229,9 @@ amount of extra stamina; most effects start 3 s after eating.
 | Heat above the rising lava | up to 1.5 every 0.25 s, fading over 10 m (≈5/s on the bar) | ×1.5 *(15)*, lost to the 2.5-point steps (still ≈5/s) |
 | Touching the lava | 25 injury + 25 heat (at most 1/s), pushed up | **100 injury and 200 heat** → **fatal** *(24)* |
 | Burning (magma) rocks | as in the Caldera | as in the Caldera |
-| Heat recovery | 1.3 a second, after 8 s | **0.6 a second** *(16)* |
+| Heat recovery | 1.3 a second, after 8 s | **0.5 a second** *(16)* |
+| Hot ash | — | once a minute once the lava rises: 5 s of rumbling as the air thickens, then **3 heat a second** for 15 s (**45** in all) *(18)*, everywhere in the Kiln |
+| Eruptions | none | **once a minute** a column of fire (the Caldera's eruption: heat ×4 ×1.5, the bar fills on the first tick) breaks out 18–32 m from one of the scouts *(17)*, taking turns with the hot ash, never with it, at most 10 s apart: 2–9.5 s after the ash clears, burning 30 s |
 
 ### Petrifying stones (crystals and petrified rock, in the Kiln and elsewhere)
 | | Game | Ultimate Ascent at 24 |
@@ -254,7 +256,7 @@ amount of extra stamina; most effects start 3 s after eating.
 |---|---|---|
 | Bite | catches an arm or leg: FlyTrap +30 on the bar, knocked down 0.5 s, pulled in | catches **any body part**: **+45**, knocked down **0.75 s** |
 | Poison while held | 5 every second | **10 every second** |
-| Escape | each jump −2.5 (12 jumps); a teammate frees you | **18 jumps** |
+| Escape | each jump −2.5 (12 jumps), only while you have stamina (as for webs); a teammate frees you | **18 jumps**, **without stamina**, early presses kept *(9)* (about 7 s of pressing) |
 | Trap cooldown | 2 s | same |
 
 ### Sleep fog
@@ -282,18 +284,18 @@ amount of extra stamina; most effects start 3 s after eating.
 |---|---|---|
 | Spiked fences (Gloom days) | 2.5 injury per touch (at most 1/s) | **15** |
 | Lava sphere (one per Gloom-day map) | heat up to 7.5 every 0.5 s within 3.9 m; touch 25 injury + 25 heat | heat ×1.5; touch **100 injury + 200 heat** → **fatal** |
-| Floor spike traps (2,800) | step on → 0.3 s → 1 s → hit within 1.2 m: **15 injury**, knockback 300, knocked down 0.2 s | the game builds this hit as an explosion: **30 injury**, knockback ×3–4, knocked down 0.6 s **and drowsiness up to passing out** → **fatal** *(24)* |
-| Wall saws (180) | first touch 15 injury (after 2 s without a hit), then 2.5 every 0.25 s while touching (10/s) | first touch **30**, then the same |
+| Floor spike traps (2,800) | step on → spikes ready after 0.3 s → hit 0.8 s after the step, within 1.2 m: **15 injury**, knockback 300, knocked down 0.2 s | the game builds this hit as an explosion: **30 injury**, knockback ×3–4, knocked down 0.6 s, the hit **0.53 s after the step** *(17)*, **and drowsiness up to passing out** → **fatal** *(24)* |
+| Wall saws (180) | run back and forth along their wall; first touch 15 injury (after 2 s without a hit), then 2.5 every 0.25 s while touching (10/s) | run **1.5× as fast**; first touch **30**, then the same |
 | Central Tower saw | nothing: its damage is left empty in the game data | **7.5 per second** |
-| Spike rollers (32) | 5 injury per contact (up to 4/s), pushed away | **10** per contact |
-| Swinging spike balls (156) | up to 25 injury (by swing speed), knockback up to 500, knocked down up to 0.2 s, 1 s cooldown | up to **60** |
+| Spike rollers (32) | turn at 15, 30 or 35° a second; 5 injury per contact (up to 4/s), pushed away | turn **1.5× as fast**; **10** per contact |
+| Swinging spike balls (156) | swing back and forth every 4.2 s; up to 25 injury (by swing speed), knockback up to 500, knocked down up to 0.2 s, 1 s cooldown | swing **1.5× as fast**; up to **60** |
 
 ### Mimic chests (trick luggage)
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
 | Where | about one per Citadel map (Central Tower) | the same, plus **every second ordinary chest in the Citadel** (they keep their loot, like the game's mimics) |
 | Opening | releases sleeping gas for 10 s within 10 m: 5 drowsiness every 0.5 s (10/s) → 100 in 10 s | gas with **5 drowsiness + 5 poison + 5 spores every 0.5 s** (30/s in all) for 10 s; opening any suitcase also hurts for **10 injury** *(21)*; staying in the gas = passing out = **death** *(24)* |
-| Rising gloom | starts after 150 s, rises in 1,200 s | starts after **30 s**, rises **2.5× as fast** (480 s) *(9)* |
+| Rising gloom | starts after 150 s, rises in 1,200 s | starts after **30 s**, reaches the top in **700 s**, as the Kiln's lava *(9)* |
 
 ## Anywhere
 
@@ -326,7 +328,7 @@ amount of extra stamina; most effects start 3 s after eating.
 ### Banana peels
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
-| Slip | 2 s | **10 s**, launched 3× higher (like jellyfish), and your screen **darkens like the Scoutmaster's** for 20 s (no Scoutmaster) |
+| Slip | 2 s | **10 s**, launched 3× higher (like jellyfish); 3 s later your screen **darkens like the Scoutmaster's** and every sound is **muffled** (as in TFA's Ice Fog: sound effects dull and quieter, no music, voices duller) for 20 s (no Scoutmaster) |
 
 ## Food
 
@@ -356,8 +358,8 @@ Petrification heals only 10 per campfire lighting *(16)*, and revives keep it *(
 |---|---|---|
 | Scout's Initiative (red) | you and every scout within 8 m make a super jump, then 3 s of low gravity; **7** petrification per use | within **6 m**, **2 s** of low gravity; **15** petrification *(14)* |
 | Scout's Ambition (yellow) | infinite stamina for 8 s for every scout within 6 m; **30** petrification | **6 s**; **35** petrification *(14)* |
-| Scout's Tenacity (blue) | heals up to 60 (injury, spores, poison, cold, heat, drowsiness, in that order) and 10 s of invincibility; costs half the healing in petrification, 10 to 30; works on a teammate (the user pays) | heals up to **40**, invincible **5 s** (blocking only 75%); costs 1.5× the healing, **20 to 60** *(14)* |
-| Scout's Generosity (green) | clones the item you aim at within 8 m; **25** petrification, **45** for a mystical item | **35**, **60** for a mystical item *(14)* |
+| Scout's Tenacity (blue) | heals up to 60 (injury, spores, poison, cold, heat, drowsiness, in that order) and 10 s of invincibility; costs half the healing in petrification, 10 to 30; works on a teammate (the user pays) | heals up to **40**, invincible **8 s** (blocking only 75%); costs 1.5× the healing, **20 to 60** *(14)* |
+| Scout's Generosity (green) | clones the item you aim at within 8 m; **25** petrification, **45** for a mystical item | **35**, **60** for a mystical item *(14)*; the Warp Compass and the Toxic Drink cost a mystical item's price (from ascent 9 on) |
 
 ## Not on the list, but deadly at 24
 | Threat | Game | Ultimate Ascent at 24 |
@@ -370,4 +372,4 @@ Petrification heals only 10 per campfire lighting *(16)*, and revives keep it *(
 | A teammate's Stick (beach, Tropics, Roots) | cut from the game | lies on the ground from ascent 9; a swing (33% of the swinger's stamina) knocks down every scout and zombie a kick would reach (**2.5 m**, 55° ahead) for **3 s**, without injury |
 | A teammate's Torch (the Mesa's Tomb; suitcases wherever the Lantern is) | a light: 2.5 cold a second off the scouts within 4.5 m while lit, no attack | lit, a swing (right mouse, 33% of the swinger's stamina, 4 s of the Torch's fuel) knocks down every scout and zombie a kick would reach (**2.5 m**, 55° ahead) for **2 s** and burns the scouts for **20** *(14)*; it warms **2 cold a second** *(14)* |
 | A teammate's Blowgun | the dart clears your statuses (except curse), then +120 drowsiness: with the starting 10 curse you fall asleep | the clear keeps 25% of each status ("Nerfed Revives") *(14)*, then **155 drowsiness** (120 × 1.3 *(15)*): with 20 curse that is 175 → pass out → **death** *(24)* |
-| The sun | only the Mesa's sun is hot; sunscreen, an open parasol or a glider held overhead keep it off | hot everywhere except the Alpine *(23)*: outside the Mesa **0.75 heat/s** in direct sunlight (0.5 × 1.5 *(15)*), the Mesa's midday sun burns **6 heat/s** *(18)* (the game's ×1.5 *(15)* below 18); whatever you shield yourself with roasts: clean for 5 s, heavy smoke for 15 s, then burned (parasols 1.5× as long, the Mesa's sun twice as fast) — in the Mesa's midday sun from *(18)*, everywhere *(23)*; **sunscreen lets a quarter of the heat through** *(14)* |
+| The sun | only the Mesa's sun is hot; sunscreen, an open parasol or a glider held overhead keep it off | hot everywhere except the Alpine, up to the Caldera and the Gloom *(23)*: outside the Mesa **0.75 heat/s** in direct sunlight (0.5 × 1.5 *(15)*), the Mesa's midday sun burns **6 heat/s** *(18)* (the game's ×1.5 *(15)* below 18); whatever you shield yourself with roasts: clean for 5 s, heavy smoke for 15 s, then burned (parasols 1.5× as long, the Mesa's sun twice as fast) — in the Mesa's midday sun from *(18)*, everywhere *(23)*; **sunscreen lets a quarter of the heat through** *(14)* |
