@@ -32,6 +32,7 @@ internal sealed class Runtime : MonoBehaviourPunCallbacks
         WeatherGrace.Tick,
         A25_AllWeather.Tick,
         ExtraTornadoes.Tick,
+        SixSlotBackpack.Tick,
     };
 
     private readonly bool[] failed = new bool[Ticks.Length];

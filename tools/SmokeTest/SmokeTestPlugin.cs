@@ -16,6 +16,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using Zorro.Core;
+using Zorro.Core.Serizalization;
 using Status = CharacterAfflictions.STATUSTYPE;
 
 namespace UltimateAscent.SmokeTest;
@@ -149,6 +150,7 @@ internal sealed class Runner : MonoBehaviour
         harmony.CreateClassProcessor(typeof(NoAchievements)).Patch();
         harmony.CreateClassProcessor(typeof(NoRunSave)).Patch();
         harmony.CreateClassProcessor(typeof(HeatSources)).Patch();
+        harmony.CreateClassProcessor(typeof(ShowOwnBackpack)).Patch();
         harmony.CreateClassProcessor(typeof(FogCalls)).Patch();
         harmony.CreateClassProcessor(typeof(CustomRunSpawn)).Patch();
         harmony.CreateClassProcessor(typeof(ForceRecorder)).Patch();
@@ -606,6 +608,7 @@ internal sealed class Runner : MonoBehaviour
             ("Mandrake heard (17)", MandrakeHeard),
             ("held snowball (17)", HeldSnowball),
             ("Auto-Parachute (9, 14)", AutoParachuteCheck),
+            ("six-slot backpack (single-player)", SixSlotBackpackCheck),
             ("Vanilla Wafers (9)", VanillaCookies),
             ("wild foods (9)", WildFoodsCheck),
             ("Stones and Sticks (9, 17)", StonesAndSticks),
@@ -2649,6 +2652,254 @@ internal sealed class Runner : MonoBehaviour
     /// the landing hurts nothing. The first fall (Ascent 14 switched off, in memory) takes one charge,
     /// the second (switched on: two a save) the last two, and it is gone.
     /// </summary>
+    /// <summary>
+    /// The six-slot Backpack (single-player; the test plays solo, offline): a Backpack put on the ground has
+    /// six slots and the six-slot model, and its wheel seven slices spread evenly; six items stashed the
+    /// game's way hang in the bag and the pouches; its contents written and read back keep all six; worn,
+    /// the scout's back shows the model and keeps all six. Told to behave as in multiplayer (in memory), a
+    /// new backpack has the game's four slots and the game's model.
+    /// </summary>
+    private IEnumerator SixSlotBackpackCheck()
+    {
+        Item template = ItemByName("Backpack");
+        // Small things in the bag, tall ones in the pouches, to see the lower pouches' items past the upper ones'.
+        string[] stash = { "Airplane Food", "Granola Bar", "Lantern", "FortifiedMilk", "Energy Drink", "Sunscreen" };
+        List<Item> things = stash.Select(ItemByName).ToList();
+        if (template == null || things.Any(thing => thing == null))
+        {
+            Fail("the Backpack and six items to stash are in the item database", $"Backpack {template != null}, missing: {string.Join(", ", stash.Where((name, i) => things[i] == null))}");
+            yield break;
+        }
+        Character local = Local;
+        Vector2 look = local.data.lookValues;
+        Check("the test plays single-player (offline), where the backpack has six slots", SixSlotBackpack.On, $"offline {PhotonNetwork.OfflineMode}");
+        local.refs.items.EquipSlot(Optionable<byte>.None);
+        yield return new WaitForSeconds(0.3f);
+        Backpack backpack = SpawnInFront(template, 1.4f)?.GetComponent<Backpack>();
+        if (backpack == null)
+        {
+            Fail("a Backpack can be put on the ground");
+            yield break;
+        }
+        yield return new WaitForSeconds(1.5f);
+        BackpackData data = backpack.GetData<BackpackData>(DataEntryKey.BackpackData);
+        MeshFilter groundFilter = backpack.groundMesh != null ? backpack.groundMesh.GetComponent<MeshFilter>() : null;
+        MeshFilter wornFilter = backpack.heldMesh != null ? backpack.heldMesh.GetComponent<MeshFilter>() : null;
+        BackpackVisuals visuals = backpack.GetComponent<BackpackVisuals>();
+        float anchorsOff = -1f;
+        if (wornFilter != null && visuals != null && visuals.backpackSlots.Length >= 6 && SixSlotBackpack.pouches != null)
+        {
+            anchorsOff = Enumerable.Range(0, 4).Max(i => Vector3.Distance(visuals.backpackSlots[i + 2].position, wornFilter.transform.TransformPoint(SixSlotBackpack.pouches[i])));
+        }
+        Check("a Backpack on the ground has six slots and the six-slot model, slots 3-6 hanging in its pouches",
+            data.itemSlots.Length == 6 && groundFilter != null && groundFilter.sharedMesh == SixSlotBackpack.ground && wornFilter != null && wornFilter.sharedMesh == SixSlotBackpack.worn && anchorsOff >= 0f && anchorsOff < 0.01f,
+            $"{data.itemSlots.Length} slots, ground mesh '{(groundFilter != null && groundFilter.sharedMesh != null ? groundFilter.sharedMesh.name : "none")}', worn mesh '{(wornFilter != null && wornFilter.sharedMesh != null ? wornFilter.sharedMesh.name : "none")}', pouch anchors at most {anchorsOff:0.000} m off");
+        Texture shownIcon = backpack.UIData.GetIcon();
+        Check("the Backpack has the six-slot icon, in the inventory and on the ground",
+            SixSlotBackpack.icon != null && template.UIData.icon == SixSlotBackpack.icon && shownIcon == SixSlotBackpack.icon,
+            $"the Backpack's icon '{(template.UIData.icon != null ? template.UIData.icon.name : "none")}', this one's '{(shownIcon != null ? shownIcon.name : "none")}'");
+        local.data.lookValues = new Vector2(look.x, -45f);
+        yield return new WaitForSeconds(1f);
+        Screenshot("six-slot-backpack-ground-empty");
+        yield return new WaitForSeconds(0.3f);
+        Step("open the six-slot backpack's wheel", () =>
+        {
+            backpack.Interact(local);
+            BackpackWheel wheel = GUIManager.instance.backpackWheel;
+            int active = wheel.slices.Count(slice => slice != null && slice.gameObject.activeSelf);
+            List<float> angles = wheel.slices.Select(slice => Mathf.Repeat(slice.transform.localEulerAngles.z, 360f)).OrderBy(a => a).ToList();
+            float step = 360f / 7f;
+            float worst = 0f;
+            for (int i = 0; i < angles.Count; i++)
+            {
+                float gap = (i + 1 < angles.Count ? angles[i + 1] : angles[0] + 360f) - angles[i];
+                worst = Mathf.Max(worst, Mathf.Abs(gap - step));
+            }
+            Texture wear = wheel.slices[0].image != null ? wheel.slices[0].image.texture : null;
+            Check("its wheel has seven slices (wearing it and six slots), spread evenly, the wearing slice with the six-slot icon",
+                wheel.gameObject.activeSelf && wheel.slices.Length == 7 && active == 7 && worst < 0.5f && wear == SixSlotBackpack.icon,
+                $"open {wheel.gameObject.activeSelf}, {wheel.slices.Length} slices, {active} shown, angles {string.Join(", ", angles.Select(a => a.ToString("0.0")))}, furthest from even {worst:0.0}°, wearing slice '{(wear != null ? wear.name : "none")}'");
+            Screenshot("six-slot-backpack-wheel");
+        });
+        yield return null;
+        GUIManager.instance.CloseBackpackWheel();
+        yield return new WaitForSeconds(0.3f);
+        // Six items, stashed the game's way: each in the hand, then into its slot.
+        for (byte slot = 0; slot < 6; slot++)
+        {
+            yield return SpawnIntoHand(things[slot]);
+            if (held == null)
+            {
+                yield break;
+            }
+            byte into = slot;
+            Step($"stash {stash[slot]} in slot {slot + 1}", () => backpack.Stash(local, into));
+            yield return new WaitForSeconds(0.6f);
+        }
+        yield return new WaitForSeconds(1f);
+        List<string> contents = data.itemSlots.Select(s => s.IsEmpty() ? "empty" : s.prefab.gameObject.name).ToList();
+        int hanging = Enumerable.Range(0, 6).Count(i => visuals.TryGetSpawnedItem((byte)i, out Item shown) && shown.backpackSlotTransform == visuals.backpackSlots[i]);
+        Check("six items stashed the game's way fill all six slots and hang on the backpack, 3-6 in the pouches",
+            Enumerable.Range(0, 6).All(i => !data.itemSlots[i].IsEmpty() && data.itemSlots[i].prefab.itemID == things[i].itemID) && hanging == 6,
+            $"slots: {string.Join(", ", contents)}; {hanging} of 6 shown at their anchors");
+        local.data.lookValues = new Vector2(look.x, -45f);
+        yield return new WaitForSeconds(1f);
+        Screenshot("six-slot-backpack-ground-full");
+        yield return new WaitForSeconds(0.3f);
+        local.data.lookValues = look;
+        yield return FrontPicture(backpack, 0f, "six-slot-backpack-pouches-front");
+        yield return FrontPicture(backpack, 40f, "six-slot-backpack-pouches-side");
+        Step("the full backpack's wheel", () =>
+        {
+            backpack.Interact(local);
+            BackpackWheel wheel = GUIManager.instance.backpackWheel;
+            int icons = Enumerable.Range(1, 6).Count(i => wheel.slices[i].image != null && wheel.slices[i].image.enabled && wheel.slices[i].image.texture == things[i - 1].UIData.GetIcon());
+            Check("its wheel shows each slot's item", icons == 6, $"{icons} of 6 slices show their item");
+            Screenshot("six-slot-backpack-wheel-full");
+        });
+        yield return null;
+        GUIManager.instance.CloseBackpackWheel();
+        // Written and read back (as a save or a sync does): all six stay.
+        Step("six-slot contents written and read back", () =>
+        {
+            BinarySerializer writer = new BinarySerializer(4000, Unity.Collections.Allocator.Temp);
+            data.Serialize(writer);
+            byte[] bytes = writer.buffer.ToByteArray();
+            writer.Dispose();
+            BackpackData copy = new BackpackData();
+            copy.Init();
+            BinaryDeserializer reader = new BinaryDeserializer(bytes, Unity.Collections.Allocator.Temp);
+            copy.Deserialize(reader);
+            reader.Dispose();
+            Check("written and read back, the six-slot contents keep all six items", copy.itemSlots.Length == 6 && Enumerable.Range(0, 6).All(i => !copy.itemSlots[i].IsEmpty() && copy.itemSlots[i].prefab.itemID == things[i].itemID),
+                $"{bytes.Length} bytes; read back: {string.Join(", ", copy.itemSlots.Select(s => s.IsEmpty() ? "empty" : s.prefab.gameObject.name))}");
+        });
+        local.data.lookValues = look;
+        local.refs.items.lastEquippedSlotTime = 0f;
+        backpack.Wear(local);
+        for (float until = Time.realtimeSinceStartup + 4f; Time.realtimeSinceStartup < until && local.player.backpackSlot.IsEmpty();)
+        {
+            yield return null;
+        }
+        yield return new WaitForSeconds(1f);
+        BackpackOnBackVisuals back = local.GetComponentsInChildren<BackpackOnBackVisuals>(true).FirstOrDefault(v => v.backpackType == BackpackSlot.BackpackType.Backpack);
+        MeshFilter backFilter = back != null ? back.GetComponentsInChildren<MeshFilter>(true).FirstOrDefault(f => f.sharedMesh == SixSlotBackpack.worn) : null;
+        BackpackData worn = null;
+        if (!local.player.backpackSlot.IsEmpty())
+        {
+            local.player.backpackSlot.data.TryGetDataEntry(DataEntryKey.BackpackData, out worn);
+        }
+        int onBack = back == null ? 0 : Enumerable.Range(0, 6).Count(i => back.TryGetSpawnedItem((byte)i, out Item shown) && shown.backpackSlotTransform == back.backpackSlots[i]);
+        Check("worn, the six-slot backpack keeps all six items and the scout's back shows the six-slot model",
+            worn != null && worn.itemSlots.Length == 6 && worn.itemSlots.All(s => !s.IsEmpty()) && backFilter != null && onBack == 6 && local.player.backpackSlot.prefab.UIData.icon == SixSlotBackpack.icon,
+            $"worn {worn != null}, {(worn != null ? worn.itemSlots.Count(s => !s.IsEmpty()) : 0)} of {(worn != null ? worn.itemSlots.Length : 0)} slots full, back model six-slot {backFilter != null}, {onBack} of 6 items shown on the back, slot 4's icon six-slot {local.player.backpackSlot.prefab.UIData.icon == SixSlotBackpack.icon}");
+        yield return BackPicture(local, "six-slot-backpack-back");
+        // Off the back again: dropped the game's way and taken away, with what it holds.
+        local.refs.items.lastEquippedSlotTime = 0f;
+        local.refs.items.EquipSlot(Optionable<byte>.Some(3));
+        yield return new WaitForSeconds(0.7f);
+        Item inHand = local.data.currentItem;
+        HashSet<Item> before = new HashSet<Item>(Item.ALL_ITEMS);
+        if (inHand is Backpack)
+        {
+            Step("drop the six-slot backpack", () =>
+            {
+                local.refs.items.photonView.RPC("DropItemRpc", RpcTarget.All, 0f, (byte)3, inHand.transform.position + Vector3.up * 0.25f, Vector3.zero, inHand.transform.rotation, local.player.GetItemSlot(3).data, false);
+                local.refs.items.EquipSlot(Optionable<byte>.None);
+            });
+            yield return new WaitForSeconds(1f);
+        }
+        Backpack dropped = Item.ALL_ITEMS.OfType<Backpack>().FirstOrDefault(i => i != null && !before.Contains(i));
+        int keptOnGround = dropped != null ? dropped.GetData<BackpackData>(DataEntryKey.BackpackData).itemSlots.Count(s => !s.IsEmpty()) : 0;
+        Check("dropped again, the six-slot backpack still holds all six", dropped != null && keptOnGround == 6 && local.player.backpackSlot.IsEmpty(),
+            dropped == null ? "nothing dropped" : $"{keptOnGround} items, slot 4 empty {local.player.backpackSlot.IsEmpty()}");
+        if (dropped != null)
+        {
+            PhotonNetwork.Destroy(dropped.gameObject);
+        }
+        // As in multiplayer: the game's four slots and the game's model.
+        SixSlotBackpack.AsMultiplayer = true;
+        try
+        {
+            BackpackData plain = new BackpackData();
+            plain.Init();
+            Backpack other = SpawnInFront(template, 1.4f)?.GetComponent<Backpack>();
+            yield return new WaitForSeconds(1.5f);
+            MeshFilter otherGround = other != null && other.groundMesh != null ? other.groundMesh.GetComponent<MeshFilter>() : null;
+            MeshFilter otherWorn = other != null && other.heldMesh != null ? other.heldMesh.GetComponent<MeshFilter>() : null;
+            int otherSlots = other != null ? other.GetData<BackpackData>(DataEntryKey.BackpackData).itemSlots.Length : -1;
+            Check("as in multiplayer, a backpack has the game's four slots and the game's model",
+                plain.itemSlots.Length == 4 && otherSlots == 4 && otherGround != null && otherGround.sharedMesh != SixSlotBackpack.ground && otherWorn != null && otherWorn.sharedMesh != SixSlotBackpack.worn,
+                $"new contents {plain.itemSlots.Length} slots, a new backpack {otherSlots} slots, ground mesh '{(otherGround != null && otherGround.sharedMesh != null ? otherGround.sharedMesh.name : "none")}', worn mesh '{(otherWorn != null && otherWorn.sharedMesh != null ? otherWorn.sharedMesh.name : "none")}'");
+            if (other != null)
+            {
+                PhotonNetwork.Destroy(other.gameObject);
+            }
+        }
+        finally
+        {
+            SixSlotBackpack.AsMultiplayer = false;
+        }
+        // Switched off in the config (in memory): single-player gets the game's four-slot Backpack and its icon.
+        ConfigEntry<bool> sixSlots = UltimateAscent.Plugin.SixSlotBackpack;
+        bool sixSaved = sixSlots.Value;
+        try
+        {
+            sixSlots.Value = false;
+            yield return null;
+            BackpackData plain = new BackpackData();
+            plain.Init();
+            Backpack other = SpawnInFront(template, 1.4f)?.GetComponent<Backpack>();
+            yield return new WaitForSeconds(1.5f);
+            MeshFilter otherGround = other != null && other.groundMesh != null ? other.groundMesh.GetComponent<MeshFilter>() : null;
+            int otherSlots = other != null ? other.GetData<BackpackData>(DataEntryKey.BackpackData).itemSlots.Length : -1;
+            Texture gameIcon = template.UIData.icon;
+            Check("with \"Six-Slot Backpack\" off, single-player has the game's four-slot Backpack, its model and its icon",
+                !SixSlotBackpack.On && plain.itemSlots.Length == 4 && otherSlots == 4 && otherGround != null && otherGround.sharedMesh != SixSlotBackpack.ground && gameIcon != null && gameIcon != SixSlotBackpack.icon,
+                $"on {SixSlotBackpack.On}, new contents {plain.itemSlots.Length} slots, a new backpack {otherSlots} slots, ground mesh '{(otherGround != null && otherGround.sharedMesh != null ? otherGround.sharedMesh.name : "none")}', icon '{(gameIcon != null ? gameIcon.name : "none")}'");
+            if (other != null)
+            {
+                PhotonNetwork.Destroy(other.gameObject);
+            }
+        }
+        finally
+        {
+            sixSlots.Value = sixSaved;
+        }
+        yield return null;
+        Check("switched back on, the Backpack has the six-slot icon again", template.UIData.icon == SixSlotBackpack.icon,
+            $"icon '{(template.UIData.icon != null ? template.UIData.icon.name : "none")}'");
+        yield return new WaitForSeconds(0.5f);
+    }
+
+    /// <summary>A picture of a backpack on the ground from in front of its flap (turned by <paramref name="turn"/> degrees), a little above.</summary>
+    private IEnumerator FrontPicture(Backpack backpack, float turn, string name)
+    {
+        MeshFilter mesh = backpack.groundMesh != null ? backpack.groundMesh.GetComponent<MeshFilter>() : null;
+        Renderer look = mesh != null ? mesh.GetComponent<Renderer>() : null;
+        Vector3 centre = look != null ? look.bounds.center : backpack.transform.position;
+        // The backpack meshes' -Y is the front of the bag (its flap), their +Z up.
+        Vector3 front = Vector3.ProjectOnPlane((mesh != null ? mesh.transform : backpack.transform).TransformDirection(Vector3.down), Vector3.up);
+        front = Quaternion.Euler(0f, turn, 0f) * (front.sqrMagnitude > 0.001f ? front.normalized : Vector3.forward);
+        GameObject holder = new GameObject("UltimateAscentTestCamera");
+        try
+        {
+            Camera camera = holder.AddComponent<Camera>();
+            camera.depth = (Camera.main != null ? Camera.main.depth : 0f) + 10f;
+            camera.fieldOfView = 40f;
+            camera.nearClipPlane = 0.05f;
+            holder.transform.position = centre + front * 1.4f + Vector3.up * 0.8f;
+            holder.transform.LookAt(centre);
+            yield return new WaitForSeconds(0.5f);
+            Screenshot(name);
+            yield return new WaitForSeconds(0.5f);
+        }
+        finally
+        {
+            Destroy(holder);
+        }
+    }
+
     private IEnumerator AutoParachuteCheck()
     {
         Item template = AutoParachute.Template;
@@ -2868,6 +3119,7 @@ internal sealed class Runner : MonoBehaviour
     private IEnumerator BackPicture(Character local, string name)
     {
         AutoParachute.ShowOwnBackModel = true;
+        ShowOwnBackpack.On = true;
         GameObject holder = new GameObject("UltimateAscentTestCamera");
         try
         {
@@ -2886,6 +3138,7 @@ internal sealed class Runner : MonoBehaviour
         finally
         {
             AutoParachute.ShowOwnBackModel = false;
+            ShowOwnBackpack.On = false;
             Destroy(holder);
         }
     }
@@ -8394,6 +8647,21 @@ internal sealed class Runner : MonoBehaviour
             Shield(false);
             Protect(true);
             local.data.lookValues = look;
+        }
+    }
+
+    /// <summary>While on, the scout's own back model shows too (the game hides it in first person), for pictures from behind.</summary>
+    [HarmonyPatch(typeof(CharacterBackpackHandler), nameof(CharacterBackpackHandler.LateUpdate))]
+    internal static class ShowOwnBackpack
+    {
+        internal static bool On;
+
+        private static void Postfix(CharacterBackpackHandler __instance)
+        {
+            if (On && __instance.character == Character.localCharacter && __instance.activeBackpackVisuals != null && !__instance.character.player.backpackSlot.IsEmpty())
+            {
+                __instance.activeBackpackVisuals.SetViewActive(true);
+            }
         }
     }
 

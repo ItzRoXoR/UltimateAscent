@@ -23,7 +23,7 @@ public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "UltimateAscent";
     public const string Name = "Ultimate Ascent";
-    public const string Version = "1.3.1";
+    public const string Version = "1.3.2";
 
     internal static ManualLogSource Log;
     internal static Plugin Instance;
@@ -43,6 +43,9 @@ public sealed class Plugin : BaseUnityPlugin
 
     /// <summary>Off: the mod's new items (Climbing Chalk, Lightweight Parasol, Auto-Parachute, Vanilla Wafers, wild foods) do not spawn in regular runs.</summary>
     internal static ConfigEntry<bool> NewItems;
+
+    /// <summary>Off: single-player keeps the game's four-slot Backpack, as multiplayer does.</summary>
+    internal static ConfigEntry<bool> SixSlotBackpack;
 
     private Harmony harmony;
 
@@ -117,6 +120,8 @@ public sealed class Plugin : BaseUnityPlugin
         NewItems = Config.Bind("Items", "New Items", true,
             "The mod's new items spawn in regular runs from ascent 9: the Climbing Chalk, the Lightweight Parasol (the Roots parasol), the Auto-Parachute, the Warp Compass, the Toxic Drink, the Vanilla Wafers (half of the Scout Cookies), the Cherry Lollipop (half of the Big Lollipops), the Torch in suitcases (half as often as the Lantern), the wild Wonderberry, Green Clusterberry and Weird Shroom, and the Stones and Sticks on the ground. Off: none of them spawns in regular runs; the regular Parasol spawns wherever the Lightweight Parasol would, the Scout Cookies and the Big Lollipop keep all their spawns, and Torches hang only in the Mesa's Tomb. Custom runs keep their own switches for the items on the Custom Run screen (the Cherry Lollipop and the Vanilla Wafers have their own there); the wild foods, Stones and Sticks (not on that screen) follow this switch there too. Only the host's settings count.");
         NewItems.SettingChanged += (_, _) => HostOptions.Invalidate();
+        SixSlotBackpack = Config.Bind("Items", "Six-Slot Backpack", true,
+            "Single-player only, on every ascent: the Backpack holds six items instead of four, with four pouches on its sides and its own icon. Off: the game's four-slot Backpack, as in multiplayer (where it always is). A change applies to backpacks that appear after it; one already in your hands or on your back stays as it is until the next run.");
         VerboseLogging = Config.Bind("Debug", "Verbose Logging", false, "Writes extra diagnostic lines to the BepInEx log.");
         // The player's file is never rewritten on loading: an update only adds its new entries (with their
         // defaults), and entries a newer version no longer uses stay as the player left them (BepInEx keeps

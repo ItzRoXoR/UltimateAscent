@@ -4,7 +4,7 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>UltimateAscent</AssemblyName>
     <RootNamespace>UltimateAscent</RootNamespace>
-    <Version>1.3.1</Version>
+    <Version>1.3.2</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -49,6 +49,9 @@
          (from the game files) with every vertex marked by its stripe. -->
     <EmbeddedResource Include="Resources\LightweightParasol_icon.png" LogicalName="UltimateAscent.LightweightParasol_icon.png" />
     <EmbeddedResource Include="Resources\LightweightParasol_canopy.bin" LogicalName="UltimateAscent.LightweightParasol_canopy.bin" />
+    <!-- The six-slot Backpack (single-player): its worn and ground meshes and pouch anchors (tools/SixSlotBackpack/build_mesh.py). -->
+    <EmbeddedResource Include="Resources\SixSlotBackpack.bin" LogicalName="UltimateAscent.SixSlotBackpack.bin" />
+    <EmbeddedResource Include="Resources\SixSlotBackpack_icon.png" LogicalName="UltimateAscent.SixSlotBackpack_icon.png" />
     <!-- The Stone's break: the smash at 4 s of the user's rock-smash clip (mono, 16-bit PCM). -->
     <EmbeddedResource Include="Resources\Stone_break.wav" LogicalName="UltimateAscent.Stone_break.wav" />
     <EmbeddedResource Include="Resources\PinkLollipop.png" LogicalName="UltimateAscent.PinkLollipop.png" />

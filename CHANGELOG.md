@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.3.2
+
+For PEAK 2.6.b.
+
+* Six-slot Backpack (single-player): in solo play the Backpack holds six items instead of four, at every
+  ascent. Four orange pouches sit on its sides (two stacked on each) in place of its side handles; slots 1
+  and 2 hang in the bag, 3 to 6 in the pouches (the upper pouches' items stand high enough to leave the
+  lower ones in view), and its wheel has seven slices (wearing it and six slots). Its contents save and
+  load with all six, and it has its own icon (the game's unused six-slot backpack picture, toned to its
+  Backpack icon's colours). In any online lobby every backpack stays the game's. The new setting Items >
+  Six-Slot Backpack (on by default) switches it off, single-player included.
+
 ## 1.3.1
 
 For PEAK 2.6.b.

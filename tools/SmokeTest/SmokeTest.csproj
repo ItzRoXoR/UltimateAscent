@@ -49,6 +49,10 @@
       <HintPath>$(ManagedDir)\Sirenix.Serialization.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="Unity.Collections">
+      <HintPath>$(ManagedDir)\Unity.Collections.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="PhotonUnityNetworking">
       <HintPath>$(ManagedDir)\PhotonUnityNetworking.dll</HintPath>
       <Private>false</Private>

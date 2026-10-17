@@ -155,6 +155,7 @@ vanilla way (also late joiners and campfire saves). The host's ascent switches a
 | Unlocks | Highest Unlocked Ascent | 0 | Your progress beyond 8 (kept by the mod) |
 | Ascents | Ascent 9 … Ascent 25 | true | Switches that ascent's own rule on or off; the other ascents keep theirs (ascent 25 with *Ascent 20* off plays without Bing Bong's rule). The host's switches apply to everyone |
 | Items | New Items | true | The mod's new items spawn in regular runs from ascent 9: the Climbing Chalk, the Lightweight Parasol (the Roots parasol), the Auto-Parachute, the Warp Compass, the Toxic Drink, the Vanilla Wafers (half of the Scout Cookies), the Cherry Lollipop (half of the Big Lollipops), the Torch in suitcases (half as often as the Lantern), the wild Wonderberry, Green Clusterberry and Weird Shroom, and the Stones and Sticks on the ground. Off: none of them spawns in regular runs; the regular Parasol spawns wherever the Lightweight Parasol would, the Scout Cookies and the Big Lollipop keep all their spawns, and Torches hang only in the Mesa's Tomb. Custom runs keep their own switches for the items on the Custom Run screen (the Cherry Lollipop and the Vanilla Wafers have their own there); the wild foods, Stones and Sticks (not on that screen) follow this switch there too. The host's switch applies to everyone |
+| Items | Six-Slot Backpack | true | Single-player only, on every ascent: the Backpack holds six items, with four pouches on its sides and its own icon. Off: the game's four-slot Backpack, as in multiplayer. A change applies to backpacks that appear after it |
 | Ascents | Cold Nights | true | The night's own cold (the game's rule from ascent 5; harsher from 18). Off: the night itself no longer makes you cold, on every ascent; cold from anything else (storms, snow, water, the Alpine) stays. Custom runs keep their own Cold Night setting. The host's switch applies to everyone |
 | Debug | Verbose Logging | false | Extra log lines |
 
@@ -192,6 +193,11 @@ vanilla way (also late joiners and campfire saves). The host's ascent switches a
   fight over the same ascent slots); BepInEx refuses to load Ultimate Ascent next to them.
 * **Russian:** the new items (and the swing prompt) have Russian names; the game's cut items it brings back
   use the game's own Russian names. Other languages show the English names.
+* **Six-slot Backpack (single-player):** in solo play the Backpack holds **six items** instead of four, at
+  every ascent. It has four orange pouches on its sides (two stacked on each) and no side handles, and
+  its own icon; slots 1 and 2 hang in the bag, 3 to 6 in the pouches, and its wheel has a slice for each.
+  In any online lobby, even one you host alone, every backpack stays the game's. The *Six-Slot Backpack*
+  setting switches it off (the game's four-slot Backpack in single-player too).
 * **Breaking free** from a spider's web or a fly trap (from ascent 9): jumps while caught need no stamina
   and cost none, and a jump pressed too early counts as soon as the next one can. The game counted them
   only with stamina left, which ran out half way at the higher ascents, and dropped early presses.
