@@ -33,6 +33,8 @@ internal static class RunLifecycle
         A18_AlpineNights.Reset,
         CalderaTide.Reset,
         KilnAsh.Reset,
+        AlpineSnowfall.Reset,
+        ChallengeModes.Reset,
         WeatherPhases.Reset,
         WeatherGrace.Reset,
         A25_AllWeather.Reset,

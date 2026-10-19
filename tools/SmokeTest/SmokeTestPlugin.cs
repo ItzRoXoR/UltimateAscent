@@ -149,6 +149,8 @@ internal sealed class Runner : MonoBehaviour
         harmony.CreateClassProcessor(typeof(NoSteamStats)).Patch();
         harmony.CreateClassProcessor(typeof(NoAchievements)).Patch();
         harmony.CreateClassProcessor(typeof(NoRunSave)).Patch();
+        harmony.CreateClassProcessor(typeof(NoSteamStatWrites)).Patch();
+        harmony.CreateClassProcessor(typeof(NoRunSaveDeletion)).Patch();
         harmony.CreateClassProcessor(typeof(HeatSources)).Patch();
         harmony.CreateClassProcessor(typeof(ShowOwnBackpack)).Patch();
         harmony.CreateClassProcessor(typeof(FogCalls)).Patch();
@@ -541,6 +543,10 @@ internal sealed class Runner : MonoBehaviour
         }
         yield return new WaitForSecondsRealtime(5f);
         Step("ascent catalog", CheckCatalog);
+        if (Selected("challenges: no darkness before the climb"))
+        {
+            yield return Guard("challenges: no darkness before the climb", ClearBeforeTheClimb());
+        }
 
         Step("play solo", () => FindAnyObjectByType<MainMenu>().PlaySoloClicked());
         yield return Until("the airport", 240f, () => SceneManager.GetActiveScene().name == "Airport" && !LoadingScreenHandler.loading && Local != null &&
@@ -559,7 +565,10 @@ internal sealed class Runner : MonoBehaviour
             Finish();
             yield break;
         }
-        yield return CustomRunScreen();
+        if (Selected("challenges and cosmetics in the airport"))
+        {
+            yield return Guard("challenges and cosmetics in the airport", AirportCosmetics());
+        }
         Step("departure", Depart);
 
         yield return Until("the island", 300f, () => Rules.InRun && !LoadingScreenHandler.loading && MapHandler.ExistsAndInitialized && Local != null && Local.data != null);
@@ -631,6 +640,7 @@ internal sealed class Runner : MonoBehaviour
             ("storms between Apocalypse weather (25)", ApocalypseBreaks),
             ("Energy Drink burst knocks nobody out (17)", EnergyDrinkBurstCheck),
             ("snowstorm heat, sunscreen and the sun (18, 23)", StormAndSun),
+            ("snowstorm shelter (9)", SnowstormShelterCheck),
             ("TFA's Apocalypse events stay TFA's", TfaEvents),
             ("Bing Bong (20)", () => BingBong(wake)),
             ("fog (9, 18)", Fog),
@@ -644,6 +654,7 @@ internal sealed class Runner : MonoBehaviour
             ("Stones and Sticks in the Tropics or the Roots (9)", StonesAndSticksSecond),
             ("Alpine (18, 23)", Alpine),
             ("ascent 18 weather: Gloom fog, tornado grip, Mesa sun (18, 25)", Weather18),
+            ("Alpine snowfall", AlpineSnow),
             ("after the Alps (18)", AfterAlps),
             ("Caldera lava tide (18)", CalderaTideHeight),
             ("recovery rates and the Citadel (16, 17, 22)", RecoveryAndCitadel),
@@ -653,6 +664,8 @@ internal sealed class Runner : MonoBehaviour
             ("spinning traps, saws and pressure plates in the Citadel (17)", SpinningTraps),
             ("Kiln: ash and eruptions (17, 18)", KilnCheck),
             ("bees knock a scout out (17, 24)", BeeKnockout),
+            // Last: it ends the climb.
+            ("challenges and cosmetics in the climb", ChallengesInClimb),
         };
         foreach ((string name, Func<IEnumerator> run) in steps)
         {
@@ -668,6 +681,380 @@ internal sealed class Runner : MonoBehaviour
             yield return Guard(name, run());
         }
         Finish();
+    }
+
+    /// <summary>A step whose name holds one of the -Only words (every step without -Only).</summary>
+    private bool Selected(string name) => only == null || only.Any(word => name.IndexOf(word, StringComparison.OrdinalIgnoreCase) >= 0);
+
+    /// <summary>A click on a UI element's middle, the way the mouse would.</summary>
+    private static void ClickOn(RectTransform rect)
+    {
+        Vector3[] corners = Corners(rect);
+        Canvas canvas = rect.GetComponentInParent<Canvas>().rootCanvas;
+        ClickAt(RectTransformUtility.WorldToScreenPoint(canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : canvas.worldCamera, (corners[0] + corners[2]) * 0.5f));
+    }
+
+    private static PersistentPlayerData MyData => GameHandler.GetService<PersistentPlayerDataService>().GetPlayerData(PhotonNetwork.LocalPlayer);
+
+    /// <summary>
+    /// The challenges and the mod's cosmetics in the airport. The Blind Mode and Hot Mode boxes in the boarding pass's
+    /// header: both click on and off, and on ascent 23 Hot Mode shows ticked and cannot be changed. The passport: the Orange Helmet
+    /// and the VR Headset are hats 45 and 46 (the ice hoods moved two along), the Orange Spacesuit the last outfit;
+    /// locked, a click shows how to unlock them; unlocked (in the mod's save), each is worn on the passport's scout,
+    /// saved in the mod's save and not in a Steam stat. Then, for the climb: Blind Mode and Hot Mode on, the Astronaut
+    /// suit on, nothing unlocked (smoketest.ps1 puts the mod's save back afterwards).
+    /// </summary>
+    private IEnumerator AirportCosmetics()
+    {
+        Info("the mod's save", ModSave.FilePath);
+        BoardingPass pass = GUIManager.instance.boardingPass;
+        if (!pass.isOpen)
+        {
+            pass.Open();
+        }
+        yield return new WaitForSecondsRealtime(1.5f);
+        Check("the Blind Mode and Hot Mode boxes are in the boarding pass header", ChallengeModesUi.Shown && ChallengeModesUi.BlindBox != null && ChallengeModesUi.HotBox != null);
+        if (!ChallengeModesUi.Shown)
+        {
+            yield break;
+        }
+        ChallengeModes.Blind = false;
+        ChallengeModes.Hot = false;
+        pass.ascentIndex = 10;
+        pass.UpdateAscent();
+        yield return new WaitForSecondsRealtime(0.3f);
+        ClickOn((RectTransform)ChallengeModesUi.BlindBox.transform);
+        yield return new WaitForSecondsRealtime(0.3f);
+        ClickOn((RectTransform)ChallengeModesUi.HotBox.transform);
+        yield return new WaitForSecondsRealtime(0.3f);
+        Check("a click ticks Blind Mode and Hot Mode", ChallengeModes.Blind && ChallengeModes.Hot && ChallengeModesUi.BlindBox.isOn && ChallengeModesUi.HotBox.isOn,
+            $"Blind Mode {ChallengeModes.Blind} (shown {ChallengeModesUi.BlindBox.isOn}), Hot Mode {ChallengeModes.Hot} (shown {ChallengeModesUi.HotBox.isOn})");
+        Screenshot("challenge-boxes");
+        yield return new WaitForSecondsRealtime(1f);
+        ClickOn((RectTransform)ChallengeModesUi.HotBox.transform);
+        yield return new WaitForSecondsRealtime(0.3f);
+        Check("another click takes Hot Mode off", !ChallengeModes.Hot && !ChallengeModesUi.HotBox.isOn);
+        pass.ascentIndex = 23;
+        pass.UpdateAscent();
+        yield return new WaitForSecondsRealtime(0.3f);
+        ClickOn((RectTransform)ChallengeModesUi.HotBox.transform);
+        yield return new WaitForSecondsRealtime(0.3f);
+        Check("on ascent 23 Hot Mode shows ticked and cannot be changed", ChallengeModesUi.HotBox.isOn && !ChallengeModesUi.HotBox.interactable && !ChallengeModes.Hot,
+            $"shown {ChallengeModesUi.HotBox.isOn}, can be changed {ChallengeModesUi.HotBox.interactable}, own box {ChallengeModes.Hot}");
+        Screenshot("challenge-boxes-ascent-23");
+        yield return new WaitForSecondsRealtime(1f);
+        pass.ascentIndex = target;
+        pass.UpdateAscent();
+        pass.Close();
+        yield return new WaitForSecondsRealtime(1f);
+
+        Customization customization = Singleton<Customization>.Instance;
+        string savedUnlocks = ModSave.Get("unlocked");
+        ModSave.Set("unlocked", "");
+        int helmet = ModCosmetics.IndexOf("orangehelmet");
+        int vr = ModCosmetics.IndexOf("vrheadset");
+        int suit = ModCosmetics.IndexOf("orangespacesuit");
+        CustomizationRefs refs = Local.refs.customization.refs;
+        string Row(int i) => i >= 0 && i < refs.playerHats.Length ? refs.playerHats[i].name : "none";
+        CustomizationOption blue = customization.fits.FirstOrDefault(f => f != null && f.name == "Fit_Bundled_Blue");
+        Check("the Orange Helmet and the VR Headset are the last hats, at their models' places; the ice hoods two along",
+            helmet == 45 && vr == 46 && customization.hats.Length == 47 && Row(45) == "SpaceHelmet Orange" && Row(46) == "VRHeadset" && Row(47) == "Ice Hood Blue" && blue != null && blue.overrideHatIndex == 47,
+            $"hats {helmet}/{vr} of {customization.hats.Length}; models 45-48: {Row(45)}, {Row(46)}, {Row(47)}, {Row(48)}; Bundled Blue wears {blue?.overrideHatIndex}");
+        Check("the Orange Spacesuit is the last outfit: the Astronaut suit in orange",
+            suit == customization.fits.Length - 1 && customization.fits[suit].fitMaterial != null && customization.fits[suit].fitMaterial.name == "M_Scout_Space_Orange",
+            $"outfit {suit} of {customization.fits.Length}, material '{(suit >= 0 ? customization.fits[suit].fitMaterial?.name : "")}'");
+        Check("all three are locked, with no badge of their own", helmet >= 0 && vr >= 0 && suit >= 0 && customization.hats[helmet].IsLocked && customization.hats[vr].IsLocked && customization.fits[suit].IsLocked
+            && customization.hats[vr].requiredAchievement == ACHIEVEMENTTYPE.NONE && customization.fits[suit].requiredAchievement == ACHIEVEMENTTYPE.NONE);
+
+        PassportManager passport = PassportManager.instance;
+        passport.ToggleOpen();
+        yield return new WaitForSecondsRealtime(1.5f);
+        IEnumerator ToOption(Customization.Type type, int index)
+        {
+            passport.OpenTab(type);
+            yield return new WaitForSecondsRealtime(0.5f);
+            for (int page = 0; page < index / 28; page++)
+            {
+                passport.PageNext();
+            }
+            yield return new WaitForSecondsRealtime(0.5f);
+        }
+        PassportButton ButtonOf(CustomizationOption option) => passport.buttons.FirstOrDefault(b => b.gameObject.activeInHierarchy && b.currentOption == option);
+
+        yield return ToOption(Customization.Type.Hat, vr);
+        PassportButton vrButton = ButtonOf(customization.hats[vr]);
+        int hatBefore = MyData.customizationData.currentHat;
+        if (vrButton != null)
+        {
+            ClickOn((RectTransform)vrButton.button.transform);
+        }
+        yield return new WaitForSecondsRealtime(0.5f);
+        string note = ModCosmetics.Requirement.Shown;
+        Check("a click on the locked VR Headset tells how to unlock it, and it stays off",
+            vrButton != null && vrButton.lockedIcon.gameObject.activeSelf && note != null && note.Contains("ULTIMATE ASCENT:") && note.Contains("Blind Mode") && MyData.customizationData.currentHat == hatBefore,
+            $"button {vrButton != null}, note '{note}'");
+        Screenshot("passport-locked-vr-headset");
+        yield return new WaitForSecondsRealtime(1f);
+        PassportButton helmetButton = ButtonOf(customization.hats[helmet]);
+        if (helmetButton != null)
+        {
+            ClickOn((RectTransform)helmetButton.button.transform);
+        }
+        yield return new WaitForSecondsRealtime(0.5f);
+        note = ModCosmetics.Requirement.Shown;
+        Check("the locked Orange Helmet tells its own way", note != null && note.Contains("Astronaut suit and helmet") && note.Contains("Hot Mode"), $"note '{note}'");
+        Screenshot("passport-locked-orange-helmet");
+        yield return new WaitForSecondsRealtime(1f);
+        PassportButton gameLocked = passport.buttons.FirstOrDefault(b => b.gameObject.activeInHierarchy && b.currentOption != null && b.currentOption.IsLocked
+            && Array.IndexOf(customization.hats, b.currentOption) >= 0 && Array.IndexOf(customization.hats, b.currentOption) < helmet);
+        if (gameLocked != null)
+        {
+            ClickOn((RectTransform)gameLocked.button.transform);
+            yield return new WaitForSecondsRealtime(0.5f);
+            Check("a click on a locked hat of the game's then takes the note away", ModCosmetics.Requirement.Shown == null, $"clicked '{gameLocked.currentOption.name}', note '{ModCosmetics.Requirement.Shown}'");
+        }
+        else
+        {
+            Info("the other-item note check is skipped", "no locked game hat on this page");
+        }
+
+        ModSave.Set("unlocked", "vrheadset,orangespacesuit");
+        passport.SetButtons();
+        yield return new WaitForSecondsRealtime(0.5f);
+        NoSteamStatWrites.Asked.Clear();
+        vrButton = ButtonOf(customization.hats[vr]);
+        if (vrButton != null)
+        {
+            ClickOn((RectTransform)vrButton.button.transform);
+        }
+        yield return new WaitForSecondsRealtime(1f);
+        Check("unlocked, the VR Headset is worn: on the passport's scout, in the mod's save, no Steam stat",
+            MyData.customizationData.currentHat == vr && passport.dummy.refs.playerHats[vr].gameObject.activeSelf && ModSave.Get("hat") == "vrheadset" && !NoSteamStatWrites.Asked.Any(a => a.StartsWith("Cosmetic_Hat", StringComparison.Ordinal)),
+            $"hat {MyData.customizationData.currentHat}, passport scout wears {passport.dummy.refs.playerHats.FirstOrDefault(h => h.gameObject.activeSelf)?.name}, saved '{ModSave.Get("hat")}', Steam stats asked: {string.Join(", ", NoSteamStatWrites.Asked)}");
+        Screenshot("passport-vr-headset");
+        yield return new WaitForSecondsRealtime(1f);
+
+        yield return ToOption(Customization.Type.Fit, suit);
+        PassportButton suitButton = ButtonOf(customization.fits[suit]);
+        if (suitButton != null)
+        {
+            ClickOn((RectTransform)suitButton.button.transform);
+        }
+        yield return new WaitForSecondsRealtime(0.5f);
+        yield return ToOption(Customization.Type.Hat, helmet);
+        helmetButton = ButtonOf(customization.hats[helmet]);
+        if (helmetButton != null)
+        {
+            ClickOn((RectTransform)helmetButton.button.transform);
+        }
+        yield return new WaitForSecondsRealtime(1f);
+        Check("the Orange Spacesuit and the Orange Helmet are worn", MyData.customizationData.currentOutfit == suit && MyData.customizationData.currentHat == helmet && ModSave.Get("outfit") == "orangespacesuit",
+            $"outfit {MyData.customizationData.currentOutfit}, hat {MyData.customizationData.currentHat}, saved '{ModSave.Get("outfit")}'/'{ModSave.Get("hat")}'");
+        passport.OpenTab(Customization.Type.Fit);
+        yield return new WaitForSecondsRealtime(1f);
+        Screenshot("passport-orange-spacesuit");
+        yield return new WaitForSecondsRealtime(1f);
+
+        // For the climb: the Astronaut suit and helmet (game ones), both challenges, nothing unlocked yet.
+        int astronaut = Array.FindIndex(customization.fits, f => f != null && f.name == ModCosmetics.AstronautFit);
+        int astronautHat = Array.FindIndex(customization.hats, h => h != null && h.name == ModCosmetics.AstronautHat);
+        CharacterCustomization.SetCharacterOutfit(astronaut);
+        CharacterCustomization.SetCharacterHat(0);
+        yield return new WaitForSecondsRealtime(0.3f);
+        bool suitAlone = CosmeticUnlocks.WearsAstronaut();
+        CharacterCustomization.SetCharacterHat(astronautHat);
+        passport.dummy.UpdateDummy();
+        yield return new WaitForSecondsRealtime(0.5f);
+        Check("a game outfit and hat put on again leave the mod's save; only suit and helmet together count as the Astronaut's",
+            ModSave.Get("outfit") == "" && ModSave.Get("hat") == "" && !suitAlone && CosmeticUnlocks.WearsAstronaut(),
+            $"saved '{ModSave.Get("outfit")}'/'{ModSave.Get("hat")}', the suit with the cap {suitAlone}, with the helmet (hat {astronautHat}) {CosmeticUnlocks.WearsAstronaut()}");
+        passport.ToggleOpen();
+        ChallengeModes.Blind = true;
+        ChallengeModes.Hot = true;
+        ModSave.Set("unlocked", "");
+        Info("for the climb", $"Blind Mode, Hot Mode and the Astronaut suit and helmet on, nothing unlocked (the save had '{savedUnlocks}')");
+        yield return new WaitForSecondsRealtime(1f);
+    }
+
+    /// <summary>
+    /// Before any climb (the title screen, like the developers' logos before it) Blind Mode does not darken the
+    /// screen: it is no climb, though neither the title nor the airport by name.
+    /// </summary>
+    private IEnumerator ClearBeforeTheClimb()
+    {
+        bool saved = ChallengeModes.Blind;
+        Info("Blind Mode in the player's save", saved.ToString());
+        ChallengeModes.Blind = true;
+        yield return new WaitForSecondsRealtime(0.5f);
+        GameObject prefab = Resources.Load<GameObject>("Character_Scoutmaster");
+        Scoutmaster template = prefab != null ? prefab.GetComponentInChildren<Scoutmaster>(true) : null;
+        float strength = template != null && template.mat != null ? template.mat.GetFloat("_Strength") : -1f;
+        Check("with Blind Mode on, the title screen (no climb) stays clear", !ChallengeModes.Blinding && strength >= 0f && strength < 0.05f,
+            $"darkening {ChallengeModes.Blinding}, the Scoutmaster's screen effect at {strength:0.000}, scene '{SceneManager.GetActiveScene().name}', a climb by the scene's name {Rules.InRun}");
+        Screenshot("title-with-blind-mode");
+        ChallengeModes.Blind = saved;
+    }
+
+    /// <summary>
+    /// The challenges in the climb (the last step: it ends the climb). Blind Mode keeps the Scoutmaster's screen effect at
+    /// its strongest. Hot Mode: below ascent 23 an open parasol held up in the sun roasts (without the sun heating), from
+    /// 23 it adds nothing. Then the game's own debug win (as at the peak): the VR Headset and the orange pieces unlock,
+    /// the statistics show each as a small icon where badges go and the game's unlock window for each. Last, Blind Mode
+    /// off clears the screen.
+    /// </summary>
+    private IEnumerator ChallengesInClimb()
+    {
+        Info("the challenges this climb", CosmeticUnlocks.State);
+        Scoutmaster scoutmaster = FindAnyObjectByType<Scoutmaster>();
+        Material effect = scoutmaster != null ? scoutmaster.mat : null;
+        yield return new WaitForSeconds(1f);
+        float strength = effect != null ? effect.GetFloat("_Strength") : -1f;
+        Check("Blind Mode keeps the screen as dark as the Scoutmaster makes it at his closest", ChallengeModes.Blinding && strength >= 0.999f,
+            $"Blind Mode {ChallengeModes.Blind}, the Scoutmaster's screen effect at {strength:0.000} (Scoutmaster in the level {scoutmaster != null})");
+        Screenshot("blind-mode");
+        if (scoutmaster != null)
+        {
+            // The game clears the effect when a Scoutmaster is switched off: read it in the same moment.
+            scoutmaster.gameObject.SetActive(false);
+            float afterLeaving = effect.GetFloat("_Strength");
+            scoutmaster.gameObject.SetActive(true);
+            Check("when the Scoutmaster is switched off, Blind Mode keeps the screen dark in that same moment", afterLeaving >= 0.999f, $"{afterLeaving:0.000} right after");
+        }
+        yield return new WaitForSeconds(2f);
+        Vector2 look = Local.data.lookValues;
+        Local.data.lookValues = new Vector2(look.x, -45f);
+        yield return new WaitForSeconds(1.5f);
+        Screenshot("blind-mode-looking-down");
+        yield return new WaitForSeconds(1f);
+        Local.data.lookValues = look;
+
+        Character local = Local;
+        if (Rules.Level >= Lvl.HotSun)
+        {
+            Check("from ascent 23 Hot Mode adds nothing (that ascent's own sun roasts)", !ChallengeModes.HotRoasts, $"ascent {Rules.Level}");
+        }
+        else
+        {
+            yield return SpawnIntoHand(ItemByName("Parasol"));
+            Item item = held;
+            Parasol parasol = item != null ? item.GetComponent<Parasol>() : null;
+            DayNightManager clock = DayNightManager.instance;
+            clock.timeOfDay = (clock.dayStart + clock.dayEnd) / 2f;
+            yield return new WaitForSeconds(2f);
+            if (!InSunlight(local))
+            {
+                yield return IntoSunlight(40f);
+            }
+            if (parasol == null || !InSunlight(local))
+            {
+                Info("the Hot Mode roasting check is skipped", $"parasol {parasol != null}, in direct sunlight {InSunlight(local)}");
+            }
+            else
+            {
+                if (!parasol.isOpen)
+                {
+                    parasol.ToggleOpen();
+                }
+                Protect(false);
+                Meter heat = new Meter(Status.Hot);
+                float start = Time.time;
+                try
+                {
+                    yield return new WaitForSeconds(3f);
+                }
+                finally
+                {
+                    heat.Stop();
+                    Protect(true);
+                }
+                float seconds = Time.time - start;
+                float expected = seconds / (Map.InMesa ? 15f : 30f);
+                Check($"Hot Mode on ascent {Rules.Level}: an open parasol in the sun roasts as on ascent 23 (and keeps the heat off)",
+                    ChallengeModes.HotRoasts && Mathf.Abs(Roasted(item) - expected) < expected * 0.2f && heat.Total < 0.001f,
+                    $"{Roasted(item):0.000} roasted in {seconds:F1} s (expected {expected:0.000}), {heat.Total:0.0000} heat");
+                Screenshot("hot-mode-parasol");
+                parasol.ToggleOpen();
+                local.refs.items.EquipSlot(Optionable<byte>.None);
+                yield return new WaitForSeconds(0.5f);
+                if (InSunlight(local))
+                {
+                    Protect(false);
+                    Meter bare = new Meter(Status.Hot);
+                    try
+                    {
+                        yield return new WaitForSeconds(3f);
+                    }
+                    finally
+                    {
+                        bare.Stop();
+                        Protect(true);
+                    }
+                    float factor = Rules.Enabled(Lvl.StrongerAilments) ? A15_StrongerAilments.Factor(Status.Hot) : 1f;
+                    float share = A23_HotSun.HeatPerSecond * 0.65f * factor * bare.Seconds;
+                    Check($"Hot Mode on ascent {Rules.Level}: the sun heats at 65% of ascent 23's strength",
+                        Mathf.Abs(bare.Total - share) <= share * 0.15f, $"{bare.Total * 100f:0.###} heat in {bare.Seconds:F1} s (expected {share * 100f:0.###})");
+                }
+                else
+                {
+                    Info("the Hot Mode heat check is skipped", "not in direct sunlight");
+                }
+            }
+            local.refs.items.EquipSlot(Optionable<byte>.None);
+            yield return new WaitForSeconds(0.5f);
+        }
+
+        Info("the challenges before the peak", CosmeticUnlocks.State);
+        for (float until = Time.time + 30f; Time.time < until && (!local.refs.stats.IsInitialized || local.refs.stats.timelineInfo.Count == 0);)
+        {
+            yield return null;
+        }
+        Character.TestWin();
+        EndScreen screen = null;
+        for (float until = Time.realtimeSinceStartup + 20f; Time.realtimeSinceStartup < until && (screen == null || !screen.isOpen);)
+        {
+            screen = GUIManager.instance != null ? GUIManager.instance.endScreen : null;
+            yield return null;
+        }
+        Check("the win unlocks the VR Headset and the orange pieces", CosmeticUnlocks.Has(CosmeticUnlocks.VrHeadset) && CosmeticUnlocks.Has(CosmeticUnlocks.OrangeSpacesuit),
+            $"unlocked '{ModSave.Get("unlocked")}', won {local.refs.stats.won}");
+        if (screen == null || !screen.isOpen)
+        {
+            Fail("the climb's statistics open");
+            yield break;
+        }
+        int windows = 0;
+        for (float until = Time.realtimeSinceStartup + 90f; Time.realtimeSinceStartup < until && !screen.buttons.activeSelf;)
+        {
+            if (screen.cosmeticUnlockObject.activeSelf && screen.inPopupView)
+            {
+                windows++;
+                yield return new WaitForSecondsRealtime(1.5f);
+                Screenshot($"statistics-unlock-{windows}");
+                yield return new WaitForSecondsRealtime(1f);
+                screen.PopupNext();
+                yield return new WaitForSecondsRealtime(0.6f);
+            }
+            else if ((screen.ascentsUnlockObject.activeSelf || screen.promotionUnlockObject.activeSelf) && screen.inPopupView)
+            {
+                screen.PopupNext();
+                yield return new WaitForSecondsRealtime(0.6f);
+            }
+            yield return null;
+        }
+        int ours = 0;
+        foreach (Transform icon in screen.badgeParentTF)
+        {
+            if (icon.name.StartsWith("UltimateAscentCosmetic", StringComparison.Ordinal))
+            {
+                ours++;
+            }
+        }
+        yield return new WaitForSecondsRealtime(1f);
+        Screenshot("statistics-icons");
+        Check("the statistics show the three as small icons where badges go, each with the game's unlock window", ours == 3 && windows >= 3, $"{ours} icons, {windows} unlock windows");
+        ChallengeModes.Blind = false;
+        yield return new WaitForSecondsRealtime(0.5f);
+        Check("Blind Mode off clears the screen", effect == null || effect.GetFloat("_Strength") < 0.05f, $"{(effect != null ? effect.GetFloat("_Strength") : -1f):0.000}");
     }
 
     private static IEnumerator Now(Action check)
@@ -5453,6 +5840,97 @@ internal sealed class Runner : MonoBehaviour
     }
 
     /// <summary>
+    /// Shelter from a snowstorm (from ascent 9): on a flat test floor high above the map (open low ground with
+    /// nothing natural within reach), a test snowstorm blowing along +X. In the open the scout is as exposed as
+    /// the game says; a wall on the storm's side shelters fully, the same wall downwind does not; a low bank and
+    /// a long gentle slope rising toward the storm give no shelter; a hill 30 m away on the storm's side shelters
+    /// partly, and not once the wind turns around. Then, for the record, how the real ground around the
+    /// scout's start would shelter from either wind.
+    /// </summary>
+    private IEnumerator SnowstormShelterCheck()
+    {
+        if (!Rules.InExtraAscent || Rules.Level >= Lvl.AllWeather)
+        {
+            Info("the snowstorm shelter checks are skipped", Rules.Level >= Lvl.AllWeather
+                ? "at ascent 25 a test storm would follow ascent 25's own snowstorm; the checks run at ascents 9-24" : $"testing ascent {target}");
+            yield break;
+        }
+        Character local = Local;
+        Vector3 start = local.Center;
+        foreach ((string name, Vector3 wind) in new[] { ("+X", Vector3.right), ("-X", Vector3.left) })
+        {
+            Info($"the real ground at the start, wind along {name}", $"open {SnowstormShelter.Openness(local.Head, wind):0.00}");
+        }
+        Action undo = CalmForMeasuring();
+        Vector3 floorAt = new Vector3(start.x, 1600f, start.z);
+        List<GameObject> made = new List<GameObject>();
+        GameObject Block(string name, Vector3 centre, Vector3 size, Quaternion turn)
+        {
+            GameObject block = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            block.name = "UltimateAscentTest" + name;
+            block.layer = LayerMask.NameToLayer("Map");
+            block.transform.SetPositionAndRotation(centre, turn);
+            block.transform.localScale = size;
+            made.Add(block);
+            return block;
+        }
+        Block("Floor", floorAt + Vector3.down * 0.5f, new Vector3(160f, 1f, 160f), Quaternion.identity);
+        local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, floorAt + Vector3.up * 1.2f, false);
+        yield return new WaitForSeconds(3f);
+        WindChillZone snow = TestSnowstorm(local.Center);
+        try
+        {
+            yield return new WaitForSeconds(1f);
+            float game = SnowstormShelter.LastGame;
+            Check("in the open the snowstorm reaches the scout as fully as the game says (9)",
+                snow.windPlayerFactor > 0f && SnowstormShelter.LastOpen >= 0.999f && Mathf.Abs(snow.windPlayerFactor - game) < 0.001f,
+                $"exposure {snow.windPlayerFactor:0.00} (the game's {game:0.00}), land open {SnowstormShelter.LastOpen:0.00}, scout at {local.Center.y:0.0}");
+
+            IEnumerator Case(string check, GameObject block, float lowest, float highest)
+            {
+                yield return new WaitForSeconds(0.6f);
+                float exposure = snow.windPlayerFactor;
+                Check(check, exposure >= lowest - 0.001f && exposure <= highest + 0.001f,
+                    $"exposure {exposure:0.00} (the game's {SnowstormShelter.LastGame:0.00}), land open {SnowstormShelter.LastOpen:0.00}");
+                made.Remove(block);
+                Destroy(block);
+                yield return new WaitForSeconds(0.4f);
+            }
+
+            Vector3 feet = floorAt;
+            yield return Case("a wall on the storm's side shelters fully (9)",
+                Block("Wall", feet + new Vector3(-4f, 4f, 0f), new Vector3(1f, 8f, 20f), Quaternion.identity), 0f, 0f);
+            yield return Case("the same wall downwind gives no shelter (9)",
+                Block("Wall", feet + new Vector3(4f, 4f, 0f), new Vector3(1f, 8f, 20f), Quaternion.identity), game, game);
+            yield return Case("a low bank on the storm's side gives no shelter (9)",
+                Block("Bank", feet + new Vector3(-6f, 0.75f, 0f), new Vector3(1f, 1.5f, 20f), Quaternion.identity), game, game);
+            // 70 m of ground rising 8 degrees toward the storm, from the scout's feet.
+            Quaternion rise = Quaternion.AngleAxis(-8f, Vector3.forward);
+            yield return Case("a long gentle slope rising toward the storm gives no shelter (9)",
+                Block("Slope", feet + rise * new Vector3(-35f, -0.5f, 0f), new Vector3(70f, 1f, 40f), rise), game, game);
+            // A hill 15 m high, 30 m away: seen about 24 degrees up from the head.
+            GameObject hill = Block("Hill", feet + new Vector3(-32f, 7.5f, 0f), new Vector3(4f, 15f, 60f), Quaternion.identity);
+            yield return new WaitForSeconds(0.6f);
+            float partly = snow.windPlayerFactor;
+            Check("a hill 30 m away on the storm's side shelters partly (9)", partly > 0.2f * game && partly < 0.8f * game,
+                $"exposure {partly:0.00} (the game's {SnowstormShelter.LastGame:0.00}), land open {SnowstormShelter.LastOpen:0.00}");
+            snow.RPCA_ToggleWind(true, Vector3.left, 100000f);
+            yield return Case("with the wind turned around the same hill gives no shelter (9)", hill, game, game);
+        }
+        finally
+        {
+            Destroy(snow.gameObject);
+            foreach (GameObject block in made)
+            {
+                Destroy(block);
+            }
+            local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, start + Vector3.up * 1.5f, false);
+            undo();
+        }
+        yield return new WaitForSeconds(3f);
+    }
+
+    /// <summary>
     /// A snowstorm by day outside the Alpine (ascent 18): a test snowstorm blowing on the scout where it stands, at
     /// midday in direct sunlight. Its heat lands with or without an open parasol; only sunscreen keeps it off (with
     /// ascent 14's rule on, in memory, all but a quarter). While it blows ascent 23's sun neither heats the scout nor
@@ -7351,6 +7829,26 @@ internal sealed class Runner : MonoBehaviour
         }
     }
 
+    /// <summary>Steam stats set directly (the cosmetics a player picks, the highest ascent at a win): not written, only noted.</summary>
+    [HarmonyPatch(typeof(AchievementManager), nameof(AchievementManager.SetSteamStat))]
+    internal static class NoSteamStatWrites
+    {
+        internal static readonly List<string> Asked = new List<string>();
+
+        private static bool Prefix(STEAMSTATTYPE steamStatType, int value)
+        {
+            Asked.Add(steamStatType + "=" + value);
+            return false;
+        }
+    }
+
+    /// <summary>A climb that ends (the test's win) would delete the player's saved run.</summary>
+    [HarmonyPatch(typeof(Peak.Quicksave), nameof(Peak.Quicksave.DestroySaveData))]
+    internal static class NoRunSaveDeletion
+    {
+        private static bool Prefix() => false;
+    }
+
     [HarmonyPatch(typeof(AchievementManager), nameof(AchievementManager.ThrowAchievement))]
     internal static class NoAchievements
     {
@@ -7996,6 +8494,63 @@ internal sealed class Runner : MonoBehaviour
                 yield return Guard("sun in the Alpine (23)", SunHeat(false, "in the Alpine"));
             }
         }
+    }
+
+    /// <summary>
+    /// The Alps' light snowfall: none yet at the campfire below the Alps (where the climb already counts as
+    /// the Alpine); at the Alpine's campfire, on its snowy ground, flakes fall around the view by day
+    /// (pictures looking ahead and a little up); a test roof put 5 m above the view stops it, and it comes
+    /// back once the roof is gone.
+    /// </summary>
+    private IEnumerator AlpineSnow()
+    {
+        MapHandler.JumpToSegment(Segment.Alpine);
+        yield return new WaitForSeconds(5f);
+        if (Map.CurrentPlace != Place.Alpine)
+        {
+            Info("the snowfall checks are skipped", $"this map's second mountain biome is not the Alpine ({Map.CurrentPlace}); run with -Biome A");
+            yield break;
+        }
+        Character local = Local;
+        Check("no snow yet at the campfire below the Alps", AlpineSnowfall.Amount <= 0f,
+            $"place {Map.CurrentPlace}, ground below {GroundBiome(local)}, thickness {AlpineSnowfall.Amount:0.00}");
+
+        MapHandler.JumpToSegment(Segment.Caldera);
+        DayNightManager clock = DayNightManager.instance;
+        float time = clock.timeOfDay;
+        Vector2 look = local.data.lookValues;
+        clock.timeOfDay = (clock.dayStart + clock.dayEnd) / 2f;
+        yield return new WaitForSeconds(9f);
+        Check("a light snow falls around the view on the Alpine's ground", AlpineSnowfall.Amount >= 1f && AlpineSnowfall.Flakes > 100,
+            $"thickness {AlpineSnowfall.Amount:0.00}, {AlpineSnowfall.Flakes} flakes, under a roof {AlpineSnowfall.Covered}, ground below {GroundBiome(local)}, place {Map.CurrentPlace}");
+        foreach ((string name, float pitch) in new[] { ("ahead", 0f), ("up", 25f) })
+        {
+            local.data.lookValues = new Vector2(look.x, pitch);
+            yield return new WaitForSeconds(1.5f);
+            Screenshot("alpine-snowfall-" + name);
+            yield return new WaitForSeconds(1f);
+        }
+        local.data.lookValues = look;
+
+        Transform view = MainCamera.instance.transform;
+        GameObject roof = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        roof.name = "UltimateAscentTestRoof";
+        roof.layer = LayerMask.NameToLayer("Map");
+        roof.transform.position = view.position + Vector3.up * 5f;
+        roof.transform.localScale = new Vector3(12f, 0.5f, 12f);
+        try
+        {
+            yield return new WaitForSeconds(4.5f);
+            Check("under a roof the snow stops", AlpineSnowfall.Covered && AlpineSnowfall.Amount <= 0f,
+                $"under a roof {AlpineSnowfall.Covered}, thickness {AlpineSnowfall.Amount:0.00}, {AlpineSnowfall.Flakes} flakes left");
+        }
+        finally
+        {
+            Destroy(roof);
+        }
+        yield return new WaitForSeconds(4.5f);
+        Check("without the roof it snows again", !AlpineSnowfall.Covered && AlpineSnowfall.Amount >= 1f, $"thickness {AlpineSnowfall.Amount:0.00}");
+        clock.timeOfDay = time;
     }
 
     /// <summary>

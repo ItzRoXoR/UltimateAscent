@@ -29,10 +29,13 @@ internal sealed class Runtime : MonoBehaviourPunCallbacks
         ClimbingChalkHands.Tick,
         CalderaTide.Tick,
         KilnAsh.Tick,
+        AlpineSnowfall.Tick,
         WeatherGrace.Tick,
         A25_AllWeather.Tick,
         ExtraTornadoes.Tick,
         SixSlotBackpack.Tick,
+        ChallengeModes.Tick,
+        CosmeticUnlocks.Tick,
     };
 
     private readonly bool[] failed = new bool[Ticks.Length];

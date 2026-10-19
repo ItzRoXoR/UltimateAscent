@@ -138,6 +138,29 @@ Open the boarding pass at the airport and use the arrows, like vanilla.
 * With **True Final Ascent**, its FINAL ASCENT entry stays right after your highest ascent. In FINAL
   ASCENT, TFA's own difficulty dropdown offers ascents 9–25 too.
 
+## Challenges and cosmetics
+
+Two boxes in the boarding pass's header, **Blind Mode** and **Hot Mode**, are each player's own (in
+multiplayer every player ticks their own) and work on every ascent:
+
+* **Blind Mode:** all climb long your screen stays as dark as the Scoutmaster makes it at his closest
+  (without his sound). When he really comes, it gets no darker.
+* **Hot Mode:** ascent 23's sun on any ascent below 23, where that sun would scorch (not in the Alps, not
+  from the Caldera and the Gloom on): it incinerates whatever you hold up against it just the same, and heats
+  you at 65% of its strength. On ascent 23 and higher the box shows ticked and fixed: that ascent already has it.
+
+Three cosmetics the game made but never offered are in the passport, each unlocked by a challenge
+(clicking one while it is locked tells how):
+
+* **VR Headset:** reach the peak with Blind Mode on for the whole climb.
+* **Orange Spacesuit** and **Orange Helmet:** reach the peak wearing the Astronaut suit and the Astronaut
+  helmet together for the whole climb, with Hot Mode on (or on ascent 23 or higher).
+
+Custom runs and the Nadir do not count. The run's statistics show a new cosmetic as a small icon where the
+badges go. These cosmetics have no Scout badge and leave the badge ribbon alone. What you unlocked, which of
+them you wear and your two boxes are kept in the mod's own save next to the game's (`UltimateAscent/Save.txt`),
+not in Steam; players without the mod see the game's default outfit and hat in their place.
+
 ## Multiplayer
 
 Everybody needs **the same version** of the mod. The boarding pass refuses to start ascents 9–25 and
@@ -198,6 +221,13 @@ vanilla way (also late joiners and campfire saves). The host's ascent switches a
   its own icon; slots 1 and 2 hang in the bag, 3 to 6 in the pouches, and its wheel has a slice for each.
   In any online lobby, even one you host alone, every backpack stays the game's. The *Six-Slot Backpack*
   setting switches it off (the game's four-slot Backpack in single-player too).
+* **Snow in the Alps:** a light snowfall drifts down around you wherever the ground below is the Alps',
+  on every run. It is only for the look (no cold, no wind) and thin enough to keep the view clear; under a
+  roof or an overhang it stops.
+* **Shelter from snowstorms** (from ascent 9): a hill, rock or wall between you and the oncoming snowstorm
+  shelters you, out in the lowlands too (also on True Final Ascent's own terrain). The game only asks
+  whether the sky above you is open. It only ever adds shelter: standing in the open, you are as exposed
+  as before, and a gentle slope rising toward the storm does not count.
 * **Breaking free** from a spider's web or a fly trap (from ascent 9): jumps while caught need no stamina
   and cost none, and a jump pressed too early counts as soon as the next one can. The game counted them
   only with stamina left, which ran out half way at the higher ascents, and dropped early presses.

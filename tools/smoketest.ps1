@@ -78,6 +78,10 @@ Remove-Item (Join-Path $profileDir 'BepInEx\UltimateAscent.SmokeTest.*.png') -Er
 $tfaSelection = Join-Path $env:LOCALAPPDATA 'LandCrab\PEAK\TrueFinalAscent\TrueFinalAscent.Auswahl.txt'
 $tfaBackup = $null
 if (Test-Path $tfaSelection) { $tfaBackup = [System.IO.File]::ReadAllBytes($tfaSelection) }
+# Ultimate Ascent's own save (unlocked cosmetics, the ones worn, Blind Mode and Hot Mode), next to the game's: the test
+# changes it; keep a copy.
+$modSave = Join-Path $env:USERPROFILE 'AppData\LocalLow\LandCrab\PEAK\UltimateAscent\Save.txt'
+$modSaveBackup = if (Test-Path $modSave) { [System.IO.File]::ReadAllBytes($modSave) } else { $null }
 
 $arguments = @('-applaunch', '3527290', '--doorstop-enabled', 'true', '--doorstop-target-assembly', $preloader, '--ua-smoketest', "--ua-smoketest-ascent=$Ascent")
 if ($Apocalypse) { $arguments += '--ua-smoketest-apocalypse' }
@@ -117,6 +121,8 @@ finally {
             Write-Warning 'True Final Ascent rewrote its selection file during the test; the previous one was put back.'
         }
     }
+    if ($null -ne $modSaveBackup) { [System.IO.File]::WriteAllBytes($modSave, $modSaveBackup) }
+    elseif (Test-Path $modSave) { Remove-Item -LiteralPath $modSave }
 }
 
 New-Item -ItemType Directory -Force $out | Out-Null

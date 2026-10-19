@@ -343,7 +343,8 @@ internal static class KilnAsh
         return true;
     }
 
-    private static ParticleSystem Particles(ParticleSystem template, string name, Vector3 box, int most, float minLife, float maxLife, float minSize, float maxSize,
+    /// <summary>A copy of <paramref name="template"/>'s particles alone, emitting nothing yet from a box, fading in and out over each particle's life.</summary>
+    internal static ParticleSystem Particles(ParticleSystem template, string name, Vector3 box, int most, float minLife, float maxLife, float minSize, float maxSize,
         float minSpeed, float maxSpeed, Color dark, Color light, float gravity)
     {
         ParticleSystem made = UnityEngine.Object.Instantiate(template);

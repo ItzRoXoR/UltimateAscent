@@ -4,7 +4,7 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>UltimateAscent</AssemblyName>
     <RootNamespace>UltimateAscent</RootNamespace>
-    <Version>1.3.2</Version>
+    <Version>1.4.0</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -52,6 +52,10 @@
     <!-- The six-slot Backpack (single-player): its worn and ground meshes and pouch anchors (tools/SixSlotBackpack/build_mesh.py). -->
     <EmbeddedResource Include="Resources\SixSlotBackpack.bin" LogicalName="UltimateAscent.SixSlotBackpack.bin" />
     <EmbeddedResource Include="Resources\SixSlotBackpack_icon.png" LogicalName="UltimateAscent.SixSlotBackpack_icon.png" />
+    <!-- The mod's cosmetics' passport icons (the game's Astronaut icons recoloured; the VR Headset rendered in game). -->
+    <EmbeddedResource Include="Resources\OrangeHelmet_icon.png" LogicalName="UltimateAscent.OrangeHelmet_icon.png" />
+    <EmbeddedResource Include="Resources\OrangeSpacesuit_icon.png" LogicalName="UltimateAscent.OrangeSpacesuit_icon.png" />
+    <EmbeddedResource Include="Resources\VRHeadset_icon.png" LogicalName="UltimateAscent.VRHeadset_icon.png" />
     <!-- The Stone's break: the smash at 4 s of the user's rock-smash clip (mono, 16-bit PCM). -->
     <EmbeddedResource Include="Resources\Stone_break.wav" LogicalName="UltimateAscent.Stone_break.wav" />
     <EmbeddedResource Include="Resources\PinkLollipop.png" LogicalName="UltimateAscent.PinkLollipop.png" />

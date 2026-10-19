@@ -30,6 +30,7 @@ namespace UltimateAscent.Features;
 /// Ascent runs an Apocalypse weather the sun rules rest, heat and roasting alike, the way TFA rests
 /// More Ascents' sun: its weather, its own sun events included, is TFA's to tune. They rest too while a
 /// snowstorm blows where the scout is (ascent 18: no sun burns through one, see A18_ExtremeWeather).
+/// A player's Hot Mode (<see cref="ChallengeModes"/>) brings this sun to ascents below 23: the same roasting, 65% of the heat.
 /// </summary>
 internal static class A23_HotSun
 {
@@ -86,9 +87,11 @@ internal static class A23_HotSun
             float intensity = DayNightManager.instance.sun.intensity;
             bool scorching = ScorchingHere && intensity > 1f;
             bool mesaSun = Rules.Enabled(Lvl.ExtremeWeather) && Map.InMesa && intensity >= MesaSunIntensity;
-            if (scorching || mesaSun)
+            // Hot Mode: this ascent's sun below ascent 23, where it would scorch: it roasts the same, and heats at 65%.
+            bool hotMode = ChallengeModes.HotRoasts && A09_FogAndKiln.BeforeTheVolcano && intensity > 1f;
+            if (scorching || mesaSun || hotMode)
             {
-                roasted = Sunbathe(local, scorching);
+                roasted = Sunbathe(local, scorching ? 1f : hotMode ? ChallengeModes.HotModeHeat : 0f);
             }
         }
         if (exposures.Count == 0)
@@ -113,9 +116,10 @@ internal static class A23_HotSun
 
     /// <summary>
     /// Applies the sun to the local scout; returns the held item that is roasting, if any. The scout
-    /// is only heated by ascent 23's scorching sun (the Mesa's own sun heats by itself).
+    /// is only heated by ascent 23's scorching sun, at <paramref name="heat"/> of its strength (Hot Mode's is half;
+    /// the Mesa's own sun heats by itself).
     /// </summary>
-    private static Item Sunbathe(Character local, bool heats)
+    private static Item Sunbathe(Character local, float heat)
     {
         Transform sun = DayNightManager.instance.sun.transform;
         Item held = local.data.currentItem;
@@ -136,13 +140,13 @@ internal static class A23_HotSun
             Roast(held, Map.InMesa ? burnSeconds / MesaSpeedup : burnSeconds);
             roasting = held;
         }
-        if (!heats || shields || Map.InMesa || (local.data.wearingSunscreen && !A14_Items.SunscreenLeaks) || (RunSettings.IsCustomRun && RunSettings.GetValue(RunSettings.SETTINGTYPE.Hazard_Heat) == 0))
+        if (heat <= 0f || shields || Map.InMesa || (local.data.wearingSunscreen && !A14_Items.SunscreenLeaks) || (RunSettings.IsCustomRun && RunSettings.GetValue(RunSettings.SETTINGTYPE.Hazard_Heat) == 0))
         {
             return roasting;
         }
         // Ascent 14: sunscreen keeps off only three quarters of the heat.
         float share = local.data.wearingSunscreen ? A14_Items.SunscreenLeak : 1f;
-        local.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Hot, HeatPerSecond * share * Time.deltaTime);
+        local.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Hot, HeatPerSecond * heat * share * Time.deltaTime);
         return roasting;
     }
 

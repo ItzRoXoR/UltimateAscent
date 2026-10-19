@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.4.0
+
+For PEAK 2.6.b.
+
+* Snow in the Alps: a light snowfall drifts down around you wherever the ground below is the Alps', on every
+  run (from the Alpine's start, not yet at the campfire below it). Only for the look (no cold, no wind),
+  thin enough to keep the view clear; it stops under a roof or an overhang.
+* Shelter from snowstorms (from ascent 9): a hill, rock or wall on the side the snowstorm blows from (rising
+  at least 12-25 degrees as seen from your head, within 60 m) shelters you, in the lowlands too and on True
+  Final Ascent's terrain; the game only looked at the open sky above you. In the open you stay as exposed
+  as before. Only snowstorms; True Final Ascent's own weather is left as it is.
+* Challenges: Blind Mode and Hot Mode, two boxes in the boarding pass's header, each player's own, on every
+  ascent. Blind Mode keeps the screen as dark as the Scoutmaster at his closest all climb (no sound; he
+  makes it no darker). Hot Mode brings ascent 23's sun to ascents below 23, in the same places: held items
+  incinerate the same, scouts are heated at 65% of its strength (on 23 and higher the box is fixed on).
+* Cosmetics: the game's unused VR Headset, Orange Spacesuit and Orange Helmet are in the passport. VR
+  Headset: reach the peak with Blind Mode on for the whole climb. Orange Spacesuit and Helmet: reach the peak
+  in the Astronaut suit and helmet with Hot Mode on (or on ascent 23+). A locked one tells how to unlock it
+  when clicked; the run's statistics show new ones as small icons; no Scout badges. Unlocks and choices live
+  in the mod's own save, not in Steam.
+
 ## 1.3.2
 
 For PEAK 2.6.b.
