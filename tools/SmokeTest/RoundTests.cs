@@ -2069,17 +2069,44 @@ internal sealed partial class Runner
                         worn != null && worn.itemSlots.Length == 6 && sixOnBack[label], $"{worn?.itemSlots.Length ?? 0} slots, six-slot model on the back {sixOnBack[label]}");
                     yield return BackPicture(local, "six-slot-multiplayer-back");
                 }
-                // Off the back again, dropped where it was.
-                local.refs.items.lastEquippedSlotTime = 0f;
-                local.refs.items.EquipSlot(Optionable<byte>.Some(3));
-                yield return new WaitForSeconds(0.7f);
-                Item onBack = local.data.currentItem;
-                if (onBack is Backpack)
+                // Off the back again, dropped where it was; the six-slot one twice (worn again in between), staying itself.
+                for (int round = 1; round <= (label == "six" ? 2 : 1); round++)
                 {
-                    local.refs.items.photonView.RPC("DropItemRpc", RpcTarget.All, 0f, (byte)3, onBack.transform.position + Vector3.up * 0.25f, Vector3.zero, onBack.transform.rotation, local.player.GetItemSlot(3).data, false);
-                    local.refs.items.EquipSlot(Optionable<byte>.None);
+                    if (round == 2)
+                    {
+                        local.refs.items.lastEquippedSlotTime = 0f;
+                        spawned.Wear(local);
+                        for (float until = Time.realtimeSinceStartup + 4f; Time.realtimeSinceStartup < until && local.player.backpackSlot.IsEmpty();)
+                        {
+                            yield return null;
+                        }
+                        yield return new WaitForSeconds(1f);
+                    }
+                    HashSet<Item> before = new HashSet<Item>(Item.ALL_ITEMS);
+                    local.refs.items.lastEquippedSlotTime = 0f;
+                    local.refs.items.EquipSlot(Optionable<byte>.Some(3));
+                    yield return new WaitForSeconds(0.7f);
+                    Item onBack = local.data.currentItem;
+                    bool sixInHands = SixSlotBackpack.IsSix(onBack);
+                    if (onBack is Backpack)
+                    {
+                        local.refs.items.photonView.RPC("DropItemRpc", RpcTarget.All, 0f, (byte)3, onBack.transform.position + Vector3.up * 0.25f, Vector3.zero, onBack.transform.rotation, local.player.GetItemSlot(3).data, false);
+                        local.refs.items.EquipSlot(Optionable<byte>.None);
+                    }
+                    yield return new WaitForSeconds(1f);
+                    if (label == "six")
+                    {
+                        Backpack dropped = Item.ALL_ITEMS.OfType<Backpack>().FirstOrDefault(b => b != null && !before.Contains(b));
+                        BackpackData kept = dropped != null ? dropped.GetData<BackpackData>(DataEntryKey.BackpackData) : null;
+                        Check($"taken off the back into the hands and dropped{(round == 2 ? " a second time, after wearing it again" : "")}, the Six-Slot Backpack stays itself with what it holds (multiplayer)",
+                            sixInHands && SixSlotBackpack.IsSix(dropped) && kept != null && kept.itemSlots.Length == 6 && !kept.itemSlots[4].IsEmpty() && !kept.itemSlots[5].IsEmpty(),
+                            $"in the hands six-slot {sixInHands}; on the ground '{(dropped != null ? dropped.name : "nothing")}', six-slot {SixSlotBackpack.IsSix(dropped)}, {kept?.itemSlots.Length ?? 0} slots, slots 5/6 full {(kept != null && kept.itemSlots.Length == 6 && !kept.itemSlots[4].IsEmpty() && !kept.itemSlots[5].IsEmpty())}");
+                        if (dropped != null)
+                        {
+                            spawned = dropped;
+                        }
+                    }
                 }
-                yield return new WaitForSeconds(1f);
             }
             if (sixOnBack.ContainsKey("game"))
             {

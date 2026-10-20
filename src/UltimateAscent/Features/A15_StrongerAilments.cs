@@ -7,7 +7,7 @@ namespace UltimateAscent.Features;
 
 /// <summary>
 /// Ascent 15 (13DDA): cold and drowsiness apply 30% more, heat 50% more, spores 65% more and
-/// poison 75% more, on everything. The mod's exact numbers are what lands from ascent 15 on, this
+/// poison 75% more, on everything but the night's cold and the sun's heat, which land as they come. The mod's exact numbers are what lands from ascent 15 on, this
 /// boost included; below 15 the same rules land them without the boost (<see cref="FromAscent15"/>),
 /// so ascent 14 always gets less than 15. <see cref="Raw"/> and <see cref="ExactStatus"/> put an
 /// amount on the bar exactly. True Final Ascent's Apocalypse events land what TFA gives
@@ -73,9 +73,33 @@ internal static class A15_StrongerAilments
         return target / Factor(type);
     }
 
+    /// <summary>While above zero, what is added lands without this ascent's boost (the sun's heat).</summary>
+    [System.ThreadStatic] internal static int Unboosted;
+
+    /// <summary>While above zero, the game is adding the night's cold (its status update): that cold lands without the boost.</summary>
+    [System.ThreadStatic] internal static int Night;
+
+    /// <summary>Adds a status that lands as it comes, without this ascent's boost.</summary>
+    internal static void AddUnboosted(CharacterAfflictions afflictions, CharacterAfflictions.STATUSTYPE type, float amount)
+    {
+        Unboosted++;
+        try
+        {
+            afflictions.AddStatus(type, amount);
+        }
+        finally
+        {
+            Unboosted--;
+        }
+    }
+
     private static void Prefix(CharacterAfflictions __instance, CharacterAfflictions.STATUSTYPE statusType, ref float amount)
     {
         if (amount <= 0f || StatusReplication.Active || !Rules.Owns(__instance.character) || !Rules.Enabled(Lvl.StrongerAilments))
+        {
+            return;
+        }
+        if (Unboosted > 0 || (Night > 0 && statusType == CharacterAfflictions.STATUSTYPE.Cold))
         {
             return;
         }
@@ -94,6 +118,34 @@ internal static class A15_StrongerAilments
 /// remainder to the next call instead, so a stream (bee stings) or an amount that is not a whole
 /// number of steps (a spider's 12 poison) averages out exactly.
 /// </summary>
+/// <summary>The night's cold is added from inside the game's status update (with ascent 18's dark Alpine quarters, also added there).</summary>
+[HarmonyPatch(typeof(CharacterAfflictions), nameof(CharacterAfflictions.UpdateNormalStatuses))]
+internal static class NightColdUnboosted
+{
+    [HarmonyPriority(Priority.First)]
+    private static void Prefix() => A15_StrongerAilments.Night++;
+
+    private static System.Exception Finalizer(System.Exception __exception)
+    {
+        A15_StrongerAilments.Night--;
+        return __exception;
+    }
+}
+
+/// <summary>The game's Mesa sun heats without the boost (ascent 18's sun lands its own exact amount, before this).</summary>
+[HarmonyPatch(typeof(HotSun), nameof(HotSun.Update))]
+internal static class SunUnboosted
+{
+    [HarmonyPriority(Priority.Last)]
+    private static void Prefix() => A15_StrongerAilments.Unboosted++;
+
+    private static System.Exception Finalizer(System.Exception __exception)
+    {
+        A15_StrongerAilments.Unboosted--;
+        return __exception;
+    }
+}
+
 internal static class ExactStatus
 {
     private static readonly Dictionary<string, float> owed = new Dictionary<string, float>();

@@ -146,7 +146,8 @@ internal static class A23_HotSun
         }
         // Ascent 14: sunscreen keeps off only three quarters of the heat.
         float share = local.data.wearingSunscreen ? A14_Items.SunscreenLeak : 1f;
-        local.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Hot, HeatPerSecond * heat * share * Time.deltaTime);
+        // The sun's heat lands as it comes, without ascent 15's boost.
+        A15_StrongerAilments.AddUnboosted(local.refs.afflictions, CharacterAfflictions.STATUSTYPE.Hot, HeatPerSecond * heat * share * Time.deltaTime);
         return roasting;
     }
 

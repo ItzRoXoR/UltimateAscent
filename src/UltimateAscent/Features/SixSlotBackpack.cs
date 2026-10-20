@@ -383,6 +383,23 @@ internal static class SixSlotBackpack
     private static bool SpawnsInThisClimb => template != null && (SpawnForTests
         || (PhotonNetwork.InRoom && !PhotonNetwork.OfflineMode && Plugin.SixSlotBackpackMultiplayer != null && Plugin.SixSlotBackpackMultiplayer.Value));
 
+    /// <summary>
+    /// A worn backpack goes back into the world (dropped, swapped for another, carried, its scout dead) under the name
+    /// its slot gives, which the game makes "Backpack" for every backpack; a worn six-slot backpack gives its own, so it
+    /// comes back as itself.
+    /// </summary>
+    [HarmonyPatch(typeof(BackpackSlot), nameof(BackpackSlot.GetPrefabName))]
+    private static class StaysSixWhenDropped
+    {
+        private static void Postfix(BackpackSlot __instance, ref string __result)
+        {
+            if (__instance.backpackType == BackpackSlot.BackpackType.Backpack && IsSix(__instance.prefab))
+            {
+                __result = __instance.prefab.gameObject.name;
+            }
+        }
+    }
+
     /// <summary>For the tests: the start's backpack is the six-slot one although the game is single-player.</summary>
     internal static bool SpawnForTests;
 

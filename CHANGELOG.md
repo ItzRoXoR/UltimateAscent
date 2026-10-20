@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.5.1
+
+For PEAK 2.6.b.
+
+* Six-Slot Backpack in multiplayer: it no longer turns into a regular Backpack once it has been worn. The game
+  brings any worn backpack back as "Backpack" (taken off into the hands, dropped, swapped, carried, its scout
+  dead); now the six-slot one comes back as itself, with all six slots.
+* Ascent 15: its boost no longer applies to the night's own cold or the scorching sun's own heat (ascent 23's sun,
+  Hot Mode's, and the game's Mesa sun where ascent 18 does not set it); they land as they come. At night from
+  ascent 18 that is 0.75 cold a second (was about 1).
+
 ## 1.5.0
 
 For PEAK 2.6.b.

@@ -1195,8 +1195,8 @@ internal sealed partial class Runner : MonoBehaviour
                         bare.Stop();
                         Protect(true);
                     }
-                    float factor = Rules.Enabled(Lvl.StrongerAilments) ? A15_StrongerAilments.Factor(Status.Hot) : 1f;
-                    float share = A23_HotSun.HeatPerSecond * 0.65f * factor * bare.Seconds;
+                    // The sun's heat lands as it comes (no ascent 15 boost).
+                    float share = A23_HotSun.HeatPerSecond * 0.65f * bare.Seconds;
                     Check($"Hot Mode on ascent {Rules.Level}: the sun heats at 65% of ascent 23's strength",
                         Mathf.Abs(bare.Total - share) <= share * 0.15f, $"{bare.Total * 100f:0.###} heat in {bare.Seconds:F1} s (expected {share * 100f:0.###})");
                 }
@@ -2909,8 +2909,8 @@ internal sealed partial class Runner : MonoBehaviour
             heat.Stop();
             Protect(true);
         }
-        // Ascent 23's sun heat (0.005/s) x ascent 15's heat factor (1.5).
-        float expected = 0.005f * 1.5f * heat.Seconds;
+        // Ascent 23's sun heat (0.005/s), as it comes: ascent 15's boost leaves the sun alone.
+        float expected = 0.005f * heat.Seconds;
         if (expectHeat)
         {
             Check($"the sun heats {where} (23)", heat.Total > expected * 0.75f && heat.Total < expected * 1.25f, $"{heat.Total:0.0000} heat in {heat.Seconds:F1} s (expected {expected:0.0000})");
@@ -6464,7 +6464,7 @@ internal sealed partial class Runner : MonoBehaviour
             bare.Stop();
             bool hidden = A18_ExtremeWeather.SnowstormHidesSun;
             float rate = snow.windPlayerFactor * TestStormPerSecond * hotFactor;
-            float sunRate = A23_HotSun.HeatPerSecond * hotFactor;
+            float sunRate = A23_HotSun.HeatPerSecond;
             Check(sun ? "a snowstorm by day outside the Alpine scorches (18), and no sun burns through it (23): only the storm's heat lands"
                       : "a snowstorm by day outside the Alpine scorches (18)",
                 rate > 0f && Mathf.Abs(bare.Total - rate * bare.Seconds) <= rate * bare.Seconds * 0.12f && (!sun || hidden),
@@ -8979,8 +8979,8 @@ internal sealed partial class Runner : MonoBehaviour
                 cold.Stop();
                 Protect(true);
             }
-            // Night cold (0.005/s) x 1.5 (ascent 18) x 1.3 (ascent 15's cold factor).
-            float expected = dark ? Ascents.nightColdRate * 1.5f * 1.3f * cold.Seconds : 0f;
+            // Night cold (0.005/s) x 1.5 (ascent 18); ascent 15's boost leaves the night's cold alone.
+            float expected = dark ? Ascents.nightColdRate * 1.5f * cold.Seconds : 0f;
             Check($"{(dark ? "night cold" : "no night cold")} in the {name} (18)", dark ? Mathf.Abs(cold.Total - expected) < expected * 0.2f : cold.Total < 0.0005f,
                 $"{cold.Total:0.0000} night cold in {cold.Seconds:F1} s (expected {expected:0.0000})");
             if (!dark)

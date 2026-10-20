@@ -1,7 +1,7 @@
 # Threats at ascent 24
 
 Every value below is from PEAK 2.6.b (read from the game code and the game data) and from
-Ultimate Ascent 1.5.0's rules. Status amounts use the stamina bar's scale: **100 = the whole bar**. A rule
+Ultimate Ascent 1.5.1's rules. Status amounts use the stamina bar's scale: **100 = the whole bar**. A rule
 marked *(17)* comes from that ascent; ascent 24 contains every ascent up to 24. Ultimate Ascent's
 numbers are what lands on the bar, ascent 15's boost included; below ascent 15 the same rules land
 them without that boost, so they are always lower there. Distances are the game's own units,
@@ -388,4 +388,4 @@ Petrification heals only 10 per campfire lighting *(17)*, and revives keep it *(
 | A teammate's Stick (beach, Tropics, Roots) | cut from the game | lies on the ground from ascent 9; a swing (33% of the swinger's stamina) knocks down every scout and zombie a kick would reach (**2.5 m**, 55° ahead) for **3 s**, without injury |
 | A teammate's Torch (the Mesa's Tomb; suitcases wherever the Lantern is) | a light: 2.5 cold a second off the scouts within 4.5 m while lit, no attack | lit, a swing (right mouse, 33% of the swinger's stamina, 4 s of the Torch's fuel) knocks down every scout and zombie a kick would reach (**2.5 m**, 55° ahead) for **2 s** and burns the scouts for **20** *(14)*; it warms **2 cold a second** *(14)* |
 | A teammate's Blowgun | the dart clears your statuses (except curse), then +120 drowsiness: with the starting 10 curse you fall asleep | the clear keeps 25% of each status ("Nerfed Revives") *(14)*, then **155 drowsiness** (120 × 1.3 *(15)*): with 20 curse that is 175 → pass out → **death** *(24)* |
-| The sun | only the Mesa's sun is hot; sunscreen, an open parasol or a glider held overhead keep it off | hot everywhere except the Alpine, up to the Caldera and the Gloom *(23)*: outside the Mesa **0.75 heat/s** in direct sunlight (0.5 × 1.5 *(15)*), the Mesa's midday sun burns **6 heat/s** *(18)* (the game's ×1.5 *(15)* below 18); whatever you shield yourself with roasts: clean for 5 s, heavy smoke for 15 s, then burned (parasols 1.5× as long, the Mesa's sun twice as fast) — in the Mesa's midday sun from *(18)*, everywhere *(23)*; **sunscreen lets a quarter of the heat through** *(14)* |
+| The sun | only the Mesa's sun is hot; sunscreen, an open parasol or a glider held overhead keep it off | hot everywhere except the Alpine, up to the Caldera and the Gloom *(23)*: outside the Mesa **0.5 heat/s** in direct sunlight (ascent 15's boost leaves the sun alone), the Mesa's midday sun burns **6 heat/s** *(18)* (the game's ×1.5 *(15)* below 18); whatever you shield yourself with roasts: clean for 5 s, heavy smoke for 15 s, then burned (parasols 1.5× as long, the Mesa's sun twice as fast) — in the Mesa's midday sun from *(18)*, everywhere *(23)*; **sunscreen lets a quarter of the heat through** *(14)* |
