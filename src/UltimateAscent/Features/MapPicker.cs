@@ -68,7 +68,7 @@ internal static class MapPicker
     {
         get
         {
-            if (Count == 0 || ModSave.Get(DayKey) != Day.ToString() || !int.TryParse(ModSave.Get(PickKey), out int pick) || pick < 0 || pick >= Count)
+            if (Count == 0 || !ChallengeModes.Offered || ModSave.Get(DayKey) != Day.ToString() || !int.TryParse(ModSave.Get(PickKey), out int pick) || pick < 0 || pick >= Count)
             {
                 return Today;
             }
@@ -163,7 +163,7 @@ internal static class MapPicker
     }
 
     /// <summary>Only the host picks (the host's game loads the map); a map at all only with the game's rotation there.</summary>
-    private static bool Picks => Count > 1 && (!PhotonNetwork.InRoom || PhotonNetwork.IsMasterClient);
+    private static bool Picks => Count > 1 && ChallengeModes.Offered && (!PhotonNetwork.InRoom || PhotonNetwork.IsMasterClient);
 
     private static void Refresh()
     {

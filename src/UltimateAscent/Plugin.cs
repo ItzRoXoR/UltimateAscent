@@ -23,7 +23,7 @@ public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "UltimateAscent";
     public const string Name = "Ultimate Ascent";
-    public const string Version = "1.5.3";
+    public const string Version = "1.5.4";
 
     internal static ManualLogSource Log;
     internal static Plugin Instance;
@@ -33,6 +33,7 @@ public sealed class Plugin : BaseUnityPlugin
     internal static ConfigEntry<int> ExtendedProgress;
     internal static ConfigEntry<int> DefaultAscent;
     internal static ConfigEntry<bool> WrapAround;
+    internal static ConfigEntry<bool> BoardingPassExtras;
     internal static ConfigEntry<bool> VerboseLogging;
 
     /// <summary>One switch per ascent 9-25 (indexed by the ascent): off leaves that ascent's own rule out.</summary>
@@ -109,6 +110,24 @@ public sealed class Plugin : BaseUnityPlugin
                 new AcceptableValueRange<int>(-1, Lvl.Last)));
         WrapAround = Config.Bind("Boarding Pass", "Wrap Around", true,
             "The ascent arrows wrap around: left from Tenderfoot jumps to the end of the list (True Final Ascent's FINAL ASCENT if installed, otherwise your highest unlocked ascent), right from the end of the list goes back to Tenderfoot.");
+        BoardingPassExtras = Config.Bind("Boarding Pass", "Boarding Pass Extras", true,
+            "The mod's additions to the boarding pass: the Blind Mode and Hot Mode boxes in its header and the map picker on its ascent card. Off: none of them shows, Blind Mode and Hot Mode stay off (your ticks are kept for when this is on again) and every climb is on today's map. Each player's own.");
+        BoardingPassExtras.SettingChanged += (_, _) =>
+        {
+            // An open boarding pass shows the change at once.
+            try
+            {
+                BoardingPass pass = GUIManager.instance != null ? GUIManager.instance.boardingPass : null;
+                if (pass != null && pass.isOpen)
+                {
+                    pass.UpdateAscent();
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Log.LogWarning("Boarding Pass Extras: the open boarding pass could not be refreshed: " + ex.Message);
+            }
+        };
         UnlockAll = Config.Bind("Unlocks", "Unlock All Ascents", false,
             "Makes ascents 9-25 selectable on the boarding pass without beating them in order. Turning it off again brings back your normal progress.");
         ExtendedProgress = Config.Bind("Unlocks", "Highest Unlocked Ascent", 0,

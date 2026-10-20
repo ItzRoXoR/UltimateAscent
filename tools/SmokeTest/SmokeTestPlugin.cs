@@ -935,6 +935,27 @@ internal sealed partial class Runner : MonoBehaviour
             $"Blind Mode {ChallengeModes.Blind} (shown {ChallengeModesUi.BlindBox.isOn}), Hot Mode {ChallengeModes.Hot} (shown {ChallengeModesUi.HotBox.isOn})");
         Screenshot("challenge-boxes");
         yield return new WaitForSecondsRealtime(1f);
+        // True Final Ascent puts its light/dark switch left of the airline's logo (its own rule, worked out here: the
+        // test runs without TFA); the boxes' rows, which take the clicks, must end before it.
+        {
+            RectTransform close = pass.closeButton != null ? pass.closeButton.transform as RectTransform : null;
+            Image logo = pass.GetComponentsInChildren<Image>(true).FirstOrDefault(i => (i.sprite != null && (i.sprite.name.ToLowerInvariant().Contains("bingbong") || i.sprite.name.ToLowerInvariant().Contains("airline"))) || i.name.ToLowerInvariant().Contains("logo"));
+            RectTransform anchor = logo != null ? logo.rectTransform : close;
+            Transform layer = close != null ? close.parent : pass.transform;
+            float size = close != null ? Mathf.Clamp(close.rect.height, 40f, 90f) : 56f;
+            Vector3[] corners = new Vector3[4];
+            anchor.GetWorldCorners(corners);
+            Vector3 middleLeft = layer.InverseTransformPoint((corners[0] + corners[1]) * 0.5f);
+            float switchLeft = layer.TransformPoint(new Vector3(middleLeft.x - size * 0.9f - size * 0.5f, middleLeft.y, 0f)).x;
+            float rowsRight = new[] { ChallengeModesUi.BlindBox, ChallengeModesUi.HotBox }.Max(t =>
+            {
+                Vector3[] row = new Vector3[4];
+                ((RectTransform)t.transform).GetWorldCorners(row);
+                return row[2].x;
+            });
+            Check("the challenge boxes take the click over their box and name only, ending before where True Final Ascent puts its light/dark switch",
+                rowsRight < switchLeft, $"rows end at {rowsRight:0}, TFA's switch would start at {switchLeft:0} (screen x, left of '{anchor.name}')");
+        }
         // The map picker clicked like a player: one to the right and back.
         Transform next = MapPicker.Line != null ? MapPicker.Line.transform.Find("UltimateAscent Map Next") : null;
         Transform previous = MapPicker.Line != null ? MapPicker.Line.transform.Find("UltimateAscent Map Previous") : null;
@@ -981,6 +1002,31 @@ internal sealed partial class Runner : MonoBehaviour
             $"shown {ChallengeModesUi.HotBox.isOn}, can be changed {ChallengeModesUi.HotBox.interactable}, own box {ChallengeModes.Hot}");
         Screenshot("challenge-boxes-ascent-23");
         yield return new WaitForSecondsRealtime(1f);
+        // The config's "Boarding Pass Extras" off (in memory): no boxes, no map picker, both modes off and today's map
+        // although a box is ticked and another map picked; on again, all back as they were.
+        {
+            ConfigEntry<bool> extras = UltimateAscent.Plugin.BoardingPassExtras;
+            bool savedBlind = ModSave.GetBool("blindmode");
+            ModSave.SetBool("blindmode", true);
+            MapPicker.Picked = MapPicker.Order().First(m => m != MapPicker.Today);
+            int picked = MapPicker.Picked;
+            pass.ascentIndex = 10;
+            pass.UpdateAscent();
+            extras.Value = false;
+            yield return new WaitForSecondsRealtime(0.4f);
+            bool hidden = !ChallengeModesUi.Shown && (MapPicker.Line == null || !MapPicker.Line.activeInHierarchy);
+            bool modesOff = !ChallengeModes.Blind && !ChallengeModes.Hot;
+            bool todays = MapPicker.Picked == MapPicker.Today;
+            Screenshot("boarding-pass-extras-off");
+            yield return new WaitForSecondsRealtime(1f);
+            extras.Value = true;
+            yield return new WaitForSecondsRealtime(0.4f);
+            bool back = ChallengeModesUi.Shown && MapPicker.Line != null && MapPicker.Line.activeInHierarchy && ChallengeModes.Blind && MapPicker.Picked == picked;
+            Check("with Boarding Pass Extras off the pass shows neither the challenge boxes nor the map picker, Blind Mode is off and the climb on today's map; on again, all as they were",
+                hidden && modesOff && todays && back, $"hidden {hidden}, modes off {modesOff}, today's map {todays}; back on: {back} ({MapPicker.Name(MapPicker.Picked)})");
+            ModSave.SetBool("blindmode", savedBlind);
+            MapPicker.Picked = MapPicker.Today;
+        }
         pass.ascentIndex = target;
         pass.UpdateAscent();
         pass.Close();

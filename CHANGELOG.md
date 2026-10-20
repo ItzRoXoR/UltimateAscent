@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.5.4
+
+For PEAK 2.6.b.
+
+* A new setting, Boarding Pass > Boarding Pass Extras (on by default), turns off the mod's additions to the
+  boarding pass: the Blind Mode and Hot Mode boxes and the map picker. Off, none of them shows, both modes stay
+  off (your ticks are kept for when it is on again) and every climb is on today's map. A change shows at once on
+  an open boarding pass.
+* Blind Mode and Hot Mode boxes: each takes the click over its box and name only. Their rows reached across the
+  header to where True Final Ascent puts its light/dark switch, so a click there hit a box instead.
+
 ## 1.5.3
 
 For PEAK 2.6.b.

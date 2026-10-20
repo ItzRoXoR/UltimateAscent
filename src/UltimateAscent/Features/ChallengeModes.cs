@@ -30,15 +30,18 @@ internal static class ChallengeModes
     private static Material screen;
     private static bool darkened;
 
+    /// <summary>The boarding pass's extras are on (the config's "Boarding Pass Extras"); off, both modes are too.</summary>
+    internal static bool Offered => Plugin.BoardingPassExtras == null || Plugin.BoardingPassExtras.Value;
+
     internal static bool Blind
     {
-        get => ModSave.GetBool(BlindKey);
+        get => Offered && ModSave.GetBool(BlindKey);
         set => ModSave.SetBool(BlindKey, value);
     }
 
     internal static bool Hot
     {
-        get => ModSave.GetBool(HotKey);
+        get => Offered && ModSave.GetBool(HotKey);
         set => ModSave.SetBool(HotKey, value);
     }
 

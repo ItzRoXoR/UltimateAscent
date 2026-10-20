@@ -190,6 +190,7 @@ vanilla way (also late joiners and campfire saves). The host's ascent switches a
 |---|---|---|---|
 | Boarding Pass | Default Ascent | 0 | -1 = Tenderfoot, 0 = Peak (vanilla), 1–25 = that ascent (capped at your highest unlocked) |
 | Boarding Pass | Wrap Around | true | The arrows wrap around |
+| Boarding Pass | Boarding Pass Extras | true | The Blind Mode and Hot Mode boxes and the map picker on the boarding pass. Off: none of them shows, both modes stay off (your ticks are kept) and every climb is on today's map. Each player's own |
 | Unlocks | Unlock All Ascents | false | All of 9–25 selectable |
 | Unlocks | Highest Unlocked Ascent | 0 | Your progress beyond 8 (kept by the mod) |
 | Ascents | Ascent 9 … Ascent 25 | true | Switches that ascent's own rule on or off; the other ascents keep theirs (ascent 25 with *Ascent 20* off plays without Bing Bong's rule). The host's switches apply to everyone |

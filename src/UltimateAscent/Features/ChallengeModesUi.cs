@@ -12,7 +12,8 @@ namespace UltimateAscent.Features;
 /// The Blind Mode and Hot Mode boxes, in the boarding pass's blue header to the right of its title, one above the
 /// other, in the header's own style: a white box in the shape of the pass's buttons with the pass's blue tick, the
 /// name beside it in the title's white lettering, and the Custom Run screen's click and hover sounds. Every player
-/// can open the boarding pass and tick their own. On ascent 23 and above the Hot Mode box shows ticked and cannot
+/// can open the boarding pass and tick their own. Each row takes the click over its box and name only, clear of True
+/// Final Ascent's light/dark switch at the header's right end. On ascent 23 and above the Hot Mode box shows ticked and cannot
 /// be changed (its name dims): that ascent's own sun already does it.
 /// </summary>
 internal static class ChallengeModesUi
@@ -59,6 +60,7 @@ internal static class ChallengeModesUi
         {
             return;
         }
+        boxes.SetActive(ChallengeModes.Offered);
         blind.SetIsOnWithoutNotify(ChallengeModes.Blind);
         bool byAscent = ChallengeModes.SunByAscent(pass.ascentIndex);
         hot.interactable = !byAscent;
@@ -92,7 +94,9 @@ internal static class ChallengeModesUi
         rows.spacing = 4f;
         rows.childControlWidth = true;
         rows.childControlHeight = true;
-        rows.childForceExpandWidth = true;
+        // Each row only as wide as its box and name: the header's right end is where True Final Ascent puts its
+        // light/dark switch, which a row reaching across would cover and take the click from.
+        rows.childForceExpandWidth = false;
         rows.childForceExpandHeight = true;
         blind = Box(holder.transform, buttonLook, tickLook, title, pass.ascentTitle.color, Russian ? "СЛЕПОЙ РЕЖИМ" : "BLIND MODE", on => ChallengeModes.Blind = on, out _, out _);
         hot = Box(holder.transform, buttonLook, tickLook, title, pass.ascentTitle.color, Russian ? "ЖАРКИЙ РЕЖИМ" : "HOT MODE", on => ChallengeModes.Hot = on, out hotLabel, out hotBox);
@@ -127,7 +131,7 @@ internal static class ChallengeModesUi
     {
         GameObject row = new GameObject("UltimateAscent " + text, typeof(RectTransform));
         row.transform.SetParent(parent, false);
-        // The whole row takes the click, not only the box.
+        // The whole row (its box and its name) takes the click, not only the box.
         Image hit = row.AddComponent<Image>();
         hit.color = Color.clear;
         HorizontalLayoutGroup line = row.AddComponent<HorizontalLayoutGroup>();
