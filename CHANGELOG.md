@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.5.5
+
+For PEAK 2.6.b.
+
+* Toxic Drink: it cools you by 60 heat (was 30, the Energy Drink's); from ascent 14, as every cure, 60% of it (36).
+  From ascent 14 it wakes you by at most 80 drowsiness (its boost drained it all, as the Energy Drink's does).
+* Energy Drink at ascent 14: it keeps the game's boosts, walking +50% and climbing +150% (was +30% and +70%). Its
+  crash from ascent 15 (50 drowsiness) stays; the Cherry Lollipop's boost keeps walking +30%.
+
 ## 1.5.4
 
 For PEAK 2.6.b.

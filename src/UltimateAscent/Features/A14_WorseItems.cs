@@ -277,14 +277,15 @@ internal static class A14_WorseItems
         {
             if (On && !ToxicDrink.IsBoost(__instance))
             {
-                // The Energy Drink itself: walking only +30%, and from ascent 15 a crash of exactly 50 drowsiness (the
-                // Cherry Lollipop's boost, the Energy Drink's, walks the same but has no crash). Other speed boosts keep
-                // at most 13DDA's +60% walking (the game's are +50% now) and +70% climbing.
-                bool energyDrink = A14_Items.InEnergyDrink || A14_Items.InCherryLollipop;
+                // The Energy Drink itself keeps the game's boosts (walking +50%, climbing +150%), and from ascent 15 its
+                // crash is exactly 50 drowsiness. The Cherry Lollipop's boost walks +30% without a crash. Other speed
+                // boosts keep at most 13DDA's +60% walking and +70% climbing.
+                bool energyDrink = A14_Items.InEnergyDrink;
+                bool cherry = A14_Items.InCherryLollipop;
                 float walk = Overrides.Original(__instance, "walk", __instance.moveSpeedMod);
                 float climb = Overrides.Original(__instance, "climb", __instance.climbSpeedMod);
-                Overrides.Set(__instance, nameof(Affliction_FasterBoi.moveSpeedMod), energyDrink ? A14_Items.EnergyDrinkWalking : Mathf.Min(walk, 0.6f));
-                Overrides.Set(__instance, nameof(Affliction_FasterBoi.climbSpeedMod), Mathf.Min(climb, 0.7f));
+                Overrides.Set(__instance, nameof(Affliction_FasterBoi.moveSpeedMod), energyDrink ? walk : cherry ? A14_Items.EnergyDrinkWalking : Mathf.Min(walk, 0.6f));
+                Overrides.Set(__instance, nameof(Affliction_FasterBoi.climbSpeedMod), energyDrink ? climb : Mathf.Min(climb, 0.7f));
                 if (A14_Items.InEnergyDrink && Rules.Enabled(Lvl.StrongerAilments))
                 {
                     Overrides.Set(__instance, nameof(Affliction_FasterBoi.drowsyOnEnd), A15_StrongerAilments.Raw(CharacterAfflictions.STATUSTYPE.Drowsy, A14_Items.EnergyDrinkCrash));

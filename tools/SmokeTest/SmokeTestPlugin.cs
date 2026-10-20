@@ -750,6 +750,7 @@ internal sealed partial class Runner : MonoBehaviour
             ("eruptions burn (17)", EruptionHeatCheck),
             ("zombies share out the scouts (17)", () => Now(ZombieSharingCheck)),
             ("shorter reach of the rope cannons and the rescue claw (14)", ShorterReachCheck),
+            ("what the drinks take off (14)", DrinkNumbers),
             ("the map picker's map (picker)", () => Now(PickedMapCheck)),
             ("bees knock a scout out (17, 24)", BeeKnockout),
             ("Nadir (17, 18)", NadirCheck),

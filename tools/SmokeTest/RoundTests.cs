@@ -1241,6 +1241,82 @@ internal sealed partial class Runner
             claw != null ? $"level or up {claw.range:0.#} m, down {claw.rangeDownward:0.#} m (the game: {Overrides.Original(claw, "range", -1f):0.#} and {Overrides.Original(claw, "rangeDownward", -1f):0.#})" : "no claw in the hands");
     }
 
+    /// <summary>
+    /// What the Energy Drink and the Toxic Drink take off and the boost they give, drunk the game's way with 90 heat
+    /// and 90 drowsiness, with ascent 14's rule on and switched off (in memory). The Energy Drink: 30 heat (from 14,
+    /// 60% of it), all the drowsiness, the game's boosts (walking +50%, climbing +150%) on every ascent. The Toxic
+    /// Drink: 60 heat (from 14, 60% of it), all the drowsiness, from 14 at most 80. Heat lands in 2.5 steps.
+    /// </summary>
+    private IEnumerator DrinkNumbers()
+    {
+        Character local = Local;
+        BepInEx.Configuration.ConfigEntry<bool> worse = UltimateAscent.Plugin.AscentSwitches[Lvl.WorseItems];
+        bool saved = worse.Value;
+        Protect(false);
+        Action calm = CalmForMeasuring();
+        try
+        {
+            foreach (bool rule in new[] { true, false })
+            {
+                worse.Value = rule && saved;
+                HostOptions.Invalidate();
+                foreach (Item drink in new[] { ItemByName("Energy Drink"), ToxicDrink.Template })
+                {
+                    if (drink == null)
+                    {
+                        continue;
+                    }
+                    yield return SpawnIntoHand(drink);
+                    if (held == null)
+                    {
+                        continue;
+                    }
+                    ClearStatuses(Afflictions);
+                    foreach (Peak.Afflictions.Affliction old in Afflictions.afflictionList.ToList())
+                    {
+                        Afflictions.RemoveAffliction(old.GetAfflictionType());
+                    }
+                    Afflictions.SetStatus(Status.Hot, 0.9f);
+                    Afflictions.SetStatus(Status.Drowsy, 0.9f);
+                    yield return new WaitForSeconds(0.3f);
+                    float hot = Afflictions.GetCurrentStatus(Status.Hot);
+                    float drowsy = Afflictions.GetCurrentStatus(Status.Drowsy);
+                    yield return EatHeld();
+                    yield return new WaitForSeconds(0.5f);
+                    float hotTaken = hot - Afflictions.GetCurrentStatus(Status.Hot);
+                    float drowsyTaken = drowsy - Afflictions.GetCurrentStatus(Status.Drowsy);
+                    Peak.Afflictions.Affliction_FasterBoi boost = Afflictions.afflictionList.OfType<Peak.Afflictions.Affliction_FasterBoi>().FirstOrDefault();
+                    bool on = rule && saved;
+                    bool toxic = drink == ToxicDrink.Template;
+                    float heatWanted = (toxic ? ToxicDrink.Cooling : 0.3f) * (on ? A14_WorseItems.CureShare : 1f);
+                    float drowsyWanted = toxic && on ? ToxicDrink.WakesWorse : drowsy;
+                    bool boostRight = toxic || (boost != null && Mathf.Abs(boost.moveSpeedMod - 0.5f) < 0.01f && Mathf.Abs(boost.climbSpeedMod - 1.5f) < 0.01f);
+                    Check($"the {(toxic ? "Toxic Drink" : "Energy Drink")} takes off {heatWanted * 100f:0} heat and {(drowsyWanted >= drowsy ? "all the drowsiness" : $"{drowsyWanted * 100f:0} drowsiness")}"
+                        + (toxic ? "" : ", and walks +50% and climbs +150%") + $", ascent 14's rule {(on ? "on" : "off")} (14)",
+                        Mathf.Abs(hotTaken - heatWanted) <= 0.026f && Mathf.Abs(drowsyTaken - drowsyWanted) <= 0.011f && boostRight,
+                        $"took {hotTaken * 100f:0.#} heat, {drowsyTaken * 100f:0.#} drowsiness" + (boost != null ? $"; walking +{boost.moveSpeedMod * 100f:0}%, climbing +{boost.climbSpeedMod * 100f:0}%" : ""));
+                    Info($"{drink.GetName()} drunk, ascent 14's rule {(rule && saved ? "on" : "off")} (climb on ascent {target})",
+                        $"heat {hot * 100f:0} -> {Afflictions.GetCurrentStatus(Status.Hot) * 100f:0} (took {hotTaken * 100f:0.#}), drowsiness {drowsy * 100f:0} -> {Afflictions.GetCurrentStatus(Status.Drowsy) * 100f:0} (took {drowsyTaken * 100f:0.#}); "
+                        + (boost != null ? $"boost walking +{boost.moveSpeedMod * 100f:0}%, climbing +{boost.climbSpeedMod * 100f:0}%, {boost.totalTime:0.#} s, drowsiness at its end {boost.drowsyOnEnd * 100f:0.#}" : "no speed boost"));
+                    ClearStatuses(Afflictions);
+                    foreach (Peak.Afflictions.Affliction left in Afflictions.afflictionList.ToList())
+                    {
+                        Afflictions.RemoveAffliction(left.GetAfflictionType());
+                    }
+                    yield return new WaitForSeconds(0.5f);
+                }
+            }
+        }
+        finally
+        {
+            worse.Value = saved;
+            HostOptions.Invalidate();
+            ClearStatuses(Afflictions);
+            calm();
+            Protect(true);
+        }
+    }
+
     private static float Flat(Vector3 a, Vector3 b)
     {
         a.y = b.y;

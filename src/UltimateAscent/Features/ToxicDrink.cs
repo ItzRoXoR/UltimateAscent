@@ -15,8 +15,9 @@ namespace UltimateAscent.Features;
 /// on). Its can looks the way a cooked Energy Drink's does (the game's first cooking tint). Cooked,
 /// it works like a cooked Energy Drink: it bursts when drunk (a knock-down and a push, never knocking you
 /// out or making you drowsy, as ascent 17's explosions would), and the poison is gone. Its drinking sound
-/// is the Energy Drink's, 1.5 times as fast. Everything else is the Energy Drink's: it cools you by 30
-/// heat and wakes you up.
+/// is the Energy Drink's, 1.5 times as fast. It cools you by 60 heat (the Energy Drink: 30; from ascent 14, as every
+/// cure, 60% of it: 36) and wakes you up as the Energy Drink does; from ascent 14 it takes off at most 80 of the
+/// drowsiness you had when you drank it (its boost drains drowsiness while it lasts, as the Energy Drink's does).
 /// <para>It turns up only in Ancient Luggage and in the Ancient Statues (the pools the Ritual Dagger
 /// comes from), as rarely as the Faerie Lantern (Legendary): from ascent 9 with the config's "New Items"
 /// on; in custom runs it has its own switch.</para>
@@ -45,6 +46,15 @@ internal static class ToxicDrink
     internal const float PoisonPerSecond = 0.04f;
     internal const float PoisonPerSecondWorse = 0.08f;
     internal const float PoisonSeconds = 5f;
+
+    /// <summary>The heat it takes off (the Energy Drink: 30); from ascent 14 the cure share of it, as every cure.</summary>
+    internal const float Cooling = 0.6f;
+
+    /// <summary>From ascent 14: at most this much of the drowsiness you had when you drank it comes off.</summary>
+    internal const float WakesWorse = 0.8f;
+
+    /// <summary>From ascent 14, while a Toxic Drink's boost runs: drowsiness goes no lower than this (the local scout's).</summary>
+    private static float drowsyFloor = -1f;
 
     /// <summary>Its drinking sound: the Energy Drink's, played this much faster (and higher).</summary>
     internal const float SoundSpeed = 1.5f;
@@ -101,6 +111,102 @@ internal static class ToxicDrink
     internal static void Reset()
     {
         doses.Clear();
+        drowsyFloor = -1f;
+    }
+
+    /// <summary>
+    /// From ascent 14 the Toxic Drink wakes you by at most 80: its own drowsiness cure lands only down to that, and
+    /// its boost (which takes 50 off as it starts and drains the rest while it lasts) goes no lower either.
+    /// </summary>
+    [HarmonyPatch(typeof(Action_ModifyStatus), nameof(Action_ModifyStatus.RunAction))]
+    private static class WakesAtMost80
+    {
+        [HarmonyPriority(Priority.Last)]
+        private static bool Prefix(Action_ModifyStatus __instance)
+        {
+            Character drinker = __instance.item != null ? __instance.item.holderCharacter : null;
+            if (!Worse || __instance.statusType != CharacterAfflictions.STATUSTYPE.Drowsy || __instance.changeAmount >= 0f || !IsToxic(__instance.item) || drinker == null || !drinker.IsLocal)
+            {
+                return true;
+            }
+            CharacterAfflictions afflictions = drinker.refs.afflictions;
+            float drowsy = afflictions.GetCurrentStatus(CharacterAfflictions.STATUSTYPE.Drowsy);
+            // Set once per drink: its boost may have started first and set it from before it woke you.
+            if (drowsyFloor < 0f)
+            {
+                drowsyFloor = Mathf.Max(0f, drowsy - WakesWorse);
+            }
+            if (drowsy > drowsyFloor)
+            {
+                afflictions.SetStatus(CharacterAfflictions.STATUSTYPE.Drowsy, drowsyFloor);
+            }
+            return false;
+        }
+    }
+
+    [HarmonyPatch(typeof(Affliction_FasterBoi), nameof(Affliction_FasterBoi.OnApplied))]
+    private static class BoostWakesToTheFloor
+    {
+        private static void Prefix(Affliction_FasterBoi __instance, out float __state)
+        {
+            __state = -1f;
+            Character drinker = __instance.character;
+            if (Worse && IsBoost(__instance) && drinker != null && drinker.IsLocal)
+            {
+                float drowsy = drinker.refs.afflictions.GetCurrentStatus(CharacterAfflictions.STATUSTYPE.Drowsy);
+                // The cure may already have set the floor (it runs first); otherwise it is set from here.
+                if (drowsyFloor < 0f)
+                {
+                    drowsyFloor = Mathf.Max(0f, drowsy - WakesWorse);
+                }
+                __state = drowsyFloor;
+            }
+        }
+
+        private static void Postfix(Affliction_FasterBoi __instance, float __state)
+        {
+            if (__state >= 0f && __instance.character != null && __instance.character.refs.afflictions.GetCurrentStatus(CharacterAfflictions.STATUSTYPE.Drowsy) < __state)
+            {
+                __instance.character.refs.afflictions.SetStatus(CharacterAfflictions.STATUSTYPE.Drowsy, __state);
+            }
+        }
+    }
+
+    [HarmonyPatch(typeof(Affliction_FasterBoi), "UpdateEffect")]
+    private static class BoostDrainsToTheFloor
+    {
+        private static bool Prefix(Affliction_FasterBoi __instance)
+        {
+            Character drinker = __instance.character;
+            if (!Worse || drowsyFloor < 0f || !IsBoost(__instance) || drinker == null || !drinker.IsLocal)
+            {
+                return true;
+            }
+            if (drinker.data.isClimbing)
+            {
+                __instance.climbDelay = 0f;
+                __instance.bonusTime = 0f;
+            }
+            CharacterAfflictions afflictions = drinker.refs.afflictions;
+            float drowsy = afflictions.GetCurrentStatus(CharacterAfflictions.STATUSTYPE.Drowsy);
+            if (drowsy > drowsyFloor)
+            {
+                afflictions.SetStatus(CharacterAfflictions.STATUSTYPE.Drowsy, Mathf.Max(drowsyFloor, drowsy - Time.deltaTime));
+            }
+            return false;
+        }
+    }
+
+    [HarmonyPatch(typeof(Affliction_FasterBoi), nameof(Affliction_FasterBoi.OnRemoved))]
+    private static class FloorGoes
+    {
+        private static void Postfix(Affliction_FasterBoi __instance)
+        {
+            if (IsBoost(__instance) && __instance.character != null && __instance.character.IsLocal)
+            {
+                drowsyFloor = -1f;
+            }
+        }
     }
 
     /// <summary>A copy of the Energy Drink with the new label, its own name and icon, its boosts and its spawns.</summary>
@@ -117,6 +223,11 @@ internal static class ToxicDrink
             return;
         }
         Item drink = ModItems.Copy(energy, PrefabName);
+        // It cools by 60 (the game's Energy Drink: 30); the mods that show what an item does read this too.
+        foreach (Action_ModifyStatus cools in drink.GetComponents<Action_ModifyStatus>().Where(a => a.statusType == CharacterAfflictions.STATUSTYPE.Hot && a.changeAmount < 0f))
+        {
+            cools.changeAmount = -Cooling;
+        }
         Action_ApplyAffliction[] boosts = drink.GetComponents<Action_ApplyAffliction>();
         ItemCooking cooking = drink.GetComponent<ItemCooking>();
         Renderer can = drink.GetComponentsInChildren<Renderer>(true).FirstOrDefault(r => r.sharedMaterial != null && r.sharedMaterial.name.StartsWith(CanMaterial, StringComparison.Ordinal));

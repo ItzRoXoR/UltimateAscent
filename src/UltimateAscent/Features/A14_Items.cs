@@ -24,8 +24,8 @@ namespace UltimateAscent.Features;
 /// ascent 14 and in custom runs, 5% of the bar from 14 (as much as the Parasol), and is the one
 /// parasol that never wears out (the Parasol is used up after 20 s of gliding, see A14_WorseItems). It is the
 /// Lightweight Parasol in every climb, custom runs included (see <see cref="IsLightweightParasol"/>).</item>
-/// <item>The Energy Drink speeds your walking up by 30% (see A14_WorseItems' energy-drink rule); from
-/// ascent 15 its crash brings 50 drowsiness. The Big Lollipop's drowsiness comes over 12 s and adds up
+/// <item>The Energy Drink keeps the game's boosts (walking +50%, climbing +150%); from ascent 15 its crash brings 50
+/// drowsiness (see A14_WorseItems' energy-drink rule). The Big Lollipop's drowsiness comes over 12 s and adds up
 /// to 85 (the game: 33 over 10 s). The Cherry Lollipop's speed boost is the Energy Drink's (walking +30%),
 /// without its crash; its drowsiness is the Big Lollipop's.</item>
 /// <item>Fortified Milk makes you invincible for 12 s, 20 s cooked (the game: 15 s and 25 s).</item>
@@ -113,7 +113,7 @@ internal static class A14_Items
     /// <summary>The Big Lollipop, or the Cherry Lollipop (the same candy in another look and name).</summary>
     internal static bool IsBigLollipop(string name) => name == BigLollipopName || name == CherryLollipop.ItemName;
 
-    /// <summary>The Energy Drink's walking bonus (+30%; the game: +50%).</summary>
+    /// <summary>The Cherry Lollipop's walking bonus (+30%; the Energy Drink's own: the game's +50%).</summary>
     internal const float EnergyDrinkWalking = 0.3f;
 
     /// <summary>From ascent 15: the Energy Drink's crash (the game: 25 drowsiness).</summary>
