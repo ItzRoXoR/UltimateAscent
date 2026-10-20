@@ -23,7 +23,7 @@ public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "UltimateAscent";
     public const string Name = "Ultimate Ascent";
-    public const string Version = "1.5.2";
+    public const string Version = "1.5.3";
 
     internal static ManualLogSource Log;
     internal static Plugin Instance;

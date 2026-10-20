@@ -145,11 +145,12 @@ Open the boarding pass at the airport and use the arrows, like vanilla.
   if installed, otherwise your highest unlocked ascent), right from the end of the list goes back to
   Tenderfoot.
 * **Default Ascent:** pick which ascent the boarding pass shows when you first open it.
-* **Map:** at the bottom right of the ascent card, the map's name in a blue outline with **<** and **>** beside it picks any map of the game's current rotation
-  (the maps it goes through, one a day). It opens on today's map, **TODAY'S MAP (9)**; the others follow as
-  **MAP 0**, **MAP 1**... (today's number not again). Your pick stays for the rest of the day, between climbs
-  and restarts, and goes back to today's map when the day changes. The host's pick is the map everyone climbs;
-  guests do not see the arrows. TFA's FINAL ASCENT keeps its own map.
+* **Map:** at the bottom right of the ascent card, the map's name in a blue outline with **<** and **>** beside it
+  picks any map of the game's current rotation (the maps it goes through, one a day). It opens on today's map,
+  **TODAY'S MAP (9)**; the arrows go by number (left **MAP 8**, right **MAP 10**), round at the ends, today's map
+  keeping its name. Your pick stays for the rest of the day, between climbs and restarts, and goes back to today's
+  map when the day changes. The host's pick is the map everyone climbs; guests do not see the arrows. TFA's FINAL
+  ASCENT keeps its own map.
 * With **True Final Ascent**, its FINAL ASCENT entry stays right after your highest ascent. In FINAL
   ASCENT, TFA's own difficulty dropdown offers ascents 9–25 too.
 

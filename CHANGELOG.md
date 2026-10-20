@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.3
+
+For PEAK 2.6.b.
+
+* Map picker: its arrows go by number, today's map keeping its name among them (from TODAY'S MAP (9), left is
+  MAP 8 and right MAP 10), and they have the game's button hover and click sounds.
+
 ## 1.5.2
 
 For PEAK 2.6.b.

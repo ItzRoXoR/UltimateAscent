@@ -72,6 +72,23 @@ internal sealed partial class Runner
         harmony.CreateClassProcessor(typeof(BlindModeUnseen)).Patch();
         harmony.CreateClassProcessor(typeof(HoldLootTables)).Patch();
         harmony.CreateClassProcessor(typeof(EruptionsSeen)).Patch();
+        harmony.CreateClassProcessor(typeof(SoundsPlayed)).Patch();
+    }
+
+    /// <summary>The sounds played through the game's sound player, while a check listens.</summary>
+    [HarmonyPatch(typeof(SFX_Player), nameof(SFX_Player.PlaySFX))]
+    internal static class SoundsPlayed
+    {
+        internal static bool Listening;
+        internal static readonly List<SFX_Instance> Heard = new List<SFX_Instance>();
+
+        private static void Prefix(SFX_Instance SFX)
+        {
+            if (Listening && SFX != null)
+            {
+                Heard.Add(SFX);
+            }
+        }
     }
 
     /// <summary>Every eruption that breaks out on this game: when and where.</summary>

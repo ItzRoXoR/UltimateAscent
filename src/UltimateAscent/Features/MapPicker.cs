@@ -13,8 +13,10 @@ namespace UltimateAscent.Features;
 
 /// <summary>
 /// The boarding pass picks the map: any map of the game's current rotation (the maps it goes through one a day),
-/// at the bottom right of the ascent card: the map's name in a rounded blue outline, "<" and ">" beside it. It opens on
-/// today's map, "TODAY'S MAP (12)" (the game's lettering has no number sign); the others follow as "MAP 5", today's number not among them. The pick is kept
+/// at the bottom right of the ascent card: the map's name in a rounded blue outline, "<" and ">" beside it (with the
+/// game's button hover and click sounds). The arrows go by number (from today's 9, left is 8 and right is 10), round
+/// at the ends; today's map keeps its own name among them. It opens on
+/// today's map, "TODAY'S MAP (12)" (the game's lettering has no number sign); the others are "MAP 5". The pick is kept
 /// in the mod's save with the day it was made, so it stays for the day's later climbs and goes back to today's map
 /// when the day changes. The host's pick is the map (the host's game loads it); guests do not see the line. True
 /// Final Ascent's FINAL ASCENT keeps its own map.
@@ -96,14 +98,8 @@ internal static class MapPicker
         return number.Success ? int.Parse(number.Value) : map;
     }
 
-    /// <summary>The maps in the order the arrows go: today's first, then the others by number.</summary>
-    internal static List<int> Order()
-    {
-        int today = Today;
-        List<int> order = new List<int> { today };
-        order.AddRange(Enumerable.Range(0, Count).Where(m => m != today).OrderBy(Number));
-        return order;
-    }
+    /// <summary>The maps in the order the arrows go: by number (today's among them, under its own name), round at the ends.</summary>
+    internal static List<int> Order() => Enumerable.Range(0, Count).OrderBy(Number).ToList();
 
     internal static string Name(int map)
     {
@@ -290,6 +286,32 @@ internal static class MapPicker
         none.mode = Navigation.Mode.None;
         button.navigation = none;
         button.onClick.AddListener(() => click());
+        // The game's button sounds: a button's on the pass if it has one, otherwise the Custom Run screen's (its
+        // options' hover and click, as the challenge boxes use).
+        (SFX_Instance clickSound, SFX_Instance hoverSound) = ButtonSounds(pass);
+        if (clickSound != null || hoverSound != null)
+        {
+            NicksButtonSFX sounds = end.AddComponent<NicksButtonSFX>();
+            sounds.button = button;
+            sounds.sfxClick = clickSound;
+            sounds.sfxHover = hoverSound;
+        }
+        else
+        {
+            Plugin.Log.LogWarning("Map picker: no button sounds found; its arrows are silent.");
+        }
+    }
+
+    /// <summary>The hover and click sounds of the game's buttons near the pass.</summary>
+    internal static (SFX_Instance click, SFX_Instance hover) ButtonSounds(BoardingPass pass)
+    {
+        NicksButtonSFX onPass = pass.GetComponentsInChildren<NicksButtonSFX>(true).FirstOrDefault(n => n.sfxClick != null);
+        if (onPass != null)
+        {
+            return (onPass.sfxClick, onPass.sfxHover);
+        }
+        CustomOptionToggle option = pass.customOptionsWindow != null ? pass.customOptionsWindow.GetComponentsInChildren<CustomOptionToggle>(true).FirstOrDefault(t => t.sfxClick != null) : null;
+        return option != null ? (option.sfxClick, option.sfxHover) : (null, null);
     }
 
     private static Sprite pill;

@@ -941,7 +941,19 @@ internal sealed partial class Runner : MonoBehaviour
         if (next != null && previous != null)
         {
             int before = MapPicker.Picked;
+            (SFX_Instance gameClick, SFX_Instance gameHover) = MapPicker.ButtonSounds(pass);
+            SoundsPlayed.Heard.Clear();
+            SoundsPlayed.Listening = true;
+            UnityEngine.EventSystems.ExecuteEvents.Execute(next.gameObject, new UnityEngine.EventSystems.PointerEventData(UnityEngine.EventSystems.EventSystem.current), UnityEngine.EventSystems.ExecuteEvents.pointerEnterHandler);
+            yield return null;
+            bool hovered = gameHover != null && SoundsPlayed.Heard.Contains(gameHover);
+            SoundsPlayed.Heard.Clear();
             ClickOn((RectTransform)next);
+            yield return null;
+            bool clicked = gameClick != null && SoundsPlayed.Heard.Contains(gameClick);
+            SoundsPlayed.Listening = false;
+            Check("the map picker's arrows have the game's button sounds: the hover sound when pointed at, the click sound when clicked",
+                hovered && clicked, $"hover {hovered} ('{gameHover?.name}'), click {clicked} ('{gameClick?.name}')");
             yield return new WaitForSecondsRealtime(0.4f);
             string shown = Plain(MapPicker.Label.text);
             Screenshot("map-picker-next");
@@ -2745,9 +2757,19 @@ internal sealed partial class Runner : MonoBehaviour
         }
         string back = Plain(MapPicker.Label.text);
         List<string> others = names.Skip(1).ToList();
-        bool noRepeat = others.All(n => n.StartsWith("MAP ", StringComparison.Ordinal)) && !others.Contains("MAP " + MapPicker.Number(today)) && others.Distinct().Count() == others.Count;
-        Check("its arrows go through every other map as \"MAP …\", today's number not among them, and round to today's again", names.Count == count && noRepeat && back == shownToday,
-            $"{string.Join(", ", names)}; after them '{back}'");
+        int number = MapPicker.Number(today);
+        List<int> numbers = MapPicker.Order().Select(MapPicker.Number).ToList();
+        string Expected(int n) => n == number ? shownToday : "MAP " + n;
+        int at = numbers.IndexOf(number);
+        string right = Expected(numbers[(at + 1) % numbers.Count]);
+        string left = Expected(numbers[(at - 1 + numbers.Count) % numbers.Count]);
+        bool byNumber = others.All(n => n.StartsWith("MAP ", StringComparison.Ordinal)) && !others.Contains("MAP " + number) && others.Distinct().Count() == others.Count && names.Count > 1 && names[1] == right;
+        MapPicker.Step(-1);
+        string leftShown = Plain(MapPicker.Label.text);
+        MapPicker.Step(1);
+        Check($"its arrows go by number: from today's map (here {number}) right to {right}, left to {left}, through every map once, today's under its own name, and round again",
+            names.Count == count && byNumber && leftShown == left && back == shownToday,
+            $"{string.Join(", ", names)}; after them '{back}'; one to the left of today's '{leftShown}'");
         MapPicker.Step(1);
         int picked = MapPicker.Picked;
         ModSave.Reload();
