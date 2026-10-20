@@ -6,13 +6,14 @@ using UnityEngine;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// From ascent 9: a hill, rock or wall between a scout and an oncoming snowstorm shelters them, in the
+/// On every ascent: a hill, rock or wall between a scout and an oncoming snowstorm or wind storm shelters them, in the
 /// lowlands too. The game (and True Final Ascent on its own terrain) only asks how open the sky above a
 /// scout is, so on open low ground a hill on the storm's side gave no shelter. Now ground that rises
 /// steeply enough on the side the storm comes from (seen from the head at least 12° up, fully from 25° up,
 /// within 60 m, across 20° to either side of the wind) shelters as well. It only ever adds shelter:
 /// standing in the open, with nothing on the storm's side, a scout is exactly as exposed as the game (or
-/// TFA) says. Only snowstorms (the game's, and ascent 25's), not True Final Ascent's own weather.
+/// TFA) says. The shelter takes off the storm's cold and its push alike (the wind's push and its hold on a climber's
+/// stamina). Only snowstorms and wind storms (the game's, and ascent 25's), not True Final Ascent's own weather.
 /// </summary>
 internal static class SnowstormShelter
 {
@@ -41,7 +42,7 @@ internal static class SnowstormShelter
     private static Vector3 lookedUpwind;
     private static float lookedOpen = 1f;
 
-    private static bool On => Rules.InExtraAscent;
+    private static bool On => Plugin.Ready && Rules.InRun;
 
     /// <summary>How open the land on the storm's side was at the last look, 0 (sheltered) to 1 (open); for the tests.</summary>
     internal static float LastOpen { get; private set; } = 1f;
@@ -96,7 +97,7 @@ internal static class SnowstormShelter
         return lookedOpen;
     }
 
-    /// <summary>Which snowstorm is asking how exposed which scout is (the game, or ascent 18's own storm rule, asks within).</summary>
+    /// <summary>Which snowstorm or wind storm is asking how exposed which scout is (the game, or ascent 18's own storm rule, asks within).</summary>
     [HarmonyPatch(typeof(WindChillZone), nameof(WindChillZone.ApplyStatus))]
     private static class Asking
     {
@@ -104,9 +105,9 @@ internal static class SnowstormShelter
         [HarmonyPriority(Priority.First)]
         private static void Prefix(WindChillZone __instance, Character character)
         {
-            bool snow = __instance != null && __instance.name == "SnowStorm";
-            storm = snow ? __instance : null;
-            exposed = snow ? character : null;
+            bool shelters = __instance != null && (__instance.name == "SnowStorm" || __instance.name == "WindStorm");
+            storm = shelters ? __instance : null;
+            exposed = shelters ? character : null;
         }
 
         private static Exception Finalizer(Exception __exception)

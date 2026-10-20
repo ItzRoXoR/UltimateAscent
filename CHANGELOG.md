@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.5.2
+
+For PEAK 2.6.b.
+
+* Shelter from wind storms: a hill, rock or wall on the wind's side now shelters you from a wind storm the way it
+  already did from a snowstorm (its push and its hold on a climber's stamina), on open low ground too. In the open
+  you are as exposed as before.
+* Shelter from snowstorms and wind storms works on every ascent (it was from ascent 9).
+* Map picker on the boarding pass: at the bottom right of the ascent card, the map's name in a blue rounded
+  outline with "<" and ">" beside it picks any map of the game's current rotation (the 21 maps it goes through,
+  one a day). It opens on today's map, "TODAY'S MAP (9)"; the others follow as "MAP 0", "MAP 1"... without
+  today's again. The pick stays for the rest of the day (in the mod's save, between climbs and restarts) and goes
+  back to today's map when the day changes. The host's pick is the map everyone climbs; guests do not see the
+  picker. True Final Ascent's FINAL ASCENT keeps its own map.
+
 ## 1.5.1
 
 For PEAK 2.6.b.

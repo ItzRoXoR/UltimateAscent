@@ -708,7 +708,7 @@ internal sealed partial class Runner : MonoBehaviour
             ("storms between Apocalypse weather (25)", ApocalypseBreaks),
             ("Energy Drink burst knocks nobody out (17)", EnergyDrinkBurstCheck),
             ("snowstorm heat, sunscreen and the sun (18, 23)", StormAndSun),
-            ("snowstorm shelter (9)", SnowstormShelterCheck),
+            ("snowstorm and wind shelter (every ascent)", SnowstormShelterCheck),
             ("TFA's Apocalypse events stay TFA's", TfaEvents),
             ("Bing Bong (20)", () => WithBingBongRule(BingBong(wake))),
             ("fog (9, 18)", Fog),
@@ -750,6 +750,7 @@ internal sealed partial class Runner : MonoBehaviour
             ("eruptions burn (17)", EruptionHeatCheck),
             ("zombies share out the scouts (17)", () => Now(ZombieSharingCheck)),
             ("shorter reach of the rope cannons and the rescue claw (14)", ShorterReachCheck),
+            ("the map picker's map (picker)", () => Now(PickedMapCheck)),
             ("bees knock a scout out (17, 24)", BeeKnockout),
             ("Nadir (17, 18)", NadirCheck),
             // Last: it ends the climb.
@@ -934,6 +935,28 @@ internal sealed partial class Runner : MonoBehaviour
             $"Blind Mode {ChallengeModes.Blind} (shown {ChallengeModesUi.BlindBox.isOn}), Hot Mode {ChallengeModes.Hot} (shown {ChallengeModesUi.HotBox.isOn})");
         Screenshot("challenge-boxes");
         yield return new WaitForSecondsRealtime(1f);
+        // The map picker clicked like a player: one to the right and back.
+        Transform next = MapPicker.Line != null ? MapPicker.Line.transform.Find("UltimateAscent Map Next") : null;
+        Transform previous = MapPicker.Line != null ? MapPicker.Line.transform.Find("UltimateAscent Map Previous") : null;
+        if (next != null && previous != null)
+        {
+            int before = MapPicker.Picked;
+            ClickOn((RectTransform)next);
+            yield return new WaitForSecondsRealtime(0.4f);
+            string shown = Plain(MapPicker.Label.text);
+            Screenshot("map-picker-next");
+            yield return new WaitForSecondsRealtime(1f);
+            ClickOn((RectTransform)previous);
+            yield return new WaitForSecondsRealtime(0.4f);
+            Check("a click on the map picker's arrows goes to the next map and back to today's", before == MapPicker.Today && shown != Plain(MapPicker.Name(before)) && MapPicker.Picked == before,
+                $"after the right arrow '{shown}', after the left '{Plain(MapPicker.Label.text)}'");
+            Screenshot("map-picker-today");
+            yield return new WaitForSecondsRealtime(1f);
+        }
+        else
+        {
+            Fail("the map picker's arrows are on the boarding pass");
+        }
         ClickOn((RectTransform)ChallengeModesUi.HotBox.transform);
         yield return new WaitForSecondsRealtime(0.3f);
         Check("another click takes Hot Mode off", !ChallengeModes.Hot && !ChallengeModesUi.HotBox.isOn);
@@ -2695,7 +2718,74 @@ internal sealed partial class Runner : MonoBehaviour
         pass.ascentIndex = target;
         pass.UpdateAscent();
         Check("the start button can be used", pass.startGameButton.interactable);
+        MapPickerChecks(pass);
         return true;
+    }
+
+    /// <summary>
+    /// The map picker on the boarding pass: it shows today's map, its arrows go through the rest of the rotation
+    /// (today's number not among them) and back, and the pick is kept in the mod's save for the day. Back on today's
+    /// map afterwards, so the climb is today's (or the -Biome map), unless "-Only picker" asks for the picked one.
+    /// </summary>
+    private void MapPickerChecks(BoardingPass pass)
+    {
+        int count = MapPicker.Count;
+        int today = MapPicker.Today;
+        MapPicker.Picked = today;
+        pass.UpdateAscent();
+        GameObject line = MapPicker.Line;
+        string shownToday = MapPicker.Label != null ? Plain(MapPicker.Label.text) : "";
+        Check("the boarding pass has the map picker at the bottom right of its card, on today's map", line != null && line.activeInHierarchy && shownToday == Plain(MapPicker.Name(today)) && shownToday.Contains("(" + MapPicker.Number(today) + ")"),
+            $"shown {(line != null && line.activeInHierarchy)}, '{shownToday}'; {count} maps in the rotation, today's {MapPicker.Number(today)} (day {MapPicker.Day})");
+        List<string> names = new List<string>();
+        for (int i = 0; i < count; i++)
+        {
+            names.Add(Plain(MapPicker.Label.text));
+            MapPicker.Step(1);
+        }
+        string back = Plain(MapPicker.Label.text);
+        List<string> others = names.Skip(1).ToList();
+        bool noRepeat = others.All(n => n.StartsWith("MAP ", StringComparison.Ordinal)) && !others.Contains("MAP " + MapPicker.Number(today)) && others.Distinct().Count() == others.Count;
+        Check("its arrows go through every other map as \"MAP …\", today's number not among them, and round to today's again", names.Count == count && noRepeat && back == shownToday,
+            $"{string.Join(", ", names)}; after them '{back}'");
+        MapPicker.Step(1);
+        int picked = MapPicker.Picked;
+        ModSave.Reload();
+        bool kept = MapPicker.Picked == picked && ModSave.Get("map.day") == MapPicker.Day.ToString();
+        MapPicker.Step(-1);
+        Check("a pick is kept in the mod's save with its day (read back from the file), and the left arrow goes back", kept && MapPicker.Picked == today,
+            $"picked {MapPicker.Name(picked)}, read back {kept}; one to the left: {MapPicker.Name(MapPicker.Picked)}");
+        Screenshot("map-picker");
+        MapBaker baker = SingletonAsset<MapBaker>.Instance;
+        List<string> built = Enumerable.Range(0, UnityEngine.SceneManagement.SceneManager.sceneCountInBuildSettings)
+            .Select(i => System.IO.Path.GetFileNameWithoutExtension(UnityEngine.SceneManagement.SceneUtility.GetScenePathByBuildIndex(i))).ToList();
+        Info("the game's maps", $"rotation ({baker.ScenePaths.Length}): {string.Join(", ", baker.ScenePaths.Select(System.IO.Path.GetFileNameWithoutExtension))}; biome codes {baker.BiomeIDs.Count}; "
+            + $"scenes in the build ({built.Count}): {string.Join(", ", built)}");
+        if (only != null && only.Any(w => w.Equals("picker", StringComparison.OrdinalIgnoreCase)))
+        {
+            pickedForClimb = MapPicker.Order()[Mathf.Min(3, count - 1)];
+            MapPicker.Picked = pickedForClimb;
+            pass.UpdateAscent();
+            Info("map for the climb", $"{MapPicker.Name(pickedForClimb)}: {SingletonAsset<MapBaker>.Instance.GetLevel(pickedForClimb)}");
+            Screenshot("map-picker-picked");
+        }
+    }
+
+    private int pickedForClimb = -1;
+
+    /// <summary>With "-Only picker": the climb is on the map picked on the boarding pass, not today's.</summary>
+    private void PickedMapCheck()
+    {
+        if (pickedForClimb < 0)
+        {
+            Info("the picked map check is skipped", "run with -Only picker");
+            return;
+        }
+        string scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+        string wanted = SingletonAsset<MapBaker>.Instance.GetLevel(pickedForClimb);
+        Check("the climb is on the map picked on the boarding pass, not today's", scene == wanted && pickedForClimb != MapPicker.Today,
+            $"scene {scene}, picked {wanted} ({MapPicker.Name(pickedForClimb)}), today's {SingletonAsset<MapBaker>.Instance.GetLevel(MapPicker.Today)}");
+        MapPicker.Picked = MapPicker.Today;
     }
 
     private void Depart()
@@ -6315,7 +6405,7 @@ internal sealed partial class Runner : MonoBehaviour
     }
 
     /// <summary>
-    /// Shelter from a snowstorm (from ascent 9): on a flat test floor high above the map (open low ground with
+    /// Shelter from a snowstorm and a wind storm (on every ascent): on a flat test floor high above the map (open low ground with
     /// nothing natural within reach), a test snowstorm blowing along +X. In the open the scout is as exposed as
     /// the game says; a wall on the storm's side shelters fully, the same wall downwind does not; a low bank and
     /// a long gentle slope rising toward the storm give no shelter; a hill 30 m away on the storm's side shelters
@@ -6324,10 +6414,9 @@ internal sealed partial class Runner : MonoBehaviour
     /// </summary>
     private IEnumerator SnowstormShelterCheck()
     {
-        if (!Rules.InExtraAscent || Rules.Level >= Lvl.AllWeather)
+        if (Rules.Level >= Lvl.AllWeather)
         {
-            Info("the snowstorm shelter checks are skipped", Rules.Level >= Lvl.AllWeather
-                ? "at ascent 25 a test storm would follow ascent 25's own snowstorm; the checks run at ascents 9-24" : $"testing ascent {target}");
+            Info("the snowstorm shelter checks are skipped", "at ascent 25 a test storm would follow ascent 25's own snowstorm; the checks run on the other ascents");
             yield break;
         }
         Character local = Local;
@@ -6337,6 +6426,10 @@ internal sealed partial class Runner : MonoBehaviour
             Info($"the real ground at the start, wind along {name}", $"open {SnowstormShelter.Openness(local.Head, wind):0.00}");
         }
         Action undo = CalmForMeasuring();
+        // As on vanilla ascent 2 (in memory, for these checks): the shelter works on every ascent.
+        int climbedAscent = Ascents._currentAscent;
+        Ascents._currentAscent = 2;
+        Info("the shelter checks run as on ascent 2", $"in memory (the climb's ascent {climbedAscent}); ascents 9-25 rules off: {!Rules.InExtraAscent}");
         Vector3 floorAt = new Vector3(start.x, 1600f, start.z);
         List<GameObject> made = new List<GameObject>();
         GameObject Block(string name, Vector3 centre, Vector3 size, Quaternion turn)
@@ -6357,7 +6450,7 @@ internal sealed partial class Runner : MonoBehaviour
         {
             yield return new WaitForSeconds(1f);
             float game = SnowstormShelter.LastGame;
-            Check("in the open the snowstorm reaches the scout as fully as the game says (9)",
+            Check("in the open the snowstorm reaches the scout as fully as the game says (every ascent)",
                 snow.windPlayerFactor > 0f && SnowstormShelter.LastOpen >= 0.999f && Mathf.Abs(snow.windPlayerFactor - game) < 0.001f,
                 $"exposure {snow.windPlayerFactor:0.00} (the game's {game:0.00}), land open {SnowstormShelter.LastOpen:0.00}, scout at {local.Center.y:0.0}");
 
@@ -6373,24 +6466,39 @@ internal sealed partial class Runner : MonoBehaviour
             }
 
             Vector3 feet = floorAt;
-            yield return Case("a wall on the storm's side shelters fully (9)",
+            yield return Case("a wall on the storm's side shelters fully (every ascent)",
                 Block("Wall", feet + new Vector3(-4f, 4f, 0f), new Vector3(1f, 8f, 20f), Quaternion.identity), 0f, 0f);
-            yield return Case("the same wall downwind gives no shelter (9)",
+            yield return Case("the same wall downwind gives no shelter (every ascent)",
                 Block("Wall", feet + new Vector3(4f, 4f, 0f), new Vector3(1f, 8f, 20f), Quaternion.identity), game, game);
-            yield return Case("a low bank on the storm's side gives no shelter (9)",
+            yield return Case("a low bank on the storm's side gives no shelter (every ascent)",
                 Block("Bank", feet + new Vector3(-6f, 0.75f, 0f), new Vector3(1f, 1.5f, 20f), Quaternion.identity), game, game);
             // 70 m of ground rising 8 degrees toward the storm, from the scout's feet.
             Quaternion rise = Quaternion.AngleAxis(-8f, Vector3.forward);
-            yield return Case("a long gentle slope rising toward the storm gives no shelter (9)",
+            yield return Case("a long gentle slope rising toward the storm gives no shelter (every ascent)",
                 Block("Slope", feet + rise * new Vector3(-35f, -0.5f, 0f), new Vector3(70f, 1f, 40f), rise), game, game);
             // A hill 15 m high, 30 m away: seen about 24 degrees up from the head.
             GameObject hill = Block("Hill", feet + new Vector3(-32f, 7.5f, 0f), new Vector3(4f, 15f, 60f), Quaternion.identity);
             yield return new WaitForSeconds(0.6f);
             float partly = snow.windPlayerFactor;
-            Check("a hill 30 m away on the storm's side shelters partly (9)", partly > 0.2f * game && partly < 0.8f * game,
+            Check("a hill 30 m away on the storm's side shelters partly (every ascent)", partly > 0.2f * game && partly < 0.8f * game,
                 $"exposure {partly:0.00} (the game's {SnowstormShelter.LastGame:0.00}), land open {SnowstormShelter.LastOpen:0.00}");
             snow.RPCA_ToggleWind(true, Vector3.left, 100000f);
-            yield return Case("with the wind turned around the same hill gives no shelter (9)", hill, game, game);
+            yield return Case("with the wind turned around the same hill gives no shelter (every ascent)", hill, game, game);
+
+            // The same storm as a wind storm: the land on its side shelters from it the same way.
+            snow.RPCA_ToggleWind(true, Vector3.right, 100000f);
+            snow.name = "WindStorm";
+            yield return new WaitForSeconds(0.8f);
+            float windGame = SnowstormShelter.LastGame;
+            Check("a wind storm in the open reaches the scout as fully as the game says (every ascent)",
+                snow.windPlayerFactor > 0f && SnowstormShelter.LastOpen >= 0.999f && Mathf.Abs(snow.windPlayerFactor - windGame) < 0.001f,
+                $"exposure {snow.windPlayerFactor:0.00} (the game's {windGame:0.00}), land open {SnowstormShelter.LastOpen:0.00}");
+            yield return Case("a wall on the wind's side shelters from a wind storm fully (every ascent)",
+                Block("Wall", feet + new Vector3(-4f, 4f, 0f), new Vector3(1f, 8f, 20f), Quaternion.identity), 0f, 0f);
+            yield return Case("the same wall downwind gives no shelter from a wind storm (every ascent)",
+                Block("Wall", feet + new Vector3(4f, 4f, 0f), new Vector3(1f, 8f, 20f), Quaternion.identity), windGame, windGame);
+            yield return Case("a low bank on the wind's side gives no shelter from a wind storm (every ascent)",
+                Block("Bank", feet + new Vector3(-6f, 0.75f, 0f), new Vector3(1f, 1.5f, 20f), Quaternion.identity), windGame, windGame);
         }
         finally
         {
@@ -6400,6 +6508,7 @@ internal sealed partial class Runner : MonoBehaviour
                 Destroy(block);
             }
             local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, start + Vector3.up * 1.5f, false);
+            Ascents._currentAscent = climbedAscent;
             undo();
         }
         yield return new WaitForSeconds(3f);

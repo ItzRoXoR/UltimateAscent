@@ -145,6 +145,11 @@ Open the boarding pass at the airport and use the arrows, like vanilla.
   if installed, otherwise your highest unlocked ascent), right from the end of the list goes back to
   Tenderfoot.
 * **Default Ascent:** pick which ascent the boarding pass shows when you first open it.
+* **Map:** at the bottom right of the ascent card, the map's name in a blue outline with **<** and **>** beside it picks any map of the game's current rotation
+  (the maps it goes through, one a day). It opens on today's map, **TODAY'S MAP (9)**; the others follow as
+  **MAP 0**, **MAP 1**... (today's number not again). Your pick stays for the rest of the day, between climbs
+  and restarts, and goes back to today's map when the day changes. The host's pick is the map everyone climbs;
+  guests do not see the arrows. TFA's FINAL ASCENT keeps its own map.
 * With **True Final Ascent**, its FINAL ASCENT entry stays right after your highest ascent. In FINAL
   ASCENT, TFA's own difficulty dropdown offers ascents 9–25 too.
 
@@ -240,8 +245,8 @@ vanilla way (also late joiners and campfire saves). The host's ascent switches a
 * **Snow in the Alps:** a light snowfall drifts down around you wherever the ground below is the Alps',
   on every run. It is only for the look (no cold, no wind) and thin enough to keep the view clear; under a
   roof or an overhang it stops.
-* **Shelter from snowstorms** (from ascent 9): a hill, rock or wall between you and the oncoming snowstorm
-  shelters you, out in the lowlands too (also on True Final Ascent's own terrain). The game only asks
+* **Shelter from snowstorms and wind storms** (on every ascent): a hill, rock or wall between you and the oncoming
+  snowstorm or wind storm shelters you (from its cold and its push alike), out in the lowlands too (also on True Final Ascent's own terrain). The game only asks
   whether the sky above you is open. It only ever adds shelter: standing in the open, you are as exposed
   as before, and a gentle slope rising toward the storm does not count.
 * **Breaking free** from a spider's web or a fly trap (on every ascent): jumps while caught need no stamina
