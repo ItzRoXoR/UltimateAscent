@@ -1,7 +1,7 @@
 # Threats at ascent 24
 
 Every value below is from PEAK 2.6.b (read from the game code and the game data) and from
-Ultimate Ascent 1.4.0's rules. Status amounts use the stamina bar's scale: **100 = the whole bar**. A rule
+Ultimate Ascent 1.5.0's rules. Status amounts use the stamina bar's scale: **100 = the whole bar**. A rule
 marked *(17)* comes from that ascent; ascent 24 contains every ascent up to 24. Ultimate Ascent's
 numbers are what lands on the bar, ascent 15's boost included; below ascent 15 the same rules land
 them without that boost, so they are always lower there. Distances are the game's own units,
@@ -15,7 +15,7 @@ called metres here as in the mod; the game's altitude display counts one unit as
 | Passing out | When statuses fill more than 99% of the bar for **5 s** (the faint timer; it runs back at the same speed when the bar drops below 99%). | Same timer, but passing out is **instant death** *(24)*. A checkpoint flag still saves you, for **10 curse** *(14)*; it puts back exactly the statuses you had when you planted it. |
 | Fall damage | ×2 from ascent 1. | Fall damage also makes you **60 drowsy** *(12)*; with your 20 curse *(19)* that is 80, so a fall that hurts for **20 or more** (less with other statuses on the bar) fills it → **fatal** *(24)* unless you cure it within the faint timer. Fall damage drops all your items, backpack included *(13)*. |
 | Status strength | — | Cold and drowsiness ×1.3, heat ×1.5, spores ×1.65, poison ×1.75 *(15)*, on everything. The exact numbers below are tuned so that they land as given, this boost included. |
-| Explosions | Knockback, a knock-down and the explosion's own status. | Every explosion: status ×2, knockback ×3–4, knock-down ×3 **and drowsiness up to passing out** *(17)* → at 24 being knocked down by an explosion kills. (Mines and the Gloom ghost land exact amounts instead of ×2; a Shroomberry's spore burst is not treated as an explosion; a cooked Energy Drink's burst knocks nobody out, and a cooked Toxic Drink's is not treated as an explosion.) |
+| Explosions | Knockback, a knock-down and the explosion's own status. | Every explosion: status ×2, knockback ×3–4, knock-down ×3 *(17)*. Only a cooked Lantern's or Faerie Lantern's burst and the Gloom ghost's burst also bring **drowsiness up to passing out** → at 24 being knocked down by one of them kills. (Mines and the Gloom ghost land exact amounts instead of ×2; a Shroomberry's spore burst and a cooked Toxic Drink's are not treated as explosions.) |
 | Cooking | Campfires (the portable stove too), lava and explosions cook items; cooking takes a food's poison away. | Campfires, lava and explosions char what they cook **to ruin** on the first cooking *(17)*; cooking no longer removes poison *(14)*. |
 | Food and items | As listed per item. | Hunger and extra stamina from food ×0.5, what status items cure ×0.6 *(14)*; what they cost you (a Napberry's sleep, a Scorchberry's heat) stays the game's, except the exact amounts in **Food** below *(15)*. |
 | Touch hazards (anything that hurts on contact) | Own values. | Damage ×2, at least 2 cold/heat *(17)*; urchins, thorny vines, spiked fences, lava streams and petrifying stones have exact values (below). Climbing ice rock ×2; magma rock burns and petrifying stones petrify while you climb them. Status emitters that add a status (spore clouds, heat fields) ×4. |
@@ -60,7 +60,7 @@ nothing below the minimum factor. "Knocked down" is ragdoll time.
 ### Bees
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
-| Swarms | one per beehive | the same, plus **ambushes**: at the middle of every day and every night each scout standing in the Tropics has a **30%** chance; the swarm appears 2.5 m away, angry |
+| Swarms | one per beehive | the same, plus **ambushes**: at the middle of every day and every night each scout standing in the Tropics has a **30%** chance; the swarm appears 2.5 m away, angry; and **20 swarms without hives** hover over the peak's grassy hill (8 m apart), calm until a scout comes near, then angry like an ambush swarm, dispersing once they have lost you *(17)* |
 | Poison | calm 3/s, angry 6/s, +5 when you enter the swarm (1 s cooldown) | **calm 10/s, angry 15/s**; +7.5 on entering (the game's 5 × 1.75 *(15)*) |
 | Sting radius | 1.3 m; stops once your bar is full | **2 m**; same |
 | Aggro / lose interest | attack within 5 m (7 m angry); give up beyond 6 m (7 m angry); never more than 20 m from the hive | the same distances to the scout, but a swarm chases up to **120 m** from its hive (an ambush swarm from where it appeared) |
@@ -77,7 +77,7 @@ leave a cloud that bursts again every 0.5 s for 11 s, with the same falloff.
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
 | **Poison mines**: Tropics only (`Jungle_SporeMushroom`, ≈100 per map) | 20 poison × falloff within 9.6 m (half strength at 7.5 m), no knockback; then 2.5 × falloff every 0.5 s for 11 s | **up to 50 poison**; then **up to 5 every 0.5 s** (10/s at the centre) for 11 s |
-| **Bombs**: Tropics (≈100 per map) and Roots (≈130–175 per map, caves included) (`Jungle_SporeMushroomExplo`) | no status; knockback 1300 × falloff, knocked down 1 s × falloff, within 4.8 m (strength falls off linearly over 6 m) | knockback ×3–4, knocked down 3 s **and drowsiness up to passing out** *(17)* → **fatal within 4.8 m** *(24)* |
+| **Bombs**: Tropics (≈100 per map) and Roots (≈130–175 per map, caves included) (`Jungle_SporeMushroomExplo`) | no status; knockback 1300 × falloff, knocked down 1 s × falloff, within 4.8 m (strength falls off linearly over 6 m) | knockback ×3–4, knocked down 3 s *(17)* |
 | **Spore mines**: Roots only (`Forest_SporeFungus`, ≈240 per map, caves included) | 20 spores × falloff within 9.6 m; then 2.5 × falloff every 0.5 s for 11 s | **up to 45 spores**; then **up to 5 every 0.5 s** for 11 s |
 
 ## Roots
@@ -103,7 +103,8 @@ leave a cloud that bursts again every 0.5 s for 11 s, with the same falloff.
 | Waking / chasing | wakes when you look at it within 20 m; chases from 10 m; sprints after 3 s within 10 m; lunges within 4 m | wakes from **30 m**, **chases at once** and **runs** all the way, as when it lunges |
 | Bite | 10 injury, 10 spores + 0.5/s for 60 s (30), stunned 3 s | spores ×1.65 (bite 15 on the bar, then ≈0.8/s), stunned **4 s** |
 | Lifetime | dies after 120 s awake | **300 s** |
-| Ritual Dagger | can't be used on a zombie | stabbed in the back (as a teammate must be), a zombie dies after **8** stabs *(14)* (5 from ascent 9) and leaves a skeleton; nobody gets anything, and the dagger is kept |
+| Ritual Dagger | can't be used on a zombie | stabbed in the back (as a teammate must be), a zombie dies after **8** stabs *(14)* (5 below 14, on every ascent) and leaves a skeleton; nobody gets anything, and the dagger is kept |
+| At the peak | none | **10 zombies dressed as scouts** on the level ground of the peak's grassy hill (not the summit with the flares), each appearing asleep as a scout comes near, with the same rules *(17)*; one the game took away with nobody near comes back, a dead one does not |
 
 ### Beetles (root bugs)
 | | Game | Ultimate Ascent at 24 |
@@ -145,7 +146,7 @@ amount of extra stamina; most effects start 3 s after eating.
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
 | Trigger | **33%** chance each time someone steps on it | **80%** |
-| Burst (within 4 m) | heat 30 × falloff (at least 30% strength), knockback 1500 × falloff, knocked down 1 s × falloff | heat ×2 ×1.5 → **up to 90**, knockback ×3–4, knocked down 3 s **and drowsiness up to passing out** → **fatal** *(24)* |
+| Burst (within 4 m) | heat 30 × falloff (at least 30% strength), knockback 1500 × falloff, knocked down 1 s × falloff | heat ×2 ×1.5 → **up to 90**, knockback ×3–4, knocked down 3 s *(17)* |
 | Warm spot | −5 cold/s within 3 m | −5 cold/s within **2 m** *(17)* |
 
 ### Ice rocks
@@ -194,7 +195,7 @@ amount of extra stamina; most effects start 3 s after eating.
 | Where | Mesa mineshafts; also an item (Legendary rarity) | same |
 | Fuse | lights when you come within 5 m; 5 s | lights within **6 m**; **3 s** |
 | In your hand when it blows | +25 injury | **+100** |
-| Explosion (within 12 m, line of sight) | injury 30 × falloff, knockback 1600 × falloff, knocked down 1 s × falloff | injury ×2 (**up to 60**), knockback ×3–4, knocked down 3 s **and drowsiness up to passing out** → **fatal within ≈11.5 m** *(24)* |
+| Explosion (within 12 m, line of sight) | injury 30 × falloff, knockback 1600 × falloff, knocked down 1 s × falloff | injury ×2 (**up to 60**), knockback ×3–4, knocked down 3 s *(17)* |
 
 ### Tumbleweeds
 | | Game | Ultimate Ascent at 24 |
@@ -208,15 +209,21 @@ amount of extra stamina; most effects start 3 s after eating.
 ### Burning rocks (eruptions)
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
-| Frequency | while a scout is in the Caldera: every −5 to 15 s (a negative roll erupts again at once), anywhere ±155 × ±140 m | every −5 to 12 s *(17)* |
-| Each eruption | burns 35 s: 3 heat zones of 15/s each within 15 m (+3 × 1/s) → **≈45 heat/s** on the bar close by | heat zones ×4 *(17)*, heat ×1.5 *(15)* → **≈285 heat/s**; the bar fills on the first heat tick (within 0.5 s) |
+| Frequency | while a scout is in the Caldera: every −5 to 15 s (a negative roll erupts again at once), anywhere ±155 × ±140 m | every −5 to 12 s, on the ground or the lava's surface where they land *(17)* (the game puts them all at 780 m, the lava's lowest level, so their heat never reached the ground around them) |
+| The last stretch (the Caldera's statue → the campfire that opens the Kiln) | only the Caldera's eruptions above | **every 2–6 s** while a scout is on it, landing all over it, each away from the last few *(17)*; none within **20 m** of that campfire or the statue (the Caldera's other eruptions keep off too) |
+| Each eruption | burns 35 s; heat zones on the column at 0, 15 and 27 m up, each a pair: a mild one (1/s) that grows to 15 m over the first 7 s and stays, and a strong one (15/s) that only grows to 15 m from about 20 s, holds 23–28 s and shrinks away by 31 s | each zone ×4 *(17)*, ×1.5 *(15)*, measured 4 m from the column: nothing for the first 3 s, then **6 heat/s** for each mild zone reaching you (usually 1–2) until about 21 s, then at its height (the strong zones: the ground one within 15 m, the one 15 m up within about 5 m of the column) **20 heat/s** however many reach you *(17)*, from about 21 to 30 s |
+
+### Condors
+| | Game | Ultimate Ascent at 24 |
+|---|---|---|
+| Speed | circle their nest, dive at a scout below and carry them off towards the nest for up to 5 s | **1.35× as fast**: circling, diving, carrying and flying back *(17)* |
 
 ### Lava (the lava river) and lava flows
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
 | Heat above the river | up to 1.2 every 0.1 s at the surface, fading over 10 m (≈8/s on the bar) | ×1.5 *(15)* (≈12/s) |
 | Touching the river | 25 injury + 25 heat (at most 1/s), pushed up | **100 injury and 200 heat** → bar full at once → **fatal** *(24)* |
-| River height | rises and falls 6.3 m (779 → 785.3) every 72 s: low for about 30 s, rising for about 20 s, about 10 s at the top, falling for about 13 s | **rises and falls 14.5 m (779 → 793.5) every 61 s** *(18)*: low for about 21 s, rising for about 16 s, about 16 s near the top, falling for about 9 s; above the game's highest level for 28 s of each cycle; the same for everyone |
+| River height | rises and falls 6.3 m (779 → 785.3) every 72 s: low for about 30 s, rising for about 20 s, about 10 s at the top, falling for about 13 s | **rises and falls 14 m (779 → 793) every 61 s** *(18)*: low for about 21 s, rising for about 16 s, about 16 s near the top, falling for about 9 s; above the game's highest level for 28 s of each cycle; the same for everyone |
 | Lava flows (streams) | 20 injury + 50 heat per touch (1/s), knockback 1000 | **50 injury + 100 heat** → bar full → **fatal** |
 | Lava pillars | knockback 1000 + 10 heat (cliffs 5) | heat ×1.5 |
 | Magma rocks (Caldera and Kiln) | 2.5 heat per touch while standing on them (every 0.75 s); heat field 1/s within 11 m; climbing them does nothing extra | touch **7.5** *(17, 15)*; field ×4 ×1.5 = 6/s nominal, **5/s** on the bar; **climbing them burns 2.5 heat every 0.3 s** (≈8.3/s), on top of touching, like ice rocks' cold |
@@ -248,8 +255,8 @@ amount of extra stamina; most effects start 3 s after eating.
 |---|---|---|
 | Spawn | every 60–180 s (counted while no ghost is out) near a scout who is alone (nobody within 15 m), 30 m ahead (±10) | **every 30 s**, for the leading scout **alone or in a group** |
 | Attack | rolls toward the nearest scout; arms within 1 m, explodes 2.1 s later (get 1.3 m away within 1.5 s to stop it); lives 30 s | explodes **1.5 s** after arming (no way back after ≈1.1 s); lives **50 s** |
-| Defence | lit bell towers (11 m) repel it and burn it (3 s) | lit bell towers push it back until it is out of blast range of the scouts they protect (11 + 10 m), and **do not burn it**; it cannot arm while pushed |
-| Explosion (within 10 m) | **blind 20 s**, cold 35, knockback 1600 (tilted up), knocked down 4 s, landing damage capped at 7.5 for 8 s | **blind 80 s**, **60 cold**, knockback ×3–4, knocked down 12 s **and drowsiness up to passing out** → **fatal** *(24)* |
+| Defence | lit bell towers (11 m) repel it and burn it (3 s); a lit Faerie Lantern (7 m) the same; the Lantern and the Torch do nothing | lit bell towers and Faerie Lanterns push it back until it is out of blast range of the scouts they protect (their reach + 10 m), and **do not burn it**; it cannot arm while pushed. A **burning Torch** in a scout's hands does the same within 4.5 m of it *(9)* |
+| Explosion (within 10 m) | **blind 20 s**, cold 35, knockback 1600 (tilted up), knocked down 4 s, landing damage capped at 7.5 for 8 s | **blind 50 s**, **60 cold**, knockback ×3–4, knocked down 12 s **and drowsiness up to passing out** → **fatal** *(24)* |
 
 ### Carnivorous plants (Venus fly traps)
 | | Game | Ultimate Ascent at 24 |
@@ -264,6 +271,7 @@ amount of extra stamina; most effects start 3 s after eating.
 |---|---|---|
 | Gloom fog | 0.9 drowsiness/s (lit bell towers protect, and so does a lit Portable Stove within 7 m — but because of a game bug, for the scouts present when it was placed only after it burned out, and then for good) | **2.5 drowsiness/s** *(18)* (×1.3 *(15)* below 18); drowsiness heals at 1 a second in the Gloom (game: 2.5) *(16)*, at night too (there is no night here); the stove bug is fixed: a stove protects while it burns, **30 s** *(14)*, and not after |
 | Early Worm (eaten) | removes 100 drowsiness, 5 hunger | removes **50** *(14)*, 2.5 hunger *(14)* |
+| Early Worm (lying about) | stays where it lies | seen lying close by (within 15 m, in view), it brings a **raven** three times in four: it flies in, lands beside it and eats it *(17)* |
 
 ### Frogs
 | | Game | Ultimate Ascent at 24 |
@@ -275,7 +283,7 @@ amount of extra stamina; most effects start 3 s after eating.
 ### Arrow traps (also in the Gloom temple)
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
-| Shot | fires along its line up to 80 m at the first scout in it; 3 shots, 8 s apart, then empty for good | **never runs out**, fires every **0.5 s** |
+| Shot | fires along its line up to 80 m at the first scout in it; 3 shots, 8 s apart, then empty for good; a swinging spike ball crossing its line sets it off too | **never runs out**, fires every **0.5 s**; spike balls no longer set it off *(9)* |
 | Hit | 1 arrow = **7.5** on the bar (Arrow), knockback 30 | 1 arrow = **15**, knockback **60** |
 | Pulling an arrow out | 12.5 injury | **25 injury** |
 
@@ -284,18 +292,26 @@ amount of extra stamina; most effects start 3 s after eating.
 |---|---|---|
 | Spiked fences (Gloom days) | 2.5 injury per touch (at most 1/s) | **15** |
 | Lava sphere (one per Gloom-day map) | heat up to 7.5 every 0.5 s within 3.9 m; touch 25 injury + 25 heat | heat ×1.5; touch **100 injury + 200 heat** → **fatal** |
-| Floor spike traps (2,800) | step on → spikes ready after 0.3 s → hit 0.8 s after the step, within 1.2 m: **15 injury**, knockback 300, knocked down 0.2 s | the game builds this hit as an explosion: **30 injury**, knockback ×3–4, knocked down 0.6 s, the hit **0.53 s after the step** *(17)*, **and drowsiness up to passing out** → **fatal** *(24)* |
+| Floor spike traps (2,800) | step on → spikes ready after 0.3 s → hit 0.8 s after the step, within 1.2 m: **15 injury**, knockback 300, knocked down 0.2 s | the game builds this hit as an explosion: **30 injury**, knockback ×3–4, knocked down 0.6 s, the hit **0.53 s after the step** *(17)* |
 | Wall saws (180) | run back and forth along their wall; first touch 15 injury (after 2 s without a hit), then 2.5 every 0.25 s while touching (10/s) | run **1.5× as fast**; first touch **30**, then the same |
 | Central Tower saw | nothing: its damage is left empty in the game data | **7.5 per second** |
-| Spike rollers (32) | turn at 15, 30 or 35° a second; 5 injury per contact (up to 4/s), pushed away | turn **1.5× as fast**; **10** per contact |
+| Spike rollers (32) | sweep round at 15, 30 or 35° a second, their rollers turning on their axles; 5 injury per contact (up to 4/s), pushed away | sweep round **1.5× as fast** (the rollers keep the game's pace); **10** per contact |
+| Ladders (69) | 3× as fast as climbing rock, 25% of its stamina | **1.2×** as fast, **90%** of its stamina |
 | Swinging spike balls (156) | swing back and forth every 4.2 s; up to 25 injury (by swing speed), knockback up to 500, knocked down up to 0.2 s, 1 s cooldown | swing **1.5× as fast**; up to **60** |
 
 ### Mimic chests (trick luggage)
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
-| Where | about one per Citadel map (Central Tower) | the same, plus **every second ordinary chest in the Citadel** (they keep their loot, like the game's mimics) |
+| Where | about one per Citadel map (Central Tower), with a chest of its own (it shows) | the same, looking like an **ordinary chest**, plus **35% of the ordinary chests in the Citadel**, picked anew each climb (they keep their loot, like the game's mimics) |
 | Opening | releases sleeping gas for 10 s within 10 m: 5 drowsiness every 0.5 s (10/s) → 100 in 10 s | gas with **5 drowsiness + 5 poison + 5 spores every 0.5 s** (30/s in all) for 10 s; opening any suitcase also hurts for **10 injury** *(21)*; staying in the gas = passing out = **death** *(24)* |
 | Rising gloom | starts after 150 s, rises in 1,200 s | starts after **30 s**, reaches the top in **700 s**, as the Kiln's lava *(9)* |
+
+## Nadir
+
+| | Game | Ultimate Ascent at 24 |
+|---|---|---|
+| Healing | drowsiness, poison, heat and spores heal at their usual rates; blindness and numbness wear off as usual | all of them **half as fast** *(17)* |
+| Gravity | as anywhere | **twice as strong** for the scouts, in the air and lying limp *(18)* |
 
 ## Anywhere
 
@@ -310,7 +326,7 @@ amount of extra stamina; most effects start 3 s after eating.
 ### The Looker
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
-| Where | 20 hiding spots per map; in 5% of runs one of them shows a Looker | **every spot** shows one with **25%** (≈5 per map) |
+| Where | 20 hiding spots per map; in 5% of runs one of them shows a Looker | **every spot** shows one with **90%** (≈18 per map) |
 | Watching it | it peeks out now and then and ducks away 6× sooner while watched; harmless | while it peeks out in the middle of your view within 40 m (nothing in between): **2.5 curse a second**, and a lollipop's **sugar rush** (infinite stamina) for 5 s, then not again for 10 s; not looking costs nothing |
 | Leaving | for good, once the host has watched it for 3 s or anyone comes within 5 m | after **5 s** of your watching it leaves and **sends the Scoutmaster after you for 70 s**; within 5 m it just leaves |
 

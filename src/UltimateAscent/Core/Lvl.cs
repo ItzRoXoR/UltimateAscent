@@ -38,8 +38,12 @@ internal static class Lvl
     // More Ascents: campfires are extremely hot (cooking chars on the first cycle; lava and explosions too);
     // lighting a campfire takes off less petrification.
     internal const int HotCampfires = 17;
+    // New: in the Nadir, ailments and their effects wear off half as fast.
+    internal const int NadirRecovery = 17;
     // 13DDA: weather is more extreme (including the Caldera lava).
     internal const int ExtremeWeather = 18;
+    // New: gravity is twice as strong in the Nadir.
+    internal const int NadirGravity = 18;
     // More Ascents (extended): no revive statues; 20 starting curse, 15 curse per revive, revives keep petrification.
     internal const int NoReviveStatues = 19;
     // More Ascents: Bing Bong calls upon an evil force if not given attention.

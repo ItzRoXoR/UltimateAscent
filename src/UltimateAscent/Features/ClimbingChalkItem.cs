@@ -15,12 +15,12 @@ namespace UltimateAscent.Features;
 /// never handed out, nothing to use it up, its effect switched off (none of its action's triggers is
 /// set) and nothing that reads the climbing multiplier of that effect.
 /// <list type="bullet">
-/// <item>From ascent 9 it turns up wherever the Energy Drink does, as rarely as the Big Lollipop (its
-/// rarity, Legendary). Below ascent 9 it never spawns. A custom run lists it on the Custom Run screen
+/// <item>On every ascent (with the config's "New Items" on) it turns up wherever the Energy Drink does, as
+/// rarely as the Big Lollipop (its rarity, Legendary). Outside a climb it never spawns. A custom run lists it on the Custom Run screen
 /// with the other items (<see cref="CustomRunItems"/>), and its switch there decides.</item>
 /// <item>It has three uses (a use bar like the game's other multi-use items); from ascent 14 two, as
-/// that ascent takes two uses per use of every item. Each use takes 2 s. For 16 s, climbing (walls,
-/// ropes and vines alike) costs 60% of its stamina; from ascent 14, 75% for 12 s. Another use restarts
+/// that ascent takes two uses per use of every item. Each use takes 1 s (the game: 2 s). For 20 s, climbing (walls,
+/// ropes and vines alike) costs 60% of its stamina; from ascent 14, 75% for 15 s. Another use restarts
 /// the time.</item>
 /// <item>Cooking darkens it but gives it none of the game's food changes (extra stamina, poison once
 /// incinerated); a burned chalk (cooked three times or more) can no longer be used.</item>
@@ -52,18 +52,22 @@ internal static class ClimbingChalkItem
 
     /// <summary>The share of climbing stamina it costs while chalked, and for how long.</summary>
     internal const float Stamina = 0.6f;
-    internal const float Seconds = 16f;
+    internal const float Seconds = 20f;
 
     /// <summary>How many times one chalk can be used (ascent 14's two uses per use leave two).</summary>
     internal const int Uses = 3;
 
+    /// <summary>How long one use takes (the game: 2 s).</summary>
+    internal const float UseSeconds = 1f;
+
     /// <summary>From ascent 14.</summary>
     internal const float WorseStamina = 0.75f;
-    internal const float WorseSeconds = 12f;
+    internal const float WorseSeconds = 15f;
 
     /// <summary>
-    /// The rub (the user's clip without its silent first second, its rubbing played twice so it fills
-    /// the 2 s use, peak -1 dBFS), as loud as the game's own item sounds where the scout hears it.
+    /// The rub (the user's clip without its silent first second, its rubbing played once, about 1 s,
+    /// fading out over its last 0.35 s; peak -1 dBFS), as loud as the game's own item sounds where the
+    /// scout hears it.
     /// </summary>
     private const float RubVolume = 0.25f;
 
@@ -127,7 +131,7 @@ internal static class ClimbingChalkItem
 
     /// <summary>
     /// The item's own fields, on the prefab (the inventory shows the prefab's icon) and on every copy.
-    /// The effect action fires once the 2 s use is done. Its triggers are read each time it subscribes
+    /// The effect action fires once the 1 s use is done. Its triggers are read each time it subscribes
     /// (OnEnable, then Start, which subscribes it afresh), so setting them in its Item's Awake is enough.
     /// The item's Start then gives a new chalk its uses (with the use bar).
     /// </summary>
@@ -141,6 +145,7 @@ internal static class ClimbingChalkItem
         item.UIData.mainInteractPrompt = UsePrompt;
         item.itemTags &= ~Item.ItemTags.Mystical;
         item.totalUses = Uses;
+        item.usingTimePrimary = UseSeconds;
         foreach (Action_ApplyAffliction effect in item.GetComponents<Action_ApplyAffliction>())
         {
             effect.OnCastFinished = true;
@@ -266,8 +271,8 @@ internal static class ClimbingChalkItem
 
     /// <summary>
     /// The chalk joins every pool the Energy Drink is in, as rare as the Big Lollipop. The table is
-    /// built once and kept, so the chalk is always in it; <see cref="OnlyFromAscent9"/> keeps it out
-    /// of what actually spawns below ascent 9.
+    /// built once and kept, so the chalk is always in it; <see cref="OnlyWithNewItems"/> keeps it out
+    /// of what actually spawns outside a climb.
     /// </summary>
     [HarmonyPatch(typeof(LootData), nameof(LootData.PopulateLootData))]
     private static class SpawnLikeEnergyDrink
@@ -337,11 +342,11 @@ internal static class ClimbingChalkItem
     /// the game's own check has already read the chalk's switch on the Custom Run screen.
     /// </summary>
     [HarmonyPatch(typeof(Item), nameof(Item.IsValidToSpawn))]
-    private static class OnlyFromAscent9
+    private static class OnlyInAClimb
     {
         private static void Postfix(Item __instance, ref bool __result)
         {
-            if (__result && IsChalk(__instance) && !RunSettings.IsCustomRun && !Rules.InExtraAscent)
+            if (__result && IsChalk(__instance) && !RunSettings.IsCustomRun && !NewItems.RegularRun)
             {
                 __result = false;
             }

@@ -115,6 +115,8 @@ internal static class A18_ExtremeWeather
         }
     }
 
+    private static bool Temperature(CharacterAfflictions.STATUSTYPE status) => status == CharacterAfflictions.STATUSTYPE.Cold || status == CharacterAfflictions.STATUSTYPE.Hot;
+
     internal static bool IsStorm(WindChillZone zone)
     {
         string name = zone.name;
@@ -150,9 +152,26 @@ internal static class A18_ExtremeWeather
                 Overrides.Set(__instance, nameof(WindChillZone.windForce), alpine ? 20f : 12f);
                 Overrides.Set(__instance, nameof(WindChillZone.statusApplicationPerSecond), alpine ? 0.07f : 0.01f);
             }
+            // Ascent 25: from the Caldera and the Gloom on (no day or night there) a storm neither chills nor heats.
+            bool noTemperature = Rules.Enabled(Lvl.AllWeather) && (place == Place.Caldera || place == Place.Gloom);
             if (!On)
             {
-                return true;
+                if (!noTemperature)
+                {
+                    return true;
+                }
+                // The game's own storm, without its cold or heat.
+                __instance.windPlayerFactor = WindChillZone.GetWindIntensityAtPoint(character.Center, __instance.lightVolumeSampleThreshold_lower, __instance.lightVolumeSampleThreshold_margin);
+                character.refs.climbing.climbingStamMinimumMultiplier = Mathf.Max(__instance.grabStaminaMultiplierDuringWind * __instance.windPlayerFactor * __instance.currentForceMult, 1f);
+                if (__instance.statusApplicationPerSecond > 0f && !Temperature(__instance.statusType))
+                {
+                    character.refs.afflictions.AddStatus(__instance.statusType, __instance.windPlayerFactor * __instance.statusApplicationPerSecond * Time.deltaTime * Mathf.Clamp01(__instance.hasBeenActiveFor * 0.2f));
+                }
+                if (__instance.setSlippy)
+                {
+                    character.data.slippy = Mathf.Clamp01(Mathf.Max(character.data.slippy, __instance.windPlayerFactor * 10f));
+                }
+                return false;
             }
 
             if (name == "WindStorm")
@@ -177,7 +196,11 @@ internal static class A18_ExtremeWeather
 
             if (name == "SnowStorm")
             {
-                if (segment == Segment.Alpine || Map.IsNight)
+                if (noTemperature)
+                {
+                    // Neither cold nor heat (see above).
+                }
+                else if (segment == Segment.Alpine || Map.IsNight)
                 {
                     character.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Cold, amount * 1.2f);
                 }
@@ -194,7 +217,7 @@ internal static class A18_ExtremeWeather
                     }
                 }
             }
-            else if (__instance.statusApplicationPerSecond > 0f)
+            else if (__instance.statusApplicationPerSecond > 0f && !(noTemperature && Temperature(__instance.statusType)))
             {
                 character.refs.afflictions.AddStatus(__instance.statusType, amount);
             }

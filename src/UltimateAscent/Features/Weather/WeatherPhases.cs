@@ -8,6 +8,8 @@ namespace UltimateAscent.Features.Weather;
 /// room property (run, start time, duration, active, direction). Everybody derives the current
 /// state from the shared clock, so late joiners and players who missed a message see the same
 /// weather, and rebuilt storms (which have no network view of their own) work in multiplayer.
+/// In the Caldera and the Gloom the wind and the snowstorm never blow together: whichever began later stays
+/// calm until the other is over (each game goes by where its own scout is).
 /// </summary>
 internal static class WeatherPhases
 {
@@ -128,7 +130,34 @@ internal static class WeatherPhases
             channel.Publish();
             Plugin.Debug($"Ascent 25 weather: {zone.name} {(active ? "storm" : "calm")} for {duration:F0} s.");
         }
-        ApplyState(zone, state != null && state.run == run ? state : null, now);
+        Phase shown = state != null && state.run == run ? state : null;
+        if (shown != null && WaitsForTheOther(channel, shown, run, now))
+        {
+            shown = null;
+        }
+        ApplyState(zone, shown, now);
+    }
+
+    /// <summary>In the Caldera and the Gloom, a wind or snowstorm that began while the other was blowing waits for it to end.</summary>
+    private static bool WaitsForTheOther(Channel channel, Phase phase, string run, double now)
+    {
+        if (!phase.active || (channel != wind && channel != snow) || !(Map.CurrentPlace == Place.Caldera || Map.CurrentPlace == Place.Gloom))
+        {
+            return false;
+        }
+        Channel other = channel == wind ? snow : wind;
+        if (!Rules.IsHost)
+        {
+            other.Receive();
+        }
+        Phase blowing = other.state;
+        if (blowing == null || blowing.run != run || !blowing.active || blowing.Remaining(now) <= 0.0)
+        {
+            return false;
+        }
+        double mine = phase.Elapsed(now);
+        double theirs = blowing.Elapsed(now);
+        return theirs > mine || (theirs == mine && other == snow);
     }
 
     private static void ApplyState(WindChillZone zone, Phase state, double now)

@@ -6,7 +6,7 @@ using UnityEngine;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// Breaking free from a spider's web or a fly trap, from ascent 9. Caught, every jump takes some of the
+/// Breaking free from a spider's web or a fly trap, on every ascent. Caught, every jump takes some of the
 /// web or the trap off the bar. The game counted such a jump only while the scout had stamina left, each
 /// cost stamina (5%, 7% from the game's ascent 6) that did not come back while the jumping went on, and
 /// the web, the trap and their poison take up the bar the stamina lives in: at the higher ascents the
@@ -20,7 +20,7 @@ namespace UltimateAscent.Features;
 /// </summary>
 internal static class Struggling
 {
-    private static bool On => Rules.InExtraAscent;
+    private static bool On => Plugin.Ready && Rules.InRun;
 
     /// <summary>How long a press made too early waits for the next jump.</summary>
     private const float PressKeptSeconds = 0.5f;

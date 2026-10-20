@@ -6,8 +6,8 @@ using UnityEngine;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// The Torch, the game's (three hang in the Mesa's Tomb), is a weapon as well as a light from ascent 9 and in
-/// custom runs.
+/// The Torch, the game's (three hang in the Mesa's Tomb), is a weapon as well as a light in every climb, custom runs
+/// included.
 /// <list type="bullet">
 /// <item>The use button, held, lights it or puts it out, as in the game. Lit, it warms like the Lantern: 2.5
 /// cold a second off every scout within 4.5 m, 2 from ascent 14 (A14_Items' weaker lanterns). It burns its 40 s
@@ -17,6 +17,10 @@ namespace UltimateAscent.Features;
 /// reaches down for 2 s (the Stick: 3 s). The scouts it hits also take 10 heat, 20 with ascent 14's rule (as it
 /// lands from ascent 15 on); zombies take no heat. A swing burns 4 s of the fuel: a full Torch gives 10 swings,
 /// 40 s of light, or a mix of both.</item>
+/// <item>Lit in a scout's hands, it keeps the Gloom's ghosts away like a lit bell tower: a ghost hunting the holder
+/// or anyone within 4.5 m of the Torch is pushed back until it is out of blast range of them, and cannot arm while
+/// it is pushed. Below ascent 17 the push also burns it, as the bell towers do in the game (from 17 they no longer
+/// burn it, see <see cref="A17_GloomGhost"/>).</item>
 /// <item>It turns up in suitcases wherever the Lantern does, at half the Lantern's weight (10 to its 20): from
 /// ascent 9 with the config's "New Items" on; in custom runs it has its own switch, after the Lantern's.</item>
 /// </list>
@@ -39,6 +43,12 @@ internal static class TorchItem
     internal const float Heat = 0.1f;
     internal const float HeatWorse = 0.2f;
 
+    /// <summary>A lit Torch keeps ghosts away from the scouts within this reach of it (its warmth's)...</summary>
+    internal const float GhostReach = 4.5f;
+
+    /// <summary>...pushing them back until they are this far beyond it (the reach of the ghost's burst).</summary>
+    internal const float GhostBlastRange = 10f;
+
     /// <summary>The fuel a swing burns: a full Torch (40 s) gives 10 swings.</summary>
     internal const float SwingFuel = 4f;
 
@@ -51,11 +61,11 @@ internal static class TorchItem
 
     internal static bool IsTorch(Item item) => item != null && template != null && item.itemID == template.itemID;
 
-    /// <summary>A Torch swings from ascent 9 and in custom runs.</summary>
-    internal static bool Works => Rules.InExtraAscent || CustomRunItems.InCustomRun;
+    /// <summary>A Torch swings in every climb.</summary>
+    internal static bool Works => NewItems.RegularRun || CustomRunItems.InCustomRun;
 
-    /// <summary>Suitcases may hold it in custom runs (by its own switch), and from ascent 9 with the config's "New Items" on.</summary>
-    private static bool Allowed => RunSettings.IsCustomRun || (Rules.InExtraAscent && HostOptions.NewItemsOn);
+    /// <summary>Suitcases may hold it in custom runs (by its own switch), and on every ascent with the config's "New Items" on.</summary>
+    private static bool Allowed => NewItems.Available;
 
     /// <summary>The heat of a hit, as it lands on the bar now.</summary>
     internal static float HeatNow => Rules.Enabled(Lvl.WorseItems) ? A15_StrongerAilments.FromAscent15(CharacterAfflictions.STATUSTYPE.Hot, HeatWorse) : Heat;
@@ -109,7 +119,7 @@ internal static class TorchItem
         }
     }
 
-    /// <summary>Regular runs: suitcases hold it only from ascent 9 with "New Items" on (the Tomb's three are the game's own and always there).</summary>
+    /// <summary>Regular runs: suitcases hold it only with "New Items" on (on every ascent) (the Tomb's three are the game's own and always there).</summary>
     [HarmonyPatch(typeof(Item), nameof(Item.IsValidToSpawn))]
     private static class SuitcasesFromAscent9
     {
@@ -183,6 +193,57 @@ internal static class TorchItem
                 Burns++;
                 ExactStatus.Add(__instance.refs.afflictions, CharacterAfflictions.STATUSTYPE.Hot, HeatNow, HeatSource);
             }
+        }
+    }
+
+    /// <summary>A burning Torch in a scout's hands, the nearest to this point within its reach, or null.</summary>
+    internal static Item LitTorchNear(Vector3 point)
+    {
+        Item nearest = null;
+        float best = GhostReach;
+        foreach (Character character in Character.AllCharacters)
+        {
+            Item item = character != null && !character.data.dead ? character.data.currentItem : null;
+            if (!IsTorch(item) || !item.TryGetComponent(out Lantern lantern) || !lantern.lit)
+            {
+                continue;
+            }
+            float distance = Vector3.Distance(item.transform.position, point);
+            if (distance <= best)
+            {
+                best = distance;
+                nearest = item;
+            }
+        }
+        return nearest;
+    }
+
+    /// <summary>
+    /// A ghost hunting a scout by a burning Torch is pushed back, the way a lit bell tower pushes it (on the ghost's
+    /// own game, the host's): until it is out of blast range of everyone the Torch keeps safe, burning (which keeps it
+    /// from arming; from ascent 17 burning does it no harm).
+    /// </summary>
+    [HarmonyPatch(typeof(global::Peak.GhostBall), nameof(global::Peak.GhostBall.UpdateMovement))]
+    private static class KeepsGhostsAway
+    {
+        private static void Postfix(global::Peak.GhostBall __instance)
+        {
+            if (!Works || template == null || __instance.risingFromSpawn || __instance.target == null)
+            {
+                return;
+            }
+            Item torch = LitTorchNear(__instance.target.Center);
+            if (torch == null)
+            {
+                return;
+            }
+            Vector3 away = __instance.transform.position - torch.transform.position;
+            if (away.magnitude >= GhostReach + GhostBlastRange)
+            {
+                return;
+            }
+            __instance.burnTick = 0.5f;
+            __instance.rig.AddForce(away.normalized * __instance.repelForce * Time.deltaTime);
         }
     }
 }

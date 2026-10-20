@@ -11,7 +11,7 @@ namespace UltimateAscent.Features;
 
 /// <summary>
 /// The Stick: the game's cut stick (its own model, name, icon and two-handed grip) made something to hit
-/// with. Sticks lie on the ground from ascent 9 (see <see cref="GroundItems"/>). Swinging one (the use
+/// with. Sticks lie on the ground in every climb (see <see cref="GroundItems"/>). Swinging one (the use
 /// button) costs 33% stamina (not possible out of stamina, like a kick) and knocks down for 3 s every
 /// scout and zombie a kick would reach, in front of the swinger; it does not hurt them.
 /// <para>The swing moves the whole hold, both hands with the stick in them, as the game moves held items:

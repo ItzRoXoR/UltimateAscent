@@ -18,7 +18,7 @@ namespace UltimateAscent.Features;
 /// parachute, which the game still has on every scout) and saves you from the fall. It holds 3
 /// charges (shown on its slot); from ascent 14 each save takes 2 (multi-use items lose 2 uses per
 /// use), so it saves twice. With the last charge it is gone.
-/// <para>It spawns where the Jetpack does, as rare (Mythic), from ascent 9 (the config's "New Items"
+/// <para>It spawns where the Jetpack does, as rare (Mythic), on every ascent (the config's "New Items"
 /// switch) and in custom runs (its own switch on the Custom Run screen).</para>
 /// <para>The game knows four things to wear in that slot (backpack, fanny pack, jetpack, rocket pack),
 /// each with its own model on the scout's back: the parachute is a fifth kind, built from the Jetpack
@@ -83,8 +83,8 @@ internal static class AutoParachute
     /// <summary>What one save costs here and now.</summary>
     internal static int Cost => Rules.Enabled(Lvl.WorseItems) ? WorseItemsCost : 1;
 
-    /// <summary>Spawns in this run: from ascent 9 with the config's "New Items" on (custom runs: its own switch).</summary>
-    private static bool Allowed => RunSettings.IsCustomRun || (Rules.InExtraAscent && HostOptions.NewItemsOn);
+    /// <summary>Spawns in this run: on every ascent with the config's "New Items" on (custom runs: its own switch).</summary>
+    private static bool Allowed => NewItems.Available;
 
     /// <summary>The parachute: the Jetpack (a thing to wear in slot 4) with the cut parachute's pack, name and icon.</summary>
     internal static void Build()
@@ -396,9 +396,9 @@ internal static class AutoParachute
         return character.player.itemSlots.Any(slot => !slot.IsEmpty() && slot.prefab != null && slot.prefab.CompareTag(ParachuteTag));
     }
 
-    /// <summary>Regular runs: only from ascent 9 and with the config's "New Items" on.</summary>
+    /// <summary>Regular runs: only with the config's "New Items" on (on every ascent).</summary>
     [HarmonyPatch(typeof(Item), nameof(Item.IsValidToSpawn))]
-    private static class OnlyFromAscent9
+    private static class OnlyWithNewItems
     {
         private static void Postfix(Item __instance, ref bool __result)
         {

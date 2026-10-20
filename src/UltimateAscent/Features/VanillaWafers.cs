@@ -11,8 +11,8 @@ namespace UltimateAscent.Features;
 /// name of their own (the game gave them the Scout Cookies' name). Each of 4 bites restores 5 hunger and gives
 /// 20 extra stamina (the Scout Cookies: 10 and 10); like the Scout Cookies they can be cooked (the game left
 /// that part off them), which makes a bite 10 hunger and 30 extra stamina (the game's cooking: twice the
-/// food, 1.5 times the stamina); ascent 14 halves both. They take half of the Scout Cookies' spawns: from
-/// ascent 9 (the config's "New Items" switch), and in custom runs, where they have their own switch (see
+/// food, 1.5 times the stamina); ascent 14 halves both. They take half of the Scout Cookies' spawns: on
+/// every ascent (the config's "New Items" switch), and in custom runs, where they have their own switch (see
 /// <see cref="CustomRunItems.VariantShare"/>).
 /// </summary>
 internal static class VanillaWafers
@@ -30,7 +30,7 @@ internal static class VanillaWafers
     /// <summary>The Scout Cookies' spawns that turn out to be the Vanilla Wafers.</summary>
     internal const float Share = 0.5f;
 
-    private static bool On => RunSettings.IsCustomRun || (Rules.InExtraAscent && HostOptions.NewItemsOn);
+    private static bool On => NewItems.Available;
 
     /// <summary>The wafers get their name, and cook like the Scout Cookies: the same cooking settings on them.</summary>
     internal static void Build()

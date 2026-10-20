@@ -29,10 +29,41 @@ namespace UltimateAscent.Features;
 /// to its Backpack icon's colours) replaces the Backpack's while the six-slot backpack is on.</item>
 /// </list>
 /// The config switch "Six-Slot Backpack" turns it all off, single-player included.
+/// <para>In multiplayer, with the host's config switch "Six-Slot Backpack in Multiplayer" on (off by default), the
+/// Backpack lying by the crashed plane at the start of the beach is a Six-Slot Backpack instead: an item of its own
+/// with the six slots, the model and the icon above; every other backpack stays the game's. Its contents travel
+/// with it (all six slots, to every player), and Scout's Generosity clones it only for 100 petrification, which is
+/// death.</para>
 /// </summary>
 internal static class SixSlotBackpack
 {
     internal const int Slots = 6;
+
+    /// <summary>The multiplayer six-slot backpack, an item of its own.</summary>
+    internal const string PrefabName = "UA_SixSlotBackpack";
+    internal const string ItemName = "Six-Slot Backpack";
+    internal const string NameKey = "NAME_SIX-SLOT BACKPACK";
+    internal const ushort ItemId = 9006;
+
+    /// <summary>What Scout's Generosity costs for cloning it.</summary>
+    internal const int ClonePetrify = 100;
+
+    /// <summary>The spawner of the Backpack by the crashed plane at the start of the beach.</summary>
+    private const string StartSpawnerParent = "crashed plane";
+    private const string GameBackpack = "Backpack";
+
+    private static Item template;
+
+    internal static Item Template => template;
+
+    /// <summary>The multiplayer six-slot backpack (in hands, on the ground, or its prefab in a slot).</summary>
+    internal static bool IsSix(Item item) => item != null && template != null && item.itemID == template.itemID;
+
+    /// <summary>Whether a backpack of this prefab holds six: every Backpack in single-player, the six-slot one anywhere.</summary>
+    internal static bool HoldsSix(Item prefab) => IsSix(prefab) || (On && prefab is Backpack backpack && backpack.backpackType == BackpackSlot.BackpackType.Backpack);
+
+    /// <summary>For the tests: spawned at the start in this climb.</summary>
+    internal static int SpawnedAtStart;
 
     private const string MeshResource = "UltimateAscent.SixSlotBackpack.bin";
     private const string IconResource = "UltimateAscent.SixSlotBackpack_icon.png";
@@ -125,21 +156,21 @@ internal static class SixSlotBackpack
         }
     }
 
-    /// <summary>The game reads four slots back (it writes all of them): in solo, all six.</summary>
+    /// <summary>
+    /// The game reads four slots back (it writes all of them): in solo, all six, and anywhere all that were written (a
+    /// six-slot backpack's six; the game's own backpacks write four, read as the game reads them).
+    /// </summary>
     [HarmonyPatch(typeof(BackpackData), nameof(BackpackData.DeserializeValue))]
     private static class ReadSixSlots
     {
         private static bool Prefix(BackpackData __instance, BinaryDeserializer deserializer)
         {
-            if (!On)
-            {
-                return true;
-            }
             InventorySyncData sync = default;
             sync.Deserialize(deserializer);
-            if (__instance.itemSlots == null || __instance.itemSlots.Length < Slots)
+            int count = Math.Max(Math.Max(On ? Slots : 4, sync.slots.Length), __instance.itemSlots?.Length ?? 0);
+            if (__instance.itemSlots == null || __instance.itemSlots.Length < count)
             {
-                Array.Resize(ref __instance.itemSlots, Slots);
+                Array.Resize(ref __instance.itemSlots, count);
             }
             for (byte b = 0; b < __instance.itemSlots.Length; b++)
             {
@@ -191,30 +222,227 @@ internal static class SixSlotBackpack
         return visuals.backpackData?.itemSlots?.Length ?? 4;
     }
 
-    /// <summary>The Backpack's wheel offers six slots in solo (the game's are four).</summary>
+    /// <summary>The Backpack's wheel offers six slots in solo, and the six-slot backpack's anywhere (the game's are four).</summary>
     [HarmonyPatch(typeof(GUIManager), nameof(GUIManager.OpenBackpackWheel))]
     private static class SixSlotWheel
     {
-        private static void Prefix(ref int slotCount, BackpackSlot.BackpackType backpackType)
+        private static void Prefix(BackpackReference backpackReference, ref int slotCount, BackpackSlot.BackpackType backpackType)
         {
-            if (On && backpackType == BackpackSlot.BackpackType.Backpack)
+            if (backpackType == BackpackSlot.BackpackType.Backpack && (On || IsSix(backpackReference)))
             {
                 slotCount = Slots;
+                Ensure(backpackReference.GetData());
             }
         }
     }
 
-    /// <summary>In solo the wheel has a slice for every slot: the game's two unused ones are added and all
-    /// seven spread evenly around the circle.</summary>
+    /// <summary>A six-slot wheel has a slice for every slot: the game's two unused ones are added and all seven spread
+    /// evenly around the circle (and put back the game's way for the next four-slot wheel).</summary>
     [HarmonyPatch(typeof(BackpackWheel), nameof(BackpackWheel.InitWheel))]
     private static class SevenSlices
     {
         private static void Prefix(BackpackWheel __instance, int slotCount)
         {
-            if (On)
+            if (On || slotCount >= Slots || gameAngles.Count > 0)
             {
                 Arrange(__instance, slotCount >= Slots);
             }
+        }
+    }
+
+    /// <summary>The backpack a reference points at is the six-slot one (in hands or on the ground, or on a scout's back).</summary>
+    private static bool IsSix(BackpackReference reference)
+    {
+        if (!reference.exists || template == null)
+        {
+            return false;
+        }
+        if (reference.type == BackpackReference.BackpackType.Item)
+        {
+            return IsSix(reference.view.GetComponent<Item>());
+        }
+        Character wearer = reference.view.GetComponent<Character>();
+        return wearer != null && IsSix(wearer.player.backpackSlot.prefab);
+    }
+
+    /// <summary>A six-slot backpack's contents get their six slots (the game made them with four).</summary>
+    internal static void Ensure(BackpackData data)
+    {
+        if (data == null || (data.itemSlots != null && data.itemSlots.Length >= Slots))
+        {
+            return;
+        }
+        int had = data.itemSlots?.Length ?? 0;
+        Array.Resize(ref data.itemSlots, Slots);
+        for (byte b = (byte)had; b < Slots; b++)
+        {
+            data.itemSlots[b] = new ItemSlot(b);
+        }
+    }
+
+    private static void Ensure(Item backpack)
+    {
+        if (IsSix(backpack))
+        {
+            Ensure(backpack.GetData<BackpackData>(DataEntryKey.BackpackData));
+        }
+    }
+
+    private static void EnsureWorn(Character wearer)
+    {
+        BackpackSlot slot = wearer != null && wearer.player != null ? wearer.player.backpackSlot : null;
+        if (slot != null && !slot.IsEmpty() && IsSix(slot.prefab))
+        {
+            if (!slot.data.TryGetDataEntry(DataEntryKey.BackpackData, out BackpackData data))
+            {
+                data = slot.data.RegisterNewEntry<BackpackData>(DataEntryKey.BackpackData);
+            }
+            Ensure(data);
+        }
+    }
+
+    /// <summary>Wherever the game reads a six-slot backpack's contents, they have their six slots first.</summary>
+    [HarmonyPatch(typeof(BackpackReference), nameof(BackpackReference.GetData))]
+    private static class SixInReference
+    {
+        private static void Postfix(BackpackReference __instance, BackpackData __result)
+        {
+            if (IsSix(__instance))
+            {
+                Ensure(__result);
+            }
+        }
+    }
+
+    [HarmonyPatch(typeof(ItemBackpackVisuals), nameof(ItemBackpackVisuals.GetBackpackData))]
+    private static class SixInItemVisuals
+    {
+        private static void Postfix(ItemBackpackVisuals __instance, BackpackData __result)
+        {
+            if (IsSix(__instance.GetComponent<Item>()))
+            {
+                Ensure(__result);
+            }
+        }
+    }
+
+    [HarmonyPatch(typeof(BackpackOnBackVisuals), nameof(BackpackOnBackVisuals.GetBackpackData))]
+    private static class SixOnBack
+    {
+        private static void Prefix(BackpackOnBackVisuals __instance)
+        {
+            EnsureWorn(__instance.character);
+        }
+    }
+
+    [HarmonyPatch(typeof(Backpack), nameof(Backpack.RPCAddItemToBackpack))]
+    private static class SixWhenStashed
+    {
+        private static void Prefix(Backpack __instance)
+        {
+            Ensure(__instance);
+        }
+    }
+
+    [HarmonyPatch(typeof(CharacterBackpackHandler), nameof(CharacterBackpackHandler.RPCAddItemToCharacterBackpack))]
+    private static class SixWhenStashedOnBack
+    {
+        private static void Prefix(CharacterBackpackHandler __instance)
+        {
+            EnsureWorn(__instance.character);
+        }
+    }
+
+    /// <summary>The six-slot backpack, a copy of the game's Backpack under its own name, icon and id (it spawns only where it is put).</summary>
+    internal static void Build()
+    {
+        if (!ItemDatabase.TryGetItem(GameBackpack, out Item backpack) || !(backpack is Backpack))
+        {
+            Plugin.Log.LogWarning("The Backpack is missing from the item database; there is no six-slot backpack in multiplayer.");
+            return;
+        }
+        Item six = ModItems.Copy(backpack, PrefabName);
+        six.UIData.itemName = ItemName;
+        if (Icon() != null)
+        {
+            six.UIData.icon = icon;
+            six.UIData.altIcon = icon;
+        }
+        if (six.TryGetComponent(out LootData loot))
+        {
+            loot.spawnLocations = SpawnPool.None;
+            loot.excludeFromCustomRunSelection = true;
+        }
+        if (ModItems.Register(six, ItemId))
+        {
+            template = six;
+        }
+    }
+
+    /// <summary>The host's multiplayer climbs (not single-player) with the host's switch on.</summary>
+    private static bool SpawnsInThisClimb => template != null && (SpawnForTests
+        || (PhotonNetwork.InRoom && !PhotonNetwork.OfflineMode && Plugin.SixSlotBackpackMultiplayer != null && Plugin.SixSlotBackpackMultiplayer.Value));
+
+    /// <summary>For the tests: the start's backpack is the six-slot one although the game is single-player.</summary>
+    internal static bool SpawnForTests;
+
+    /// <summary>The Backpack by the crashed plane at the start of the beach is the six-slot one (on the host's game, which spawns it).</summary>
+    [HarmonyPatch(typeof(SingleItemSpawner), nameof(SingleItemSpawner.TrySpawnItems))]
+    private static class AtTheStart
+    {
+        private static void Prefix(SingleItemSpawner __instance, out GameObject __state)
+        {
+            __state = null;
+            if (__instance.prefab == null || __instance.prefab.name != GameBackpack || __instance.transform.parent == null
+                || __instance.transform.parent.name != StartSpawnerParent || !SpawnsInThisClimb)
+            {
+                return;
+            }
+            __state = __instance.prefab;
+            __instance.prefab = template.gameObject;
+            SpawnedAtStart++;
+        }
+
+        private static Exception Finalizer(SingleItemSpawner __instance, GameObject __state, Exception __exception)
+        {
+            if (__state != null)
+            {
+                __instance.prefab = __state;
+            }
+            return __exception;
+        }
+    }
+
+    /// <summary>Scout's Generosity aimed at the six-slot backpack costs 100 petrification (after every other price is set).</summary>
+    [HarmonyPatch(typeof(global::Peak.Action_CloneSelectedItem), nameof(global::Peak.Action_CloneSelectedItem.RunAction))]
+    [HarmonyPriority(Priority.Last)]
+    private static class DeadlyToClone
+    {
+        private static void Prefix(global::Peak.Action_CloneSelectedItem __instance, out int[] __state)
+        {
+            __state = null;
+            Character holder = __instance.item != null ? __instance.item.holderCharacter : null;
+            if (template == null || holder == null || !holder.IsLocal || Interaction.instance == null)
+            {
+                return;
+            }
+            Interaction.instance.DoInteractableRaycasts(out IInteractible aimed, __instance.range);
+            if (aimed is Item target && IsSix(target))
+            {
+                __state = new[] { __instance.petrify, __instance.petrifyMystical };
+                __instance.petrify = ClonePetrify;
+                __instance.petrifyMystical = ClonePetrify;
+            }
+        }
+
+        private static Exception Finalizer(global::Peak.Action_CloneSelectedItem __instance, int[] __state, Exception __exception)
+        {
+            if (__state != null)
+            {
+                __instance.petrify = __state[0];
+                __instance.petrifyMystical = __state[1];
+            }
+            return __exception;
         }
     }
 
@@ -293,11 +521,11 @@ internal static class SixSlotBackpack
     {
         private static void Postfix(Backpack __instance)
         {
-            if (!On || __instance.backpackType != BackpackSlot.BackpackType.Backpack || !Load())
+            if (!(On || IsSix(__instance)) || __instance.backpackType != BackpackSlot.BackpackType.Backpack || !Load())
             {
                 return;
             }
-            if (Icon() != null && gameIcon != null)
+            if (On && Icon() != null && gameIcon != null)
             {
                 SetIcon(__instance, true);
             }
@@ -315,23 +543,73 @@ internal static class SixSlotBackpack
         }
     }
 
-    /// <summary>A scout's back: the six-slot model and its pouch anchors.</summary>
-    [HarmonyPatch(typeof(BackpackOnBackVisuals), "Awake")]
+    /// <summary>A scout's back as it was first seen: the game's worn mesh and where its slots hang.</summary>
+    private sealed class WornLook
+    {
+        internal MeshFilter filter;
+        internal Mesh gameMesh;
+        internal Vector3[] anchors;
+        internal bool six;
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<BackpackOnBackVisuals, WornLook> wornLooks =
+        new System.Runtime.CompilerServices.ConditionalWeakTable<BackpackOnBackVisuals, WornLook>();
+
+    /// <summary>
+    /// A scout's back: the six-slot model and its pouch anchors while the backpack worn holds six (every Backpack in
+    /// solo, the six-slot one anywhere), the game's otherwise; it follows the backpack the scout wears.
+    /// </summary>
+    [HarmonyPatch(typeof(CharacterBackpackHandler), "LateUpdate")]
     private static class DressBack
     {
-        private static void Postfix(BackpackOnBackVisuals __instance)
+        private static void Postfix(CharacterBackpackHandler __instance)
         {
-            if (!On || __instance.backpackType != BackpackSlot.BackpackType.Backpack || !Load())
+            BackpackOnBackVisuals visuals = __instance.backpackVisuals;
+            Player player = __instance.character != null ? __instance.character.player : null;
+            if (visuals == null || player == null || player.backpackSlot == null)
             {
                 return;
             }
-            MeshFilter filter = __instance.GetComponentsInChildren<MeshFilter>(true).FirstOrDefault(f => f.sharedMesh != null && f.sharedMesh.name == WornMeshName);
-            if (filter == null)
+            bool six = (On || (!player.backpackSlot.IsEmpty() && IsSix(player.backpackSlot.prefab))) && Load();
+            if (!wornLooks.TryGetValue(visuals, out WornLook look))
+            {
+                if (!six)
+                {
+                    return;
+                }
+                MeshFilter filter = visuals.GetComponentsInChildren<MeshFilter>(true).FirstOrDefault(f => f.sharedMesh != null && f.sharedMesh.name == WornMeshName);
+                if (filter == null)
+                {
+                    return;
+                }
+                look = new WornLook
+                {
+                    filter = filter,
+                    gameMesh = filter.sharedMesh,
+                    anchors = visuals.backpackSlots != null ? visuals.backpackSlots.Select(a => a != null ? a.localPosition : Vector3.zero).ToArray() : new Vector3[0],
+                };
+                wornLooks.Add(visuals, look);
+            }
+            if (look.six == six || look.filter == null)
             {
                 return;
             }
-            filter.sharedMesh = worn;
-            PlaceAnchors(__instance, filter.transform);
+            look.six = six;
+            look.filter.sharedMesh = six ? worn : look.gameMesh;
+            if (six)
+            {
+                PlaceAnchors(visuals, look.filter.transform);
+            }
+            else if (visuals.backpackSlots != null)
+            {
+                for (int i = 0; i < visuals.backpackSlots.Length && i < look.anchors.Length; i++)
+                {
+                    if (visuals.backpackSlots[i] != null)
+                    {
+                        visuals.backpackSlots[i].localPosition = look.anchors[i];
+                    }
+                }
+            }
         }
     }
 

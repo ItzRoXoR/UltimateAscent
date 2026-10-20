@@ -14,7 +14,7 @@ namespace UltimateAscent.Features;
 /// Food and stamina items give half, healing gives 60% (the Green Clusterberry's poison cure half), cure-alls only partly cure, consumables
 /// lose two uses at a time, ropes are shorter, chain/balloons weaker, energy drinks slower,
 /// the lollipop's crash is 85 drowsiness, cooking no longer removes poison or spores, eating a scorpion
-/// poisons you, parasols make you fall faster, gliders drain more stamina, letting go of a rescue
+/// poisons you, the Parasol wears out after 20 s of gliding, gliders drain more stamina, letting go of a rescue
 /// hook makes you fall, the cannon burns, skeletons are fragile and invincibility only blocks 75%. The gems
 /// (<see cref="A14_Gems"/>) and Shroomberries (<see cref="A14_Shroomberries"/>) are worse too;
 /// poisonous food gets far worse from ascent 15 on (<see cref="A15_FoodPoison"/>).
@@ -65,8 +65,13 @@ internal static class A14_WorseItems
     [HarmonyPatch(typeof(Action_RestoreHunger), nameof(Action_RestoreHunger.RunAction))]
     private static class HalfFood
     {
-        private static bool Prefix(Action_RestoreHunger __instance)
+        private static bool Prefix(Action_RestoreHunger __instance, bool __runOriginal)
         {
+            // Another rule has already held this food back (ascent 22's nausea).
+            if (!__runOriginal)
+            {
+                return false;
+            }
             if (!On)
             {
                 return true;
@@ -312,6 +317,35 @@ internal static class A14_WorseItems
         }
     }
 
+    /// <summary>The Rope Cannon and the Anti-Rope Cannon reach 25 m (the game: 30).</summary>
+    internal const float RopeCannonReach = 25f;
+
+    [HarmonyPatch(typeof(RopeShooter), nameof(RopeShooter.Update))]
+    private static class ShorterRopeCannonReach
+    {
+        private static void Prefix(RopeShooter __instance)
+        {
+            float reach = Overrides.Original(__instance, "maxLength", __instance.maxLength);
+            Overrides.Set(__instance, nameof(RopeShooter.maxLength), On ? RopeCannonReach : reach);
+        }
+    }
+
+    /// <summary>The Rescue Claw reaches 20 m aimed level or up, 30 m aimed down (the game: 30 and 40).</summary>
+    internal const float RescueClawReach = 20f;
+    internal const float RescueClawReachDown = 30f;
+
+    [HarmonyPatch(typeof(RescueHook), "GetHit")]
+    private static class ShorterRescueClaw
+    {
+        private static void Prefix(RescueHook __instance)
+        {
+            float reach = Overrides.Original(__instance, "range", __instance.range);
+            float reachDown = Overrides.Original(__instance, "rangeDownward", __instance.rangeDownward);
+            Overrides.Set(__instance, nameof(RescueHook.range), On ? RescueClawReach : reach);
+            Overrides.Set(__instance, nameof(RescueHook.rangeDownward), On ? RescueClawReachDown : reachDown);
+        }
+    }
+
     [HarmonyPatch(typeof(RopeShooter), nameof(RopeShooter.OnPrimaryFinishedCast))]
     private static class ShorterRope
     {
@@ -391,42 +425,35 @@ internal static class A14_WorseItems
         }
     }
 
-    /// <summary>An open parasol pulls you down instead of slowing your fall (not the Lightweight Parasol, see <see cref="A14_Items"/>).</summary>
-    [HarmonyPatch(typeof(CharacterMovement), nameof(CharacterMovement.ApplyParasolDrag))]
-    private static class ParasolScope
+    /// <summary>How long the Parasol lasts gliding (open, in the air) before it is used up.</summary>
+    internal const float ParasolSeconds = 20f;
+
+    /// <summary>
+    /// The Parasol wears out (not the Lightweight Parasol, see <see cref="A14_Items"/>): it slows your fall as in the
+    /// game, but only for 20 s of gliding in all; its use bar shows what is left, and at the end it is used up (the
+    /// game's own consuming, as when food is eaten). Counted by its owner's game; the time left travels with the item.
+    /// </summary>
+    [HarmonyPatch(typeof(Parasol), "FixedUpdate")]
+    private static class WearingParasol
     {
-        [ThreadStatic] internal static int Depth;
-
-        private static void Prefix()
+        private static void Postfix(Parasol __instance)
         {
-            Depth++;
-        }
-
-        private static Exception Finalizer(Exception __exception)
-        {
-            Depth--;
-            return __exception;
-        }
-    }
-
-    [HarmonyPatch(typeof(Bodypart), nameof(Bodypart.ParasolDrag))]
-    private static class HeavyParasol
-    {
-        private static bool Prefix(Bodypart __instance)
-        {
-            if (!On || ParasolScope.Depth <= 0 || !Rules.Owns(__instance.character) || A14_Items.IsLightweightParasol(__instance.character.data.currentItem))
+            Item item = __instance.item;
+            if (!On || item == null || item.photonView == null || !item.photonView.IsMine || item.consuming || A14_Items.IsLightweightParasol(item))
             {
-                return true;
+                return;
             }
-            if (__instance.rig.isKinematic)
+            FloatItemData left = item.GetData(DataEntryKey.Fuel, () => new FloatItemData { Value = ParasolSeconds });
+            Character holder = item.holderCharacter;
+            if (holder != null && holder.IsLocal && __instance.isOpen && !holder.data.isGrounded && left.Value > 0f)
             {
-                return false;
+                left.Value = Mathf.Max(0f, left.Value - Time.fixedDeltaTime);
+                if (left.Value <= 0f)
+                {
+                    item.StartCoroutine(item.ConsumeDelayed(ignoreActions: true));
+                }
             }
-            if (__instance.rig.linearVelocity.y < 0f)
-            {
-                __instance.rig.linearVelocity -= new Vector3(0f, 200f * Time.deltaTime, 0f);
-            }
-            return false;
+            item.SetUseRemainingPercentage(left.Value / ParasolSeconds);
         }
     }
 

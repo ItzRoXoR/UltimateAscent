@@ -11,12 +11,12 @@ using Random = UnityEngine.Random;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// Three of the game's cut foods grow in the wild from ascent 9 and in custom runs, unless the config's
+/// Three of the game's cut foods grow in the wild in every climb, custom runs included, unless the config's
 /// "New Items" switch is off (the Custom Run screen lists only what spawns in suitcases, so in custom
 /// runs too that switch is the only one they follow; see <see cref="NewItems.WildOn"/>):
 /// <list type="bullet">
 /// <item>the Wonderberry (20 hunger and 10 s of infinite stamina, no crash afterwards; from ascent 14
-/// 10 hunger and 6 s) on 0.2% of the berry bushes that grow Crispberries;</item>
+/// 10 hunger and 5 s) on 0.2% of the berry bushes that grow Crispberries;</item>
 /// <item>the Green Clusterberry (10 hunger, removes 30 poison; from ascent 14 5 hunger and 15 poison) on
 /// thorny vines, as often as each of the other Clusterberries;</item>
 /// <item>the Weird Shroom (5 hunger, the game's 10; glows for 60 s) in mushroom patches, as often as the (safe) Cluster
@@ -49,7 +49,7 @@ internal static class WildFoods
     internal const float WonderberryRush = 10f;
 
     /// <summary>From ascent 14 (half the hunger comes from the rule that halves all food).</summary>
-    internal const float WonderberryRushWorse = 6f;
+    internal const float WonderberryRushWorse = 5f;
 
     /// <summary>The share of Crispberry bushes that grow Wonderberries.</summary>
     internal const float WonderberryShare = 0.002f;
@@ -289,7 +289,7 @@ internal static class WildFoods
         return cluster > 0 ? cluster / (float)(total + cluster) : 0f;
     }
 
-    /// <summary>The Wonderberry's sugar rush lasts 6 s from ascent 14 (the game copies it as it applies it).</summary>
+    /// <summary>The Wonderberry's sugar rush lasts 5 s from ascent 14 (the game copies it as it applies it).</summary>
     [HarmonyPatch(typeof(Action_ApplyAffliction), nameof(Action_ApplyAffliction.RunAction))]
     private static class ShorterRush
     {

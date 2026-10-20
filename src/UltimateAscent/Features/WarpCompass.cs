@@ -8,7 +8,7 @@ using UnityEngine;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// The Warp Compass, cut from the game (it is in the item database, in no pool), from ascent 9. It turns
+/// The Warp Compass, cut from the game (it is in the item database, in no pool), on every ascent. It turns
 /// up only in Ancient Luggage and in the Ancient Statues at the end of each part of the climb (the two
 /// pools the Ritual Dagger comes from), at its own rarity (Legendary, like the dagger), and, as in the
 /// game, never in solo, where there is no one to warp to. The config's "New Items" switch keeps it out;
@@ -19,7 +19,7 @@ namespace UltimateAscent.Features;
 /// (not climbing, hanging on a rope or vine, falling, flying or carried), onto free ground beside them
 /// that they can see. The game warped you into the teammate's body: into the wall they climbed, or into
 /// the air with them. With no such teammate, or no free ground beside one, nothing happens and the use is
-/// kept.</item>
+/// kept; a line in the middle of the screen says why (<see cref="Notice"/>).</item>
 /// </list>
 /// </summary>
 internal static class WarpCompass
@@ -64,8 +64,8 @@ internal static class WarpCompass
 
     internal static Item Template => template;
 
-    /// <summary>Spawns in this run: from ascent 9 with the config's "New Items" on (custom runs: its own switch).</summary>
-    private static bool Allowed => RunSettings.IsCustomRun || (Rules.InExtraAscent && HostOptions.NewItemsOn);
+    /// <summary>Spawns in this run: on every ascent with the config's "New Items" on (custom runs: its own switch).</summary>
+    private static bool Allowed => NewItems.Available;
 
     internal static bool IsCompass(Item item) => item != null && template != null && item.itemID == template.itemID;
 
@@ -93,6 +93,39 @@ internal static class WarpCompass
     internal static bool CanWarpTo(Character user, Character mate, float minimumDistance)
     {
         return mate != null && mate != user && !mate.data.dead && Vector3.Distance(user.Center, mate.Center) > minimumDistance && Grounded(mate);
+    }
+
+    /// <summary>Why a warp did not happen, as the user is told (the first reason that holds for every teammate).</summary>
+    internal sealed class Failure
+    {
+        internal readonly string English;
+        internal readonly string Russian;
+
+        internal Failure(string english, string russian)
+        {
+            English = english;
+            Russian = russian;
+        }
+    }
+
+    internal static readonly Failure NoOne = new Failure("NO ONE TO WARP TO", "НЕ К КОМУ ПЕРЕМЕСТИТЬСЯ");
+    internal static readonly Failure TooClose = new Failure("EVERYONE IS TOO CLOSE", "ВСЕ СЛИШКОМ БЛИЗКО");
+    internal static readonly Failure NotOnGround = new Failure("NO ONE IS ON SOLID GROUND", "НИКТО НЕ СТОИТ НА ТВЕРДОЙ ЗЕМЛЕ");
+    internal static readonly Failure NoRoom = new Failure("NO ROOM TO LAND BESIDE ANYONE", "НИ С КЕМ НЕТ МЕСТА ДЛЯ ПРИЗЕМЛЕНИЯ");
+
+    internal static Failure WhyNot(Character user, float minimumDistance)
+    {
+        List<Character> alive = Character.AllCharacters.Where(c => c != null && c != user && !c.isBot && !c.data.dead).ToList();
+        if (alive.Count == 0)
+        {
+            return NoOne;
+        }
+        List<Character> far = alive.Where(c => Vector3.Distance(user.Center, c.Center) > minimumDistance).ToList();
+        if (far.Count == 0)
+        {
+            return TooClose;
+        }
+        return far.Any(Grounded) ? NoRoom : NotOnGround;
     }
 
     /// <summary>Standing (or lying) on solid ground for a second: not climbing, hanging, falling, flying or carried.</summary>
@@ -179,9 +212,9 @@ internal static class WarpCompass
         }
     }
 
-    /// <summary>Regular runs: only from ascent 9 and with the config's "New Items" on.</summary>
+    /// <summary>Regular runs: only with the config's "New Items" on (on every ascent).</summary>
     [HarmonyPatch(typeof(Item), nameof(Item.IsValidToSpawn))]
-    private static class OnlyFromAscent9
+    private static class OnlyWithNewItems
     {
         private static void Postfix(Item __instance, ref bool __result)
         {
@@ -231,7 +264,9 @@ internal static class WarpCompass
                 }
             }
             Kept++;
-            Plugin.Debug($"Warp Compass: no teammate on solid ground with free ground beside them ({mates.Count} on the ground); the use is kept.");
+            Failure reason = WhyNot(user, __instance.minimumDistance);
+            Notice.Show(reason.English, reason.Russian);
+            Plugin.Debug($"Warp Compass: {reason.English} ({mates.Count} on the ground); the use is kept.");
             return false;
         }
 

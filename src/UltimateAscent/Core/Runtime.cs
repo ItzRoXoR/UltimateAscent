@@ -1,13 +1,14 @@
 using System;
 using ExitGames.Client.Photon;
 using Photon.Pun;
+using Photon.Realtime;
 using UltimateAscent.Features;
 using UltimateAscent.Features.Weather;
 
 namespace UltimateAscent.Core;
 
 /// <summary>Drives the per-frame logic of every rule and receives Photon room callbacks.</summary>
-internal sealed class Runtime : MonoBehaviourPunCallbacks
+internal sealed class Runtime : MonoBehaviourPunCallbacks, IOnEventCallback
 {
     private static readonly Action[] Ticks =
     {
@@ -26,6 +27,10 @@ internal sealed class Runtime : MonoBehaviourPunCallbacks
         A13_ButterFingers.Tick,
         A14_Items.Tick,
         A17_Hazards.Tick,
+        A17_Traps.Tick,
+        GloomCrows.Tick,
+        PeakZombies.Tick,
+        A22_Episodes.Tick,
         ClimbingChalkHands.Tick,
         CalderaTide.Tick,
         KilnAsh.Tick,
@@ -63,6 +68,11 @@ internal sealed class Runtime : MonoBehaviourPunCallbacks
                 Plugin.Log.LogError($"{Ticks[i].Method.DeclaringType?.Name}.{Ticks[i].Method.Name} failed and was switched off for this session: {ex}");
             }
         }
+    }
+
+    public void OnEvent(EventData photonEvent)
+    {
+        Net.Receive(photonEvent);
     }
 
     public override void OnJoinedRoom()

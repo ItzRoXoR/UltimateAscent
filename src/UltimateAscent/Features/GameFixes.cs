@@ -15,11 +15,29 @@ namespace UltimateAscent.Features;
 /// <item>A sugar rush without a crash (the Looker's, a Shroomberry's, the Bugle of Friendship's)
 /// arriving during a lollipop's threw an error: the game adds the newcomer's crash time to the running
 /// rush's without checking that it has one. It now adds nothing.</item>
+/// <item>An arrow trap fired at the Citadel's swinging spike balls: it shoots at any loose body crossing its
+/// line, and a spike ball swinging through it is one. A spike ball crossing it no longer sets it off, on every
+/// ascent.</item>
 /// </list>
 /// </summary>
 internal static class GameFixes
 {
     private static bool On => Rules.InExtraAscent;
+
+    /// <summary>The trap's own look along its line (what it would shoot at): a swinging spike ball first is left alone.</summary>
+    [HarmonyPatch(typeof(ArrowShooter), nameof(ArrowShooter.FixedUpdate))]
+    private static class ArrowsIgnoreSpikeBalls
+    {
+        private static bool Prefix(ArrowShooter __instance)
+        {
+            if (!(Plugin.Ready && Rules.InRun) || __instance.empty || __instance.reloading
+                || !UnityEngine.Physics.Raycast(__instance.pos, __instance.forward, out UnityEngine.RaycastHit hit, __instance.range, HelperFunctions.AllPhysical, UnityEngine.QueryTriggerInteraction.Ignore))
+            {
+                return true;
+            }
+            return hit.rigidbody == null || hit.rigidbody.GetComponentInParent<SwingingAxe>() == null;
+        }
+    }
 
     [HarmonyPatch(typeof(Campfire), nameof(Campfire.Awake))]
     private static class StoveLitFromTheStart

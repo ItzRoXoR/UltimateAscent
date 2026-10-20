@@ -4,7 +4,7 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>UltimateAscent</AssemblyName>
     <RootNamespace>UltimateAscent</RootNamespace>
-    <Version>1.4.0</Version>
+    <Version>1.5.0</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -58,6 +58,7 @@
     <EmbeddedResource Include="Resources\VRHeadset_icon.png" LogicalName="UltimateAscent.VRHeadset_icon.png" />
     <!-- The Stone's break: the smash at 4 s of the user's rock-smash clip (mono, 16-bit PCM). -->
     <EmbeddedResource Include="Resources\Stone_break.wav" LogicalName="UltimateAscent.Stone_break.wav" />
+    <EmbeddedResource Include="Resources\Nausea_stomach.wav" LogicalName="UltimateAscent.Nausea_stomach.wav" />
     <EmbeddedResource Include="Resources\PinkLollipop.png" LogicalName="UltimateAscent.PinkLollipop.png" />
     <EmbeddedResource Include="Resources\PinkLollipop_icon.png" LogicalName="UltimateAscent.PinkLollipop_icon.png" Condition="Exists('Resources\PinkLollipop_icon.png')" />
     <EmbeddedResource Include="Resources\ToxicDrink.png" LogicalName="UltimateAscent.ToxicDrink.png" />

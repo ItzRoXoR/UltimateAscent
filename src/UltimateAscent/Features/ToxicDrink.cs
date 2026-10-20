@@ -10,7 +10,7 @@ namespace UltimateAscent.Features;
 
 /// <summary>
 /// The Toxic Drink: the Energy Drink's can in the player's own purple label. Drunk, it makes you
-/// walk and climb 5 times as fast for 10 s (4 times for 8 s with ascent 14's rule); when the boost is
+/// walk and climb 4 times as fast for 10 s (3 times for 7 s with ascent 14's rule); when the boost is
 /// over it poisons you for 4 a second for 5 s (8 a second with ascent 14's rule, as it lands from ascent 15
 /// on). Its can looks the way a cooked Energy Drink's does (the game's first cooking tint). Cooked,
 /// it works like a cooked Energy Drink: it bursts when drunk (a knock-down and a push, never knocking you
@@ -34,12 +34,12 @@ internal static class ToxicDrink
     internal const Rarity SpawnRarity = Rarity.Legendary;
 
     /// <summary>How fast you walk and climb (times the normal speed), and for how long...</summary>
-    internal const float Speed = 5f;
+    internal const float Speed = 4f;
     internal const float Seconds = 10f;
 
     /// <summary>...and with ascent 14's rule.</summary>
-    internal const float SpeedWorse = 4f;
-    internal const float SecondsWorse = 8f;
+    internal const float SpeedWorse = 3f;
+    internal const float SecondsWorse = 7f;
 
     /// <summary>The poison a second once the boost is over, for 5 s (with ascent 14's rule: as it lands from ascent 15 on).</summary>
     internal const float PoisonPerSecond = 0.04f;
@@ -85,7 +85,7 @@ internal static class ToxicDrink
     /// <summary>Poison doses still to come or running, on this game (for the tests).</summary>
     internal static int DosesPending => doses.Count;
 
-    private static bool Allowed => RunSettings.IsCustomRun || (Rules.InExtraAscent && HostOptions.NewItemsOn);
+    private static bool Allowed => NewItems.Available;
 
     internal static bool IsToxic(Item item) => item != null && template != null && item.itemID == template.itemID;
 
@@ -96,7 +96,7 @@ internal static class ToxicDrink
     internal static bool IsBurst(Component component) => component != null && component.gameObject.name.StartsWith(BurstName, StringComparison.Ordinal);
 
     /// <summary>The boost is this drink's: no other speed boost comes near it (the copy the game applies keeps only its numbers).</summary>
-    internal static bool IsBoost(Affliction_FasterBoi boost) => boost != null && boost.moveSpeedMod >= 2.5f;
+    internal static bool IsBoost(Affliction_FasterBoi boost) => boost != null && boost.moveSpeedMod >= 1.5f;
 
     internal static void Reset()
     {
@@ -269,9 +269,9 @@ internal static class ToxicDrink
         }
     }
 
-    /// <summary>Regular runs: only from ascent 9 and with the config's "New Items" on.</summary>
+    /// <summary>Regular runs: only with the config's "New Items" on (on every ascent).</summary>
     [HarmonyPatch(typeof(Item), nameof(Item.IsValidToSpawn))]
-    private static class OnlyFromAscent9
+    private static class OnlyWithNewItems
     {
         private static void Postfix(Item __instance, ref bool __result)
         {

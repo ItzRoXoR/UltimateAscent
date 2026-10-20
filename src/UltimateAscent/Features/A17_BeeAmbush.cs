@@ -22,7 +22,7 @@ internal static class A17_BeeAmbush
     internal const string Marker = "UltimateAscent.bees";
 
     private const float ChancePerMoment = 0.3f;
-    private const float AngrySeconds = A17_Hazards.BeeAngerSeconds;
+    internal const float AngrySeconds = A17_Hazards.BeeAngerSeconds;
 
     /// <summary>An ambush swarm follows its scout up to 120 m from where it appeared, like a hive's bees from their hive.</summary>
     private const float Leash = A17_Hazards.BeeChaseDistance;
@@ -63,10 +63,11 @@ internal static class A17_BeeAmbush
         return moment > from || moment <= to;
     }
 
+    /// <summary>An ambush swarm, or one of the swarms waiting around the map (<see cref="ScatteredBees"/>): no hive, the same leash.</summary>
     internal static bool IsAmbush(BeeSwarm swarm)
     {
         object[] data = swarm.photonView != null ? swarm.photonView.InstantiationData : null;
-        return data != null && data.Length > 0 && data[0] as string == Marker;
+        return data != null && data.Length > 0 && (data[0] as string == Marker || data[0] as string == ScatteredBees.Marker);
     }
 
     /// <summary>Host only; called every frame.</summary>
@@ -174,7 +175,7 @@ internal static class A17_BeeAmbush
     }
 
     /// <summary>The swarm prefab the game's beehives use.</summary>
-    private static string PrefabName()
+    internal static string PrefabName()
     {
         if (prefabName != null)
         {

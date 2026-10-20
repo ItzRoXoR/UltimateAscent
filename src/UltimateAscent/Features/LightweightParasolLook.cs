@@ -21,7 +21,7 @@ namespace UltimateAscent.Features;
 /// tint holds blues and greens back. Cooking darkens it the game's way, from that tint.</item>
 /// <item>The icon is the user's recolour inside the game icon's outline
 /// (Resources/LightweightParasol_icon.png).</item>
-/// <item>Only where the Roots parasol is the Lightweight Parasol (from ascent 9 and in custom runs);
+/// <item>Only where the Roots parasol is the Lightweight Parasol (in every climb, custom runs included);
 /// otherwise it keeps the Parasol's look.</item>
 /// </list>
 /// </summary>

@@ -537,14 +537,14 @@ internal static class A17_Hazards
         }
     }
 
-    /// <summary>A rescue grapple that catches a webbed scout pulls them out of the web.</summary>
+    /// <summary>A rescue grapple that catches a webbed scout pulls them out of the web (on every ascent).</summary>
     [HarmonyPatch(typeof(RescueHook), nameof(RescueHook.RPCA_RescueCharacter))]
     private static class GrappleOutOfWeb
     {
         private static void Postfix(RescueHook __instance)
         {
             Character target = __instance.targetPlayer;
-            if (On && target != null && target.IsLocal && target.refs.afflictions.GetCurrentStatus(CharacterAfflictions.STATUSTYPE.Web) > 0f)
+            if (Plugin.Ready && Rules.InRun && target != null && target.IsLocal && target.refs.afflictions.GetCurrentStatus(CharacterAfflictions.STATUSTYPE.Web) > 0f)
             {
                 target.refs.afflictions.SubtractStatus(CharacterAfflictions.STATUSTYPE.Web, 1f);
             }
@@ -1225,8 +1225,10 @@ internal static class A17_Hazards
     private static int kilnEruptedMinute = -1;
 
     /// <summary>
-    /// The Caldera erupts more often, and from the Kiln's start on the Kiln erupts as well (the host chooses
-    /// where and sends the game's own eruption message, as for the Caldera's).
+    /// The Caldera erupts more often, on the surface where it breaks out (the game puts every eruption at the lava's
+    /// lowest level, where its heat cannot reach the ground around it nor anyone at high tide), never within 20 m of the
+    /// campfire that opens the Kiln or of the Caldera's statue, its last stretch is ablaze (see <see cref="CalderaPathEruptions"/>), and from the Kiln's start on the
+    /// Kiln erupts as well (the host chooses where and sends the game's own eruption message, as for the Caldera's).
     /// </summary>
     [HarmonyPatch(typeof(EruptionSpawner), nameof(EruptionSpawner.Update))]
     private static class Eruptions
@@ -1255,6 +1257,7 @@ internal static class A17_Hazards
                     }
                 }
             }
+            CalderaPathEruptions.Tick(__instance);
             if (PhotonNetwork.IsMasterClient && HelperFunctions.AnyPlayerInZRange(__instance.min.position.z, __instance.max.position.z))
             {
                 __instance.counter -= Time.deltaTime;
@@ -1264,11 +1267,30 @@ internal static class A17_Hazards
                     Vector3 position = __instance.transform.position;
                     position.x += UnityEngine.Random.Range(-155f, 155f);
                     position.z += UnityEngine.Random.Range(-140f, 140f);
-                    __instance.photonView.RPC("RPCA_SpawnEruption", RpcTarget.All, position);
+                    position = OnTheSurface(position);
+                    if (!CalderaPathEruptions.TooClose(position) && !CalderaPathEruptions.Held)
+                    {
+                        __instance.photonView.RPC("RPCA_SpawnEruption", RpcTarget.All, position);
+                    }
                 }
             }
             return false;
         }
+    }
+
+    private static Lava calderaRiver;
+
+    /// <summary>The ground under this spot, or the lava's surface where that is higher (the lava river as it is now).</summary>
+    private static Vector3 OnTheSurface(Vector3 position)
+    {
+        if (calderaRiver == null)
+        {
+            calderaRiver = UnityEngine.Object.FindObjectsByType<Lava>(FindObjectsSortMode.None).FirstOrDefault(l => l.name == "River");
+        }
+        float lava = calderaRiver != null ? calderaRiver.transform.position.y : position.y;
+        RaycastHit ground = HelperFunctions.LineCheck(position + Vector3.up * 150f, position + Vector3.down * 30f, HelperFunctions.LayerType.TerrainMap);
+        position.y = ground.transform != null ? Mathf.Max(ground.point.y, lava) : lava;
+        return position;
     }
 
     /// <summary>A Kiln eruption burns 30 s, out before the ash comes (on every scout's game: each makes its own copy).</summary>
@@ -1289,6 +1311,26 @@ internal static class A17_Hazards
                 {
                     made.seconds = seconds;
                 }
+            }
+        }
+    }
+
+    /// <summary>The Caldera's condors fly 1.35 times as fast: circling, diving at a scout, carrying them off and flying back.</summary>
+    internal const float CondorSpeed = 1.35f;
+
+    [HarmonyPatch(typeof(Condor), "FixedUpdate")]
+    private static class FasterCondors
+    {
+        private static void Prefix(Condor __instance, Condor.CondorState ____state, ref float ____returnToLoopSpeed)
+        {
+            float speed = On ? CondorSpeed : 1f;
+            Overrides.Set(__instance, nameof(Condor.loopDuration), Overrides.Original(__instance, "loopDuration", __instance.loopDuration) / speed);
+            Overrides.Set(__instance, nameof(Condor.swoopTime), Overrides.Original(__instance, "swoopTime", __instance.swoopTime) / speed);
+            Overrides.Set(__instance, nameof(Condor.moveToNestSpeed), Overrides.Original(__instance, "moveToNestSpeed", __instance.moveToNestSpeed) * speed);
+            if (____state == Condor.CondorState.ReturnToLoop)
+            {
+                // The game speeds the way back up by 0.25 a second; this adds the rest.
+                ____returnToLoopSpeed += Time.fixedDeltaTime * 0.25f * (speed - 1f);
             }
         }
     }
@@ -1384,16 +1426,96 @@ internal static class A17_Hazards
         }
     }
 
-    /// <summary>Spore and gas emitters are four times as strong; geysers' warm spots are smaller.</summary>
+    /// <summary>
+    /// An eruption at its height (its strong heat zones, from about 21 s to 28 s) burns 20 heat a second on the bar,
+    /// however many of them reach you; before that its mild zones burn 6 a second each (the game's, four times as
+    /// strong), as they land from ascent 15 on.
+    /// </summary>
+    internal const float EruptionPeakHeat = 0.2f;
+
+    /// <summary>The game's eruption zones: the strong ones burn 0.15 a second, the mild ones 0.01.</summary>
+    private const float EruptionStrongZone = 0.1f;
+
+    private sealed class EruptionHeat
+    {
+        internal StatusEmitter[] zones;
+        internal int frame = -1;
+    }
+
+    private sealed class NotAnEruption
+    {
+    }
+
+    private static ConditionalWeakTable<GameObject, EruptionHeat> eruptionHeat = new ConditionalWeakTable<GameObject, EruptionHeat>();
+    private static ConditionalWeakTable<StatusEmitter, object> eruptionOf = new ConditionalWeakTable<StatusEmitter, object>();
+
+    /// <summary>The eruption (the game's column of fire) this heat zone belongs to, or null.</summary>
+    private static GameObject EruptionOf(StatusEmitter zone)
+    {
+        if (!eruptionOf.TryGetValue(zone, out object found))
+        {
+            Transform root = zone.transform.root;
+            found = root.name.StartsWith("Eruption", StringComparison.Ordinal) && root.GetComponent<RemoveAfterSeconds>() != null ? root.gameObject : (object)new NotAnEruption();
+            eruptionOf.Add(zone, found);
+        }
+        return found as GameObject;
+    }
+
+    /// <summary>Once a frame per eruption: its heat on the local scout, from the zones that reach them.</summary>
+    private static void BurnFrom(GameObject eruption)
+    {
+        EruptionHeat heat = eruptionHeat.GetValue(eruption, e => new EruptionHeat { zones = e.GetComponentsInChildren<StatusEmitter>(true) });
+        if (heat.frame == Time.frameCount)
+        {
+            return;
+        }
+        heat.frame = Time.frameCount;
+        Character local = Character.localCharacter;
+        if (local == null || local.data.dead)
+        {
+            return;
+        }
+        bool strong = false;
+        float mild = 0f;
+        foreach (StatusEmitter zone in heat.zones)
+        {
+            if (zone == null || !zone.isActiveAndEnabled || zone.amount <= 0f || Vector3.Distance(local.Center, zone.transform.position) >= zone.radius + zone.outerFade)
+            {
+                continue;
+            }
+            if (zone.amount >= EruptionStrongZone)
+            {
+                strong = true;
+            }
+            else
+            {
+                mild += zone.amount * 4f;
+            }
+        }
+        const CharacterAfflictions.STATUSTYPE Hot = CharacterAfflictions.STATUSTYPE.Hot;
+        float landing = strong ? A15_StrongerAilments.FromAscent15(Hot, EruptionPeakHeat) : mild * A15_StrongerAilments.Factor(Hot);
+        if (landing > 0f)
+        {
+            ExactStatus.Add(local.refs.afflictions, Hot, landing * Time.deltaTime, "eruption");
+        }
+    }
+
+    /// <summary>Spore and gas emitters are four times as strong; geysers' warm spots are smaller; eruptions burn as above.</summary>
     [HarmonyPatch(typeof(StatusEmitter), nameof(StatusEmitter.Update))]
     private static class Emitters
     {
-        private static void Prefix(StatusEmitter __instance, out float? __state)
+        private static bool Prefix(StatusEmitter __instance, out float? __state)
         {
             __state = null;
             if (!OnFor(__instance))
             {
-                return;
+                return true;
+            }
+            GameObject eruption = EruptionOf(__instance);
+            if (eruption != null)
+            {
+                BurnFrom(eruption);
+                return false;
             }
             if (__instance.amount < 0f && __instance.statusType == CharacterAfflictions.STATUSTYPE.Cold && __instance.transform.parent != null && __instance.transform.parent.name.StartsWith("Geyser", StringComparison.Ordinal))
             {
@@ -1405,6 +1527,7 @@ internal static class A17_Hazards
                 __state = __instance.amount;
                 __instance.amount *= 4f;
             }
+            return true;
         }
 
         private static Exception Finalizer(StatusEmitter __instance, float? __state, Exception __exception)
@@ -1417,9 +1540,17 @@ internal static class A17_Hazards
         }
     }
 
-    // ---- Explosions: double status, much stronger knockback, 3x longer knock-down that also knocks you out.
-    // Some bursts land exact targets instead (amounts given as they land on the bar, before falloff). A cooked
-    // Energy Drink's burst is all of that but the knock-out.
+    // ---- Explosions: double status, much stronger knockback, 3x longer knock-down; only the explosions listed in
+    // KnockOutBlasts also knock you out. Some bursts land exact targets instead (amounts given as they land on the
+    // bar, before falloff).
+
+    /// <summary>
+    /// The explosions (by their objects' names) whose knock-down also knocks you out: a cooked Lantern or Faerie Lantern
+    /// bursting, and the Gloom ghost's burst. Every other explosion only knocks you down.
+    /// </summary>
+    internal static readonly string[] KnockOutBlasts = { "VFX_DynamiteExplosionSmall", "VFX_DynamiteExplosionFae", "VFX_ExplosionGhost" };
+
+    internal static bool KnocksOut(AOE aoe) => KnockOutBlasts.Any(name => aoe.name.StartsWith(name, StringComparison.Ordinal));
 
     /// <summary>Poison mines: up to 50 poison (the game: 20), then up to 5 every 0.5 s in their cloud for 11 s (the game: 2.5).</summary>
     private const float PoisonMineBurst = 0.5f;
@@ -1431,16 +1562,41 @@ internal static class A17_Hazards
     /// <summary>Flash plants blind for up to 180 s, less with distance (the game: 45 s).</summary>
     private const float FlashBlindSeconds = 180f;
 
-    /// <summary>The Gloom's ghost: 60 cold (the game: 35) and 80 s of blindness (the game: 20 s).</summary>
+    /// <summary>The Gloom's ghost: 60 cold (the game: 35) and 50 s of blindness (the game: 20 s).</summary>
     private const float GhostCold = 0.6f;
-    private const float GhostBlindSeconds = 80f;
+    internal const float GhostBlindSeconds = 50f;
 
     /// <summary>
     /// A Mandrake's scream: up to 75 drowsiness per scream, falloff included (the game: 5 a hit, 40 up close).
-    /// A whole scream lands 8 hits (measured in the game; its 0.25 s timer fires about every 0.5 s).
+    /// Each hit gives an eighth of it, and a scream gives no more than 75 in all: how many hits a 3 s scream lands
+    /// depends on the frame rate (its 0.25 s timer; 8 hits measured once, 11 at 120 frames a second).
     /// </summary>
-    private const float MandrakeScream = 0.75f;
+    internal const float MandrakeScream = 0.75f;
     private const float MandrakeScreamTicks = 8f;
+
+    /// <summary>What each Mandrake's scream under way has given this player's scout so far.</summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Mandrake, System.Runtime.CompilerServices.StrongBox<float>> screamGiven =
+        new System.Runtime.CompilerServices.ConditionalWeakTable<Mandrake, System.Runtime.CompilerServices.StrongBox<float>>();
+
+    /// <summary>A new scream starts from nothing (every player's game hears it start).</summary>
+    [HarmonyPatch(typeof(Mandrake), nameof(Mandrake.RPC_Scream))]
+    private static class NewScream
+    {
+        private static void Prefix(Mandrake __instance)
+        {
+            screamGiven.GetValue(__instance, _ => new System.Runtime.CompilerServices.StrongBox<float>()).Value = 0f;
+        }
+    }
+
+    /// <summary>A scream's drowsiness, kept within its whole (75; 37.5 for a player who cannot hear it).</summary>
+    private static float WithinScream(Mandrake mandrake, float amount)
+    {
+        System.Runtime.CompilerServices.StrongBox<float> given = screamGiven.GetValue(mandrake, _ => new System.Runtime.CompilerServices.StrongBox<float>());
+        float whole = HearsMandrakes() ? MandrakeScream : MandrakeScream * MutedScreamShare;
+        float allowed = Mathf.Clamp(whole - given.Value, 0f, amount);
+        given.Value += allowed;
+        return allowed;
+    }
 
     /// <summary>A player who cannot hear the scream still gets this share of it (the game: nothing).</summary>
     internal const float MutedScreamShare = 0.5f;
@@ -1568,12 +1724,14 @@ internal static class A17_Hazards
         [ThreadStatic] internal static int Depth;
         [ThreadStatic] internal static string ExactSource;
         [ThreadStatic] internal static bool KnocksNobodyOut;
+        [ThreadStatic] internal static Mandrake Screaming;
 
         internal struct Scope
         {
             internal bool entered;
             internal string previous;
             internal bool previousKnocksNobodyOut;
+            internal Mandrake previousScreaming;
         }
 
         private static void Prefix(AOE __instance, out Scope __state)
@@ -1586,12 +1744,14 @@ internal static class A17_Hazards
                 entered = OnFor(__instance) && !A14_Shroomberries.IsSporeBurst(__instance) && !ToxicDrink.IsBurst(__instance) && !Compat.Tfa.Causing,
                 previous = ExactSource,
                 previousKnocksNobodyOut = KnocksNobodyOut,
+                previousScreaming = Screaming,
             };
             if (__state.entered)
             {
                 Depth++;
                 ExactSource = Retune(__instance) ? "aoe:" + __instance.name : null;
-                KnocksNobodyOut = IsEnergyDrinkBurst(__instance);
+                KnocksNobodyOut = IsEnergyDrinkBurst(__instance) || !KnocksOut(__instance);
+                Screaming = __instance.statusType == CharacterAfflictions.STATUSTYPE.Drowsy ? __instance.GetComponentInParent<Mandrake>() : null;
             }
         }
 
@@ -1602,6 +1762,7 @@ internal static class A17_Hazards
                 Depth--;
                 ExactSource = __state.previous;
                 KnocksNobodyOut = __state.previousKnocksNobodyOut;
+                Screaming = __state.previousScreaming;
             }
             return __exception;
         }
@@ -1624,6 +1785,10 @@ internal static class A17_Hazards
             // An exact target: lands as given (falloff included), carrying what the bar's steps drop.
             if (__instance.character != null && __instance.character.IsLocal)
             {
+                if (Explosions.Screaming != null && statusType == CharacterAfflictions.STATUSTYPE.Drowsy)
+                {
+                    amount = WithinScream(Explosions.Screaming, amount);
+                }
                 ExactStatus.Add(__instance, statusType, amount, Explosions.ExactSource);
             }
             return false;

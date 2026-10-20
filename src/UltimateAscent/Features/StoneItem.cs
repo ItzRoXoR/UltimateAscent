@@ -7,7 +7,7 @@ using UnityEngine;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// The Stone: the game's cut stone made a throwing stone. Stones lie on the ground from ascent 9 (see
+/// The Stone: the game's cut stone made a throwing stone. Stones lie on the ground in every climb (see
 /// <see cref="GroundItems"/>). A stone that hits a scout at 10 m/s or more (a throw charged a third of
 /// the way, or a fall from 5 m) knocks them down for 2 s and injures them by 10 (20 from ascent 17);
 /// a stone shatters on any impact that hard, whatever it hits.
@@ -16,7 +16,8 @@ namespace UltimateAscent.Features;
 /// stone's rock and name. The knock-down a stone sends carries a mark (2.0023 s) so that the scout it
 /// hit can tell it from the others and take the injury on their own client. A stone that breaks makes
 /// the user's rock smash (cut from their clip) and leaves a small gray dust cloud (the Climbing Chalk's
-/// dust, gray and smaller), for every player.</para>
+/// dust, gray and smaller), for every player; hitting a scout or a zombie makes only that smash, not the
+/// coconut's bonk.</para>
 /// </summary>
 internal static class StoneItem
 {
@@ -29,10 +30,11 @@ internal static class StoneItem
     private const string BreakResource = "UltimateAscent.Stone_break.wav";
 
     /// <summary>
-    /// The break's loudness: the game's coconut break's (its clip measures the same, -21.5 LUFS against
-    /// the smash's -21.6, and the game plays it at 0.35).
+    /// The break's loudness: full. At the coconut break's 0.35 (the clips measure alike, -21.5 LUFS against
+    /// the smash's -21.6) the smash came out 6 dB under that break and 15 dB under the Coconut's bonk where
+    /// the scout hears it (recorded in the game, 2 m away): barely above the beach's own sound.
     /// </summary>
-    private const float BreakVolume = 0.35f;
+    internal const float BreakVolume = 1f;
 
     /// <summary>
     /// The dust cloud: a small one. Fewer, smaller, slower and shorter-lived particles than the chalk's,
@@ -57,7 +59,6 @@ internal static class StoneItem
     internal const float InjuryHazards = 0.2f;
 
     private static Item template;
-    private static SFX_Instance[] bonkSounds = new SFX_Instance[0];
     private static SFX_Instance breakSound;
     private static bool breakSoundFailed;
     private static GameObject dustTemplate;
@@ -88,7 +89,6 @@ internal static class StoneItem
             Plugin.Log.LogWarning("The cut Stone's rock or the Coconut's parts are not where they were; the Stone is not added.");
             return;
         }
-        bonkSounds = coconut.GetComponent<Bonkable>().bonk ?? new SFX_Instance[0];
         int layer = look.GetComponentInChildren<MeshRenderer>(true)?.gameObject.layer ?? 0;
 
         Item stone = ModItems.Copy(coconut, PrefabName);
@@ -161,12 +161,6 @@ internal static class StoneItem
         {
             template = stone;
         }
-    }
-
-    private static void Play(SFX_Instance[] sounds, Vector3 at)
-    {
-        SFX_Instance sound = sounds.Where(s => s != null).OrderBy(_ => Random.value).FirstOrDefault();
-        sound?.Play(at);
     }
 
     /// <summary>The user's rock smash, played like the game's own breaking sounds (in the world, a little pitch variation).</summary>
@@ -272,8 +266,8 @@ internal static class StoneItem
             {
                 return;
             }
+            // No coconut bonk: the stone shatters on the same hit, and its rock smash is the sound of it (see Shatter).
             seconds = Knockdown;
-            Play(bonkSounds, __instance.Center);
             if (__instance.IsLocal && !__instance.data.dead)
             {
                 ExactStatus.Add(__instance.refs.afflictions, CharacterAfflictions.STATUSTYPE.Injury, InjuryNow, "stone");

@@ -22,8 +22,8 @@ namespace UltimateAscent.Features;
 /// <item>A Bounce Fungus pad gives back 2.5 stamina per bounce (the game: 10).</item>
 /// <item>The Roots' copy of the parasol becomes the Lightweight Parasol: it weighs nothing below
 /// ascent 14 and in custom runs, 5% of the bar from 14 (as much as the Parasol), and is the one
-/// parasol that still slows your fall (every other one pulls you down, see A14_WorseItems). It is the
-/// Lightweight Parasol from ascent 9 and in custom runs (see <see cref="IsLightweightParasol"/>).</item>
+/// parasol that never wears out (the Parasol is used up after 20 s of gliding, see A14_WorseItems). It is the
+/// Lightweight Parasol in every climb, custom runs included (see <see cref="IsLightweightParasol"/>).</item>
 /// <item>The Energy Drink speeds your walking up by 30% (see A14_WorseItems' energy-drink rule); from
 /// ascent 15 its crash brings 50 drowsiness. The Big Lollipop's drowsiness comes over 12 s and adds up
 /// to 85 (the game: 33 over 10 s). The Cherry Lollipop's speed boost is the Energy Drink's (walking +30%),
@@ -49,7 +49,7 @@ namespace UltimateAscent.Features;
 /// such as the Book of Bones leave it alone, the skull takes it with everything else, and its clear
 /// keeps 10% of every status (crab included) instead of the 25% revives keep.</item>
 /// <item>The Ritual Dagger turns the teammate it is used on into a zombie instead of killing them.</item>
-/// <item>Pandora's Lunchbox can hand out the crab status too.</item>
+/// <item>Pandora's Lunchbox can hand out the crab status too, at half the share it rolls (as the game rolls its curse).</item>
 /// <item>A lit Lantern or Torch takes 2 cold a second off the scouts within 4.5 m of it (the game: 2.5); a lit
 /// Faerie Lantern 2.5 a second of each of cold, injury, poison, drowsiness and heat (the game: 5).</item>
 /// </list>
@@ -90,7 +90,7 @@ internal static class A14_Items
     }
 
     /// <summary>
-    /// The Lightweight Parasol (name, no weight) exists from ascent 9; from 14 it weighs as much as
+    /// The Lightweight Parasol (name, no weight) exists in every climb; from 14 it weighs as much as
     /// the Parasol and is the one parasol that still slows your fall. Custom runs have it too,
     /// weightless, with its own switch on the Custom Run screen (<see cref="CustomRunItems"/>).
     /// </summary>
@@ -99,8 +99,8 @@ internal static class A14_Items
         return LightweightParasolExists && IsRootsParasol(item);
     }
 
-    /// <summary>The Roots parasol is the Lightweight Parasol in this run (from ascent 9, and in custom runs).</summary>
-    internal static bool LightweightParasolExists => Rules.InExtraAscent || CustomRunItems.InCustomRun;
+    /// <summary>The Roots parasol is the Lightweight Parasol in every climb.</summary>
+    internal static bool LightweightParasolExists => NewItems.RegularRun || CustomRunItems.InCustomRun;
 
     internal const string EnergyDrinkName = "Energy Drink";
     internal const string BigLollipopName = "Big Lollipop";
@@ -971,7 +971,7 @@ internal static class A14_Items
         }
     }
 
-    /// <summary>Crab joins the statuses Pandora's Lunchbox picks from, sharing the same budget.</summary>
+    /// <summary>Crab joins the statuses Pandora's Lunchbox picks from, sharing the same budget, rolled at half the share like curse.</summary>
     [HarmonyPatch(typeof(Affliction_Chaos), nameof(Affliction_Chaos.OnApplied))]
     private static class PandoraCrab
     {
@@ -992,6 +992,24 @@ internal static class A14_Items
                 new CodeInstruction(OpCodes.Dup),
                 new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(A14_Items), nameof(AddCrab))),
             });
+            // The game halves the share it rolls for curse (the only comparison with Curse in it); crab gets the same half.
+            int halved = 0;
+            for (int i = 1; i + 1 < code.Count; i++)
+            {
+                OpCode before = code[i - 1].opcode;
+                bool loadsLocal = before == OpCodes.Ldloc || before == OpCodes.Ldloc_S || before == OpCodes.Ldloc_0 || before == OpCodes.Ldloc_1
+                                  || before == OpCodes.Ldloc_2 || before == OpCodes.Ldloc_3;
+                if (code[i].opcode == OpCodes.Ldc_I4_5 && loadsLocal && code[i + 1].opcode.FlowControl == FlowControl.Cond_Branch)
+                {
+                    code.Insert(i, new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(A14_Items), nameof(HalvedLikeCurse))));
+                    halved++;
+                    i++;
+                }
+            }
+            if (halved != 1)
+            {
+                throw new InvalidOperationException($"Pandora's curse halving was not found ({halved} matches); Pandora's Lunchbox gives no crab.");
+            }
             return code;
         }
     }
@@ -1002,5 +1020,11 @@ internal static class A14_Items
         {
             statuses.Add(Crab);
         }
+    }
+
+    /// <summary>Pandora's crab is rolled at half the share, the way the game rolls its curse.</summary>
+    private static CharacterAfflictions.STATUSTYPE HalvedLikeCurse(CharacterAfflictions.STATUSTYPE status)
+    {
+        return status == Crab ? CharacterAfflictions.STATUSTYPE.Curse : status;
     }
 }

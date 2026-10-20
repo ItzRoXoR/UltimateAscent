@@ -9,8 +9,8 @@ using Zorro.Core;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// Stones and sticks lying around (<see cref="StoneItem"/>, <see cref="StickItem"/>), from ascent 9 and in
-/// custom runs unless the config's "New Items" switch is off: up to 20 of each on the beach and up to 20
+/// Stones and sticks lying around (<see cref="StoneItem"/>, <see cref="StickItem"/>), in every climb, custom runs
+/// included unless the config's "New Items" switch is off: up to 20 of each on the beach and up to 20
 /// of each in the Tropics or the Roots. They lie near the spots the game chose for its mushroom patches
 /// and berry bushes: a few metres away, on ground at the same level and open to the sky, not steeper than
 /// 30 degrees, out of the water and 4 m apart. The host lays them out when the game fills that part of the

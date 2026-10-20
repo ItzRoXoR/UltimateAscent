@@ -36,6 +36,7 @@ internal static class ModItems
         Features.CherryLollipop.Build,
         Features.ToxicDrink.Build,
         Features.TorchItem.Build,
+        Features.SixSlotBackpack.Build,
     };
 
     /// <summary>The templates' parent: inactive and kept across scenes, so no template ever runs.</summary>

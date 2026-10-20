@@ -1,5 +1,99 @@
 # Changelog
 
+## 1.5.0
+
+For PEAK 2.6.b.
+
+* Ascent 17: the Caldera's last stretch is ablaze: from the Caldera's statue up to the campfire that opens the
+  Kiln, an eruption breaks out every 2-6 s while anyone is on it, spread all over the stretch. No eruption breaks
+  out within 20 m of that campfire or the statue (the Caldera's other eruptions keep off them too).
+* Ascent 17: the Caldera's own eruptions break out on the ground or the lava's surface where they land. The game
+  puts them all at the lava's lowest level, where their heat never reached the ground around them (nor anyone at
+  high tide), so they did no harm.
+* Ascent 17: an eruption at its height (about 21-30 s into it) burns 20 heat a second, however many of its heat
+  zones reach you (was up to 192 a second); before that its mild heat burns 6 a second per zone as before.
+* Ascent 17: awake zombies (the Peak's grassy ones too) share out the scouts instead of all going for the nearest:
+  every scout gets one first, and the rest go for the scout with the fewest after them, the nearest of those. A
+  zombie chases the scout it was given for at least 10 s, and only scouts within 100 m.
+* Ascent 14: the Rope Cannon and the Anti-Rope Cannon reach 25 m (the game: 30); the Rescue Claw reaches 20 m aimed
+  level or up and 30 m aimed down (the game: 30 and 40).
+* Ascent 17: Lookers show up on 90% of their hiding spots (was 25%).
+* Ascent 17: the Caldera's condors fly 1.35 times as fast: circling, diving at a scout, carrying them off and
+  flying back.
+* Ascent 18: the Caldera's lava river rises 14 m (779 to 793; was 14.5 m).
+* Ascent 25: in the Caldera and the Gloom storms no longer bring cold or heat, and the wind and the snowstorm
+  never blow at the same time there (the one that would start later waits for the other to end).
+* Ascent 22 reworked: poison and spores no longer make you stumble, and heat no longer drains stamina while
+  sprinting or climbing. Instead, episodes come more often the more of that ailment you have (about every 30 s
+  with a full bar, none below 10): spores numb you for 20 s and then you burst in a Shroomberry's spore cloud,
+  weaker than its own (scouts within 5 m are knocked down for up to 1 s, a little spores); from 70 cold you are
+  now and then knocked down for 5 s, shivering where you land (cold still slows you as before); heat makes you
+  dizzy for 6 s (the view closes in dark from the edges and sways, fading in and out smoothly, and stamina comes
+  back half as fast); eating while poisoned may bring nausea (25 poison: one time in
+  two; 50: always): that food and anything eaten in the next 3 s restores no hunger, and you stand bent over,
+  hands on your knees, for 3 s while your stomach growls. Weight, injury and drowsiness are as before.
+* New items on every ascent: with the "New Items" setting on, the mod's new items (the Climbing Chalk, the
+  Lightweight Parasol, the Auto-Parachute, the Warp Compass, the Toxic Drink, the Vanilla Wafers, the Cherry
+  Lollipop, the Torch in suitcases, the wild foods, the Stones and Sticks) turn up on every ascent, not only
+  from ascent 9. The Torch swings on every ascent too.
+* On every ascent, not only from ascent 9 (or 17): the Ritual Dagger on mushroom zombies, breaking free from
+  webs and fly traps, and a Rescue Claw that catches a webbed scout pulling them out of the web.
+* Ascent 14: the Parasol no longer pulls you down. It slows your fall as in the game but wears out: after 20 s of
+  gliding in all it is used up, its use bar showing what is left. The Lightweight Parasol never wears out.
+* Lightweight Parasol: clown chests hold it too, 0.5% of what they pick.
+* Blindness (a ghost's burst, a shroomberry, a clown chest's trick) is cured by the First Aid Kit and the
+  Cure-All: the blindness and the darkened screen both go.
+* Ascent 17: an arrow trap's green warning line shows only its first half metre out of the opening.
+* Ascent 17: the peak's grassy hill (after the Kiln or the Citadel, below the summit with the flares) has ten
+  zombies dressed as scouts, in two looks: yellow in the fairy outfit and flower hat with sparkling eyes and a
+  toothy grin, or lime in the green tee with cargo shorts and the sprout hat with solid angry eyes and a small
+  frown; both freckled, without sash, medal or zombie mushrooms. A player with the game's zombie phobia setting
+  sees the game's mushroom men.
+* Ascent 17: twenty bee swarms without hives hover over the peak's hill. A swarm a scout comes near turns angry
+  and chases them like a tropical ambush swarm (50 s, up to 120 m from its place), then disperses once it has lost
+  them. The game's beehives and the Tropics' ambushes are as before.
+* Lightweight Parasol under low gravity (an Initiative gem's, a shroomberry's): held open in the air, it lifts
+  you up the way balloons do (as much as eleven balloons), on every ascent; from ascent 14 half as high.
+* Gloom ravens: the eating is heard (it played at the volume of a scout eating, which a raven a few metres
+  away left barely above the Gloom's own sound).
+* Climbing Chalk: its effect lasts 20 s (was 16), from ascent 14 15 s (was 12). A use takes 1 s (was 2 s, the game's). Its rub sound plays once and fades out (it was
+  played twice in a row to fill the 2 s use).
+* Toxic Drink: 4 times as fast for 10 s (was 5 times); from ascent 14 3 times for 7 s (was 4 times
+  for 8 s). Walking and climbing alike, as before.
+* Stone: its rock smash is heard. It played at the coconut break's volume, which left it barely above the
+  beach's own sound; now at full volume (about as loud as the Coconut's bonk). Hitting a scout or a zombie
+  makes only that smash; it no longer also plays the Coconut's bonk.
+* Wonderberry (14): 5 s of infinite stamina (was 6; 10 below 14).
+* Cherry Lollipop: its drowsiness is the Big Lollipop's and 20 more on every ascent, with the ascents' changes on
+  the 20 too (from ascent 14 that ascent's Big Lollipop crash and 20 more: 85 + 26 from ascent 15, 65 + 20 at 14).
+* Six-Slot Backpack in multiplayer: a new setting, Items > Six-Slot Backpack in Multiplayer (the host's,
+  off by default). With it on, the Backpack by the crashed plane at the start of the beach is a Six-Slot
+  Backpack, an item of its own with six slots, the pouches and the icon; every other backpack stays the
+  game's. Its contents reach every player with all six slots; Scout's Generosity clones it only for 100
+  petrification, which is death.
+* Ritual Dagger on zombies: every stab that counts is heard by everyone (the game's sound of a scout taking a
+  hit; the scout who stabs hears it at their own ears, as loud as their own hits, everyone else at the zombie);
+  before, a stab made no sound you could tell apart, and none at all on the Roots' mushroom men.
+* Crab: the Ritual Dagger's stab that kills a zombie takes 15 crab off the scout who made it (exactly 15,
+  ascent 14 included). Pandora's Lunchbox (14) rolls its crab at half the share, as the game rolls its curse.
+* Ghosts (17): the Gloom's ghost blinds for 50 s (was 80). A burning Torch in a scout's hands keeps the
+  ghost away like a lit bell tower (from ascent 9; below 17 the push burns it, as the bell towers do).
+* Citadel (17): saw blades wobble 1.5 times as fast too, alongside running along their walls faster (as
+  the spike rollers sweep round and turn on their axles). Ladders: 1.2 times rock's climbing
+  speed (game: 3) for 90% of its stamina (game: 25%). The game's mimic chests look like ordinary chests,
+  and 35% of the other Citadel chests are mimics (was every second one), picked anew each climb.
+* Explosions (17): only a cooked Lantern's or Faerie Lantern's burst and the Gloom ghost's burst still knock you
+  out (drowsiness up to passing out); every other explosion (dynamite, geysers, exploding spore mushrooms, the
+  Citadel's floor spikes, fireworks...) keeps its stronger status, push and knock-down but no longer knocks you out.
+* Arrow traps (on every ascent): a swinging spike ball crossing an arrow trap's line no longer sets it off.
+* The Nadir: from ascent 17 drowsiness, poison, heat and spores heal half as fast there and blindness and
+  numbness wear off half as fast; from ascent 18 gravity pulls twice as hard there.
+* Warp Compass: when it does not warp, a line in the middle of the screen says why (no one to warp to,
+  everyone too close, no one on solid ground, no room to land), in the game's lettering, without sound.
+* The Gloom's ravens (17): three times in four, a raven comes for an Early Worm a scout sees lying close
+  by, from the nearest perch (the raven sitting there takes off) or out of the sky; it lands beside it, eats
+  it (with the sound a scout makes finishing food, heard by everyone around) and flies off. A worm picked up first is not eaten.
+
 ## 1.4.0
 
 For PEAK 2.6.b.

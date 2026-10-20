@@ -23,7 +23,7 @@ public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "UltimateAscent";
     public const string Name = "Ultimate Ascent";
-    public const string Version = "1.4.0";
+    public const string Version = "1.5.0";
 
     internal static ManualLogSource Log;
     internal static Plugin Instance;
@@ -46,6 +46,9 @@ public sealed class Plugin : BaseUnityPlugin
 
     /// <summary>Off: single-player keeps the game's four-slot Backpack, as multiplayer does.</summary>
     internal static ConfigEntry<bool> SixSlotBackpack;
+
+    /// <summary>On: in multiplayer the Backpack at the start of the beach is the six-slot one (the host's switch).</summary>
+    internal static ConfigEntry<bool> SixSlotBackpackMultiplayer;
 
     private Harmony harmony;
 
@@ -87,6 +90,10 @@ public sealed class Plugin : BaseUnityPlugin
         runtime.hideFlags = HideFlags.HideAndDontSave;
         runtime.AddComponent<Runtime>();
 
+        Features.ZombieDagger.Listen();
+        Features.GloomCrows.Listen();
+        Features.A22_Episodes.Listen();
+
         SceneManager.activeSceneChanged += OnActiveSceneChanged;
         Rules.OnActiveSceneChanged(SceneManager.GetActiveScene());
 
@@ -122,6 +129,8 @@ public sealed class Plugin : BaseUnityPlugin
         NewItems.SettingChanged += (_, _) => HostOptions.Invalidate();
         SixSlotBackpack = Config.Bind("Items", "Six-Slot Backpack", true,
             "Single-player only, on every ascent: the Backpack holds six items instead of four, with four pouches on its sides and its own icon. Off: the game's four-slot Backpack, as in multiplayer (where it always is). A change applies to backpacks that appear after it; one already in your hands or on your back stays as it is until the next run.");
+        SixSlotBackpackMultiplayer = Config.Bind("Items", "Six-Slot Backpack in Multiplayer", false,
+            "Multiplayer only, on every ascent: the Backpack lying by the crashed plane at the start of the beach is a Six-Slot Backpack (six items, four pouches on its sides, its own icon); every other backpack stays the game's four-slot one. Scout's Generosity clones it only for 100 petrification, which is death. Only the host's settings count.");
         VerboseLogging = Config.Bind("Debug", "Verbose Logging", false, "Writes extra diagnostic lines to the BepInEx log.");
         // The player's file is never rewritten on loading: an update only adds its new entries (with their
         // defaults), and entries a newer version no longer uses stay as the player left them (BepInEx keeps

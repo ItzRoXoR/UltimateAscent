@@ -179,6 +179,7 @@ internal static class AscentCatalog
         [Features.ToxicDrink.NameKey] = "Toxic Drink",
         [Features.CherryLollipop.NameKey] = "Cherry Lollipop",
         [Features.VanillaWafers.NameKey] = "Vanilla Wafers",
+        [Features.SixSlotBackpack.NameKey] = Features.SixSlotBackpack.ItemName,
     };
 
     /// <summary>The Russian for the names above and the prompts below (the game's style: berries named like its own "-ика" berries; prompts in the infinitive); every other language shows the English.</summary>
@@ -190,6 +191,7 @@ internal static class AscentCatalog
         [Features.ToxicDrink.NameKey] = "Токсичный напиток",
         [Features.CherryLollipop.NameKey] = "Вишневый леденец",
         [Features.VanillaWafers.NameKey] = "Ванильные вафли",
+        [Features.SixSlotBackpack.NameKey] = "Рюкзак на шесть мест",
         [Features.StickItem.SwingPrompt] = "ударить",
     };
 

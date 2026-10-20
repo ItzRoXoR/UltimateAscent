@@ -163,6 +163,9 @@ internal static class Map
 
     internal static bool InRoots => CurrentPlace == Place.Roots;
 
+    /// <summary>The Nadir (the game's own flag for it).</summary>
+    internal static bool InNadir => Ready && Singleton<MapHandler>.Instance != null && Singleton<MapHandler>.Instance.inNadir;
+
     /// <summary>The biome a scene object belongs to (its <see cref="Biome"/> parent), if it has one.</summary>
     internal static bool TryGetBiome(Component component, out Biome.BiomeType biome)
     {
