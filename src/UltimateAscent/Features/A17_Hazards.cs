@@ -16,8 +16,7 @@ namespace UltimateAscent.Features;
 /// Ascent 17 (13DDA): hazards are more dangerous. Every hazard is worse; some are uniquely worse.
 /// Jellyfish, urchins, bees, beetles, cacti, dynamite, spiders, ticks, tumbleweeds, mushroom
 /// zombies, explosions, banana peels, rickety bridges, lava, eruptions, hazardous rocks, poison
-/// clouds and spore emitters. Burned items burn the hands holding them (<see cref="BurnedItems"/>),
-/// and holding a snowball chills.
+/// clouds and spore emitters. Burned items burn the hands holding them (<see cref="BurnedItems"/>).
 /// Ticks and bee ambushes (<see cref="A17_BeeAmbush"/>) only happen in the Tropics.
 /// </summary>
 internal static class A17_Hazards
@@ -60,25 +59,6 @@ internal static class A17_Hazards
     /// <summary>Falling into lava: 100 injury and 200 heat (the game: 25 and 25).</summary>
     private const float LavaInjury = 1f;
     private const float LavaHeat = 2f;
-
-    /// <summary>Holding a snowball: 2.5 cold a second (the game: none).</summary>
-    private const float HeldSnowballCold = 0.025f;
-
-    /// <summary>Called every frame: a snowball held in the hand chills.</summary>
-    internal static void Tick()
-    {
-        Character local = Character.localCharacter;
-        if (!On || local == null || local.data.dead)
-        {
-            return;
-        }
-        Item held = local.data.currentItem;
-        if (held != null && held.TryGetComponent(out Snowball _))
-        {
-            ExactStatus.Add(local.refs.afflictions, CharacterAfflictions.STATUSTYPE.Cold,
-                A15_StrongerAilments.FromAscent15(CharacterAfflictions.STATUSTYPE.Cold, HeldSnowballCold * Time.deltaTime), "held snowball");
-        }
-    }
 
     private static void Slip(Character character, float fallMultiplier, float hipMultiplier)
     {

@@ -665,6 +665,7 @@ internal sealed partial class Runner : MonoBehaviour
             ("half food (14)", HalfFood),
             ("ticks (17)", TickBites),
             ("eating ticks (14)", EatTick),
+            ("campfire save petrification (17)", () => Now(CampfireSavePetrify)),
             ("burned items (17)", BurnedItemHeat),
             ("burned backpack (17)", BackpackHeat),
             ("Climbing Chalk (9, 14)", ClimbingChalk),
@@ -681,7 +682,7 @@ internal sealed partial class Runner : MonoBehaviour
             ("thrown fungi (14)", ThrownFungi),
             ("checkpoint flag (14, 15, 24)", CheckpointFlagSave),
             ("Mandrake heard (17)", MandrakeHeard),
-            ("held snowball (17)", HeldSnowball),
+            ("held snowball (14)", HeldSnowball),
             ("Auto-Parachute (9, 14)", AutoParachuteCheck),
             ("six-slot backpack (single-player)", SixSlotBackpackCheck),
             ("six-slot backpack in multiplayer", SixSlotMultiplayerCheck),
@@ -986,6 +987,38 @@ internal sealed partial class Runner : MonoBehaviour
                 $"after the right arrow '{shown}', after the left '{Plain(MapPicker.Label.text)}'");
             Screenshot("map-picker-today");
             yield return new WaitForSecondsRealtime(1f);
+            // Held down like a mouse button: the right arrow runs through the maps, faster and faster; letting go (the
+            // button's click) adds no step; a quick click after it is one map again.
+            {
+                List<int> order = MapPicker.Order();
+                UnityEngine.EventSystems.PointerEventData press = new UnityEngine.EventSystems.PointerEventData(UnityEngine.EventSystems.EventSystem.current)
+                {
+                    button = UnityEngine.EventSystems.PointerEventData.InputButton.Left,
+                    clickCount = 1,
+                };
+                int start = order.IndexOf(MapPicker.Picked);
+                UnityEngine.EventSystems.ExecuteEvents.Execute(next.gameObject, press, UnityEngine.EventSystems.ExecuteEvents.pointerDownHandler);
+                yield return new WaitForSecondsRealtime(MapPicker.Hold.Delay * 0.75f);
+                int beforeDelay = order.IndexOf(MapPicker.Picked);
+                yield return new WaitForSecondsRealtime(2f - MapPicker.Hold.Delay * 0.75f);
+                Screenshot("map-picker-held");
+                int held = order.IndexOf(MapPicker.Picked);
+                press.pointerPress = next.gameObject;
+                UnityEngine.EventSystems.ExecuteEvents.Execute(next.gameObject, press, UnityEngine.EventSystems.ExecuteEvents.pointerUpHandler);
+                UnityEngine.EventSystems.ExecuteEvents.Execute(next.gameObject, press, UnityEngine.EventSystems.ExecuteEvents.pointerClickHandler);
+                yield return new WaitForSecondsRealtime(0.5f);
+                int released = order.IndexOf(MapPicker.Picked);
+                int ran = ((held - start) % order.Count + order.Count) % order.Count;
+                ClickOn((RectTransform)next);
+                yield return new WaitForSecondsRealtime(0.3f);
+                int clickedOnce = ((order.IndexOf(MapPicker.Picked) - released) % order.Count + order.Count) % order.Count;
+                Check("holding a map picker arrow runs through the maps after a short wait; letting go adds no step, a click after it is one map",
+                    beforeDelay == start && ran >= 15 && released == held && clickedOnce == 1,
+                    $"{order.Count} maps; {beforeDelay - start} step(s) before the wait ended, {ran} in 2 s held ({MapPicker.Name(order[held])}), {released - held} on letting go, {clickedOnce} on the click after");
+                MapPicker.Picked = MapPicker.Today;
+                pass.UpdateAscent();
+                yield return new WaitForSecondsRealtime(0.5f);
+            }
         }
         else
         {
@@ -3404,13 +3437,19 @@ internal sealed partial class Runner : MonoBehaviour
         Check("the Caldera's condors fly 1.35 times as fast: circling, diving and carrying (17)", all, $"{condors.Length} condors: {string.Join("; ", seen)}");
     }
 
+    /// <summary>The seconds a snowball has left in the hands (its use bar's), or -1 without one.</summary>
+    private static float SnowballLeft(Item item) =>
+        item != null && item.data != null && item.data.TryGetDataEntry(DataEntryKey.Fuel, out FloatItemData left) ? left.Value : -1f;
+
     /// <summary>
-    /// Holding a snowball chills 2.5 a second from ascent 17 (it was part of 14): a snowball in the hand,
-    /// the chill counted for 4 s, then 3 s more with Ascent 17 switched off (in memory), which stops it.
+    /// Holding a snowball chills 2.5 a second from ascent 14 (17 before): a snowball in the hand, the chill
+    /// counted for 4 s, then 3 s more with Ascent 14 switched off (in memory), which stops it and its melting.
+    /// Then it melts: its use bar shows the seconds left of 20, stashed for 2 s it keeps them, and taken out again
+    /// it is gone (from the hand and the slot) when they run out.
     /// </summary>
     private IEnumerator HeldSnowball()
     {
-        if (Rules.Level < Lvl.Hazards)
+        if (Rules.Level < Lvl.WorseItems)
         {
             Info("the held snowball check is skipped", $"testing ascent {target}");
             yield break;
@@ -3428,8 +3467,10 @@ internal sealed partial class Runner : MonoBehaviour
             Fail("a snowball can be taken into the hand");
             yield break;
         }
-        BepInEx.Configuration.ConfigEntry<bool> rule = UltimateAscent.Plugin.AscentSwitches[Lvl.Hazards];
+        BepInEx.Configuration.ConfigEntry<bool> rule = UltimateAscent.Plugin.AscentSwitches[Lvl.WorseItems];
         bool saved = rule.Value;
+        float leftBeforeOff = -1f;
+        float leftAfterOff = -1f;
         List<(float at, float amount)> chills = new List<(float, float)>();
         float started = 0f;
         Action<Status, float> listener = (type, amount) =>
@@ -3450,7 +3491,9 @@ internal sealed partial class Runner : MonoBehaviour
             yield return new WaitForSeconds(4.2f);
             int withRule = chills.Count;
             rule.Value = false;
+            leftBeforeOff = SnowballLeft(local.data.currentItem);
             yield return new WaitForSeconds(3f);
+            leftAfterOff = SnowballLeft(local.data.currentItem);
             withRuleOff = chills.Count - withRule;
             chills.RemoveRange(withRule, withRuleOff);
         }
@@ -3465,9 +3508,46 @@ internal sealed partial class Runner : MonoBehaviour
         {
             gaps.Add(chills[i].at - chills[i - 1].at);
         }
-        Check("holding a snowball chills 2.5 a second (17), and not with Ascent 17 switched off",
+        Check("holding a snowball chills 2.5 a second (14), and not with Ascent 14 switched off",
             chills.Count >= 3 && chills.All(c => Mathf.Abs(c.amount - A15_StrongerAilments.Step) < 0.001f) && gaps.All(g => Mathf.Abs(g - 1f) < 0.1f) && withRuleOff == 0,
-            $"cold at {string.Join(", ", chills.Select(c => $"{c.at:0.00} s (+{c.amount * 100f:0.#})"))}; {withRuleOff} with Ascent 17 off");
+            $"cold at {string.Join(", ", chills.Select(c => $"{c.at:0.00} s (+{c.amount * 100f:0.#})"))}; {withRuleOff} with Ascent 14 off");
+
+        // Melting (Ascent 14 on again): the time left, kept while stashed, and gone when it runs out.
+        Item inHand = local.data.currentItem;
+        float leftNow = SnowballLeft(inHand);
+        float bar = inHand != null && inHand.data.TryGetDataEntry(DataEntryKey.UseRemainingPercentage, out FloatItemData shown) ? shown.Value : -1f;
+        Check("a held snowball's 20 s run down only with Ascent 14 on, and its use bar shows what is left",
+            leftBeforeOff > 0f && leftBeforeOff < A14_Items.SnowballSeconds - 3.5f && leftBeforeOff > A14_Items.SnowballSeconds - 6f && Mathf.Abs(leftAfterOff - leftBeforeOff) < 0.05f
+            && Mathf.Abs(bar - leftNow / A14_Items.SnowballSeconds) < 0.02f,
+            $"{leftBeforeOff:0.00} s left after 4.2 s held, {leftAfterOff:0.00} s after 3 s more with Ascent 14 off; bar {bar:0.00} for {leftNow:0.00} s");
+        byte? snowSlot = null;
+        for (byte slot = 0; slot < local.player.itemSlots.Length; slot++)
+        {
+            ItemSlot itemSlot = local.player.itemSlots[slot];
+            if (!itemSlot.IsEmpty() && itemSlot.prefab != null && itemSlot.prefab.itemID == snowball.itemID)
+            {
+                snowSlot = slot;
+            }
+        }
+        if (snowSlot.HasValue)
+        {
+            try
+            {
+                rule.Value = true;
+                foreach (object step in SnowballMelts(local, snowball, snowSlot.Value))
+                {
+                    yield return step;
+                }
+            }
+            finally
+            {
+                rule.Value = saved;
+            }
+        }
+        else
+        {
+            Fail("the held snowball is in a slot");
+        }
         local.refs.items.EquipSlot(Optionable<byte>.None);
         yield return new WaitForSeconds(0.3f);
         for (byte slot = 0; slot < local.player.itemSlots.Length; slot++)
@@ -3480,6 +3560,46 @@ internal sealed partial class Runner : MonoBehaviour
         }
         Afflictions.UpdateWeight();
         held = null;
+    }
+
+    /// <summary>The held snowball stashed for 2 s, taken out again, then held until it melts.</summary>
+    private IEnumerable SnowballMelts(Character local, Item snowball, byte snowSlot)
+    {
+        {
+            float beforeStash = SnowballLeft(local.data.currentItem);
+            local.refs.items.EquipSlot(Optionable<byte>.None);
+            yield return new WaitForSeconds(2f);
+            local.refs.items.lastEquippedSlotTime = 0f;
+            local.refs.items.EquipSlot(Optionable<byte>.Some(snowSlot));
+            float until = Time.time + 3f;
+            while (Time.time < until && (local.data.currentItem == null || local.data.currentItem.itemID != snowball.itemID))
+            {
+                yield return null;
+            }
+            float afterStash = SnowballLeft(local.data.currentItem);
+            float takenOut = Time.time;
+            Check("a stashed snowball keeps its time", afterStash > 0f && afterStash <= beforeStash && beforeStash - afterStash < 0.3f,
+                $"{beforeStash:0.00} s left when stashed, {afterStash:0.00} s after 2 s in the slot and taken out again");
+            Shield(true);
+            bool pictured = false;
+            float deadline = takenOut + afterStash + 3f;
+            while (Time.time < deadline && local.data.currentItem != null && local.data.currentItem.itemID == snowball.itemID)
+            {
+                if (!pictured && SnowballLeft(local.data.currentItem) < A14_Items.SnowballSeconds * 0.5f)
+                {
+                    pictured = true;
+                    Screenshot("snowball-melting");
+                }
+                yield return null;
+            }
+            float lasted = Time.time - takenOut;
+            Protect(true);
+            yield return new WaitForSeconds(0.5f);
+            bool gone = (local.data.currentItem == null || local.data.currentItem.itemID != snowball.itemID)
+                && local.player.itemSlots.All(s => s.IsEmpty() || s.prefab == null || s.prefab.itemID != snowball.itemID);
+            Check("a held snowball melts when its 20 s run out: gone from the hand and the slot", gone && Mathf.Abs(lasted - afterStash) < 0.6f,
+                $"{afterStash:0.00} s were left, it lasted {lasted:0.00} s more in the hand; gone {gone}");
+        }
     }
 
     /// <summary>
@@ -4202,6 +4322,7 @@ internal sealed partial class Runner : MonoBehaviour
         bool worseSaved = worseRule.Value;
         // The rising fog poisons at 18 (5.5 a second at 24): kept away while the foods' cures are measured.
         Action calm = CalmForMeasuring();
+        Action nausea = NoNausea();
         Protect(false);
         try
         {
@@ -4266,6 +4387,7 @@ internal sealed partial class Runner : MonoBehaviour
             HostOptions.Invalidate();
             Protect(true);
             calm();
+            nausea();
         }
     }
 
@@ -5191,6 +5313,23 @@ internal sealed partial class Runner : MonoBehaviour
         };
     }
 
+    /// <summary>
+    /// Ascent 22's nausea off in memory until the undo runs: eating with poison on the bar can bring it on, and then
+    /// the food gives no hunger, so checks that measure what a food restores turn it off.
+    /// </summary>
+    private static Action NoNausea()
+    {
+        ConfigEntry<bool> episodes = UltimateAscent.Plugin.AscentSwitches[Lvl.UniqueAilments];
+        bool saved = episodes.Value;
+        episodes.Value = false;
+        HostOptions.Invalidate();
+        return () =>
+        {
+            episodes.Value = saved;
+            HostOptions.Invalidate();
+        };
+    }
+
     /// <summary>Puts the item away: the hands are emptied and its slot cleared, so the next checks start with free hands.</summary>
     private IEnumerator PutAway(Item prefab)
     {
@@ -5705,6 +5844,7 @@ internal sealed partial class Runner : MonoBehaviour
         bool worseSaved = worseRule.Value;
         worseRule.Value = true;
         HostOptions.Invalidate();
+        Action nausea = NoNausea();
         Protect(false);
         try
         {
@@ -5779,6 +5919,7 @@ internal sealed partial class Runner : MonoBehaviour
             HostOptions.Invalidate();
             Afflictions.RemoveAffliction(Peak.Afflictions.Affliction.AfflictionType.Glowing);
             Protect(true);
+            nausea();
         }
     }
 
@@ -6130,7 +6271,8 @@ internal sealed partial class Runner : MonoBehaviour
                 $"lit {flame != null && flame.lit}, second use offered {inHand.CanUseSecondary()}, prompt '{prompt}'");
             Screenshot("torch-lit-held");
 
-            Vector3 spot = local.Center + forward * 1.7f;
+            // Closer than the Stick's zombie: lying down it can settle a metre further, past the 2.5 m reach.
+            Vector3 spot = local.Center + forward * 1.2f;
             if (Physics.Raycast(spot + Vector3.up * 2f, Vector3.down, out RaycastHit ground, 6f, HelperFunctions.terrainMapMask))
             {
                 spot = ground.point + Vector3.up * 0.9f;
@@ -6144,6 +6286,17 @@ internal sealed partial class Runner : MonoBehaviour
             }
             Character targetZombie = walker != null ? walker.character : null;
             float zombieHeat = targetZombie != null ? targetZombie.refs.afflictions.GetCurrentStatus(Status.Hot) : 0f;
+            // Aimed at the zombie where it lies (on a slope it can settle lower or closer than straight ahead).
+            if (targetZombie != null)
+            {
+                Vector3 to = targetZombie.Center - local.Center;
+                Vector3 flat = new Vector3(to.x, 0f, to.z);
+                if (flat.sqrMagnitude > 0.01f)
+                {
+                    local.data.lookValues = new Vector2(Quaternion.LookRotation(flat).eulerAngles.y, Mathf.Atan2(to.y, flat.magnitude) * Mathf.Rad2Deg);
+                    yield return new WaitForSeconds(0.2f);
+                }
+            }
             local.data.currentStamina = 1f;
             float staminaBefore = local.data.currentStamina;
             float fuelBefore = flame.fuel;
@@ -6176,7 +6329,8 @@ internal sealed partial class Runner : MonoBehaviour
             float zombieBurn = targetZombie != null ? targetZombie.refs.afflictions.GetCurrentStatus(Status.Hot) - zombieHeat : 0f;
             Check("the swing knocks down the zombie in front for 2 s, without heat (a plain knock-down, no burning mark)",
                 hit && Mathf.Abs(sent - TorchItem.Knockdown) < 0.0001f && longest >= TorchItem.Knockdown - 0.7f && zombieBurn < 0.001f,
-                targetZombie == null ? "no zombie" : $"hit {hit}, knock-down sent {sent:0.0000} s (down for {longest:0.00} s right after the hit, still from rising), +{zombieBurn * 100f:0.#} heat");
+                targetZombie == null ? "no zombie" : $"hit {hit}, knock-down sent {sent:0.0000} s (down for {longest:0.00} s right after the hit, still from rising), +{zombieBurn * 100f:0.#} heat; "
+                    + $"zombie {Vector3.Distance(local.Center, targetZombie.Center):0.00} m away, {Vector3.Angle(local.data.lookDirection, targetZombie.Center - local.Center):0} deg off the look, among the zombies {ZombieManager.Instance != null && ZombieManager.Instance.zombies.Contains(walker)}");
             yield return new WaitForSeconds(1f);
 
             // A teammate's burning hit on this scout: the knock-down message their client sends.
@@ -8061,6 +8215,73 @@ internal sealed partial class Runner : MonoBehaviour
         Transform body = Local.refs.customization.refs.mainRenderer.transform;
         Transform hands = body.Find("UltimateAscent Chalked Hands");
         return hands != null ? hands.GetComponent<SkinnedMeshRenderer>() : null;
+    }
+
+    /// <summary>
+    /// A campfire save (the game writes it as a fire is lit, adding the fire's effects itself) holds the
+    /// petrification lighting the fire takes off: with 40 on the scout's record, 30 saved with Ascent 17 on, 20 with
+    /// it off (in memory); the arrows (the status the game's save hit instead) stay as they were, in the save and in
+    /// the scout's record; and the record keeps its 40, so a second save made from it holds the same.
+    /// </summary>
+    private void CampfireSavePetrify()
+    {
+        if (Rules.Level < Lvl.HotCampfires)
+        {
+            Info("the campfire save check is skipped", $"testing ascent {target}");
+            return;
+        }
+        Character local = Local;
+        ReconnectHandler records = Singleton<ReconnectHandler>.Instance;
+        string id = local.player != null ? Peak.Network.NetworkingUtilities.GetUserId(local.player) : null;
+        if (records == null || string.IsNullOrEmpty(id))
+        {
+            Fail("the game keeps a record of the scout for its campfire saves", $"handler {records != null}, user id '{id}'");
+            return;
+        }
+        ConfigEntry<bool> rule = UltimateAscent.Plugin.AscentSwitches[Lvl.HotCampfires];
+        bool saved = rule.Value;
+        int petrifyBefore = local.data.petrifyAmount;
+        const int Arrows = (int)Status.Arrow;
+        try
+        {
+            local.data.SetPetrify(40);
+            records.UpdateReconnectData(local);
+            local.data.SetPetrify(petrifyBefore);
+            if (!ReconnectHandler.TryGetReconnectData(id, out ReconnectData record, out _) || record.currentStatuses == null)
+            {
+                Fail("the game keeps a record of the scout for its campfire saves", "no valid record after updating it");
+                return;
+            }
+            record.currentStatuses[Arrows] = 0.3f;
+            (int petrify, float arrows) Save(bool hotCampfires)
+            {
+                rule.Value = hotCampfires;
+                HostOptions.Invalidate();
+                if (!Peak.Quicksave.PlayerRunData.TryCreateFromReconnectData(id, out Peak.Quicksave.PlayerRunData runData))
+                {
+                    return (-1, -1f);
+                }
+                ReconnectData written = runData.GetReconnectData();
+                return (written.petrify, written.currentStatuses[Arrows]);
+            }
+            (int petrify, float arrows) on = Save(true);
+            (int petrify, float arrows) again = Save(true);
+            (int petrify, float arrows) off = Save(false);
+            ReconnectHandler.TryGetReconnectData(id, out ReconnectData after, out _);
+            Check("a campfire save holds the petrification lighting the fire takes off: 10 (17), 20 with Ascent 17 off; the arrows untouched; saved again, the same",
+                on.petrify == 30 && again.petrify == 30 && off.petrify == 20 && Mathf.Abs(on.arrows - 0.3f) < 0.001f && Mathf.Abs(off.arrows - 0.3f) < 0.001f
+                && after.petrify == 40 && Mathf.Abs(after.currentStatuses[Arrows] - 0.3f) < 0.001f,
+                $"40 on the record; saved {on.petrify} (Ascent 17 on), {again.petrify} saved again, {off.petrify} (off); arrows saved {on.arrows * 100f:0.#}/{off.arrows * 100f:0.#} of 30; "
+                + $"the record afterwards: petrification {after.petrify}, arrows {after.currentStatuses[Arrows] * 100f:0.#}");
+            record.currentStatuses[Arrows] = 0f;
+        }
+        finally
+        {
+            rule.Value = saved;
+            HostOptions.Invalidate();
+            local.data.SetPetrify(petrifyBefore);
+            records.UpdateReconnectData(local);
+        }
     }
 
     private IEnumerator BurnedItemHeat()

@@ -26,7 +26,6 @@ internal sealed class Runtime : MonoBehaviourPunCallbacks, IOnEventCallback
         ToxicDrink.Tick,
         A13_ButterFingers.Tick,
         A14_Items.Tick,
-        A17_Hazards.Tick,
         A17_Traps.Tick,
         GloomCrows.Tick,
         PeakZombies.Tick,

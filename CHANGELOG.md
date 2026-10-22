@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.5.6
+
+For PEAK 3.0.0.
+
+* Checked against PEAK 3.0.0 (cross-platform play, 208 maps loaded from map bundles): every rule works as before,
+  and the map picker lists all 208 maps and loads a picked one from its bundle.
+* Map picker: hold an arrow down to run through the maps (PEAK now has 208), faster and faster; a click is still
+  one map.
+* Snowballs from ascent 14: holding one chills you 2.5 a second (was from ascent 17), and it melts after
+  20 s in your hands; its use bar shows what is left, and stashed or on the ground it keeps.
+* Campfire saves (PEAK 3.0.0, every ascent): a save loaded after a crash keeps the petrification lighting the fire
+  took off (20; from ascent 17 only 10). The game's save took it off the arrows stuck in you instead, so loading put
+  it all back. Reloading never takes off more: the save is written once, as the fire is lit.
+
 ## 1.5.5
 
 For PEAK 2.6.b.

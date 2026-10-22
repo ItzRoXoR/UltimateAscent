@@ -1,7 +1,7 @@
 # Threats at ascent 24
 
-Every value below is from PEAK 2.6.b (read from the game code and the game data) and from
-Ultimate Ascent 1.5.5's rules. Status amounts use the stamina bar's scale: **100 = the whole bar**. A rule
+Every value below is from PEAK 3.0.0 (read from the game code and the game data) and from
+Ultimate Ascent 1.5.6's rules. Status amounts use the stamina bar's scale: **100 = the whole bar**. A rule
 marked *(17)* comes from that ascent; ascent 24 contains every ascent up to 24. Ultimate Ascent's
 numbers are what lands on the bar, ascent 15's boost included; below ascent 15 the same rules land
 them without that boost, so they are always lower there. Distances are the game's own units,
@@ -383,7 +383,7 @@ Petrification heals only 10 per campfire lighting *(17)*, and revives keep it *(
 | Thorny vines (Tropics) | 10 poison per touch (at most 1/s), knockback 1000 that can cause fall damage | **60 poison per touch**, knockback **1500**; a fall from the knockback → fatal *(12, 24)* |
 | Poison ivy (Tropics) | 3.5 poison per touch (2.5 on the bar), at most 1/s | at least 15 *(17)* × 1.75 → **25 per touch** |
 | Mandrake (pulled out of the ground) | while anyone awake is within 10 m it screams for 3 s every 0.75–2 s: 5 drowsiness × falloff 8 times per scream (40 up close), only for players whose own sound is on; eaten raw: 10 hunger, numb 60 s; cooked: no scream, −25 curse | up to **75 per scream** *(17)* (the game's 40 at 15–16); players whose own sound is off get half, up to **37.5** *(17)* (none at 15–16, as in the game); eaten raw: 5 hunger, numb 60 s and **30 spores** *(14)*; cooked: −15 curse, but every way to cook it chars it to ruin *(17)* |
-| Snowballs (Alpine) | holding one does nothing; thrown (or rolled) into a scout fast enough, it bonks them: knocked down 1 s and pushed | holding one chills **2.5/s** *(17)*; a bonk gives **30 cold** and knocks down **2 s** *(14)* |
+| Snowballs (Alpine) | holding one does nothing; thrown (or rolled) into a scout fast enough, it bonks them: knocked down 1 s and pushed | holding one chills **2.5/s** and it melts after **20 s** in the hands *(14)*; a bonk gives **30 cold** and knocks down **2 s** *(14)* |
 | A teammate's Stone (beach, Tropics, Roots) | cut from the game | lies on the ground from ascent 9; hitting a scout at **10 m/s** or more (a throw charged a third of the way, or a fall from 5 m) knocks them down **2 s** and injures **20** *(17)*; it shatters on any impact that hard |
 | A teammate's Stick (beach, Tropics, Roots) | cut from the game | lies on the ground from ascent 9; a swing (33% of the swinger's stamina) knocks down every scout and zombie a kick would reach (**2.5 m**, 55° ahead) for **3 s**, without injury |
 | A teammate's Torch (the Mesa's Tomb; suitcases wherever the Lantern is) | a light: 2.5 cold a second off the scouts within 4.5 m while lit, no attack | lit, a swing (right mouse, 33% of the swinger's stamina, 4 s of the Torch's fuel) knocks down every scout and zombie a kick would reach (**2.5 m**, 55° ahead) for **2 s** and burns the scouts for **20** *(14)*; it warms **2 cold a second** *(14)* |

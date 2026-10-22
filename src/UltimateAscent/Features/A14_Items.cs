@@ -37,7 +37,8 @@ namespace UltimateAscent.Features;
 /// <item>Placed pitons are the Alps' cracking pitons, 30% sturdier: they hold for 1.3-6.5 s of hanging
 /// (the Alps': 1-5 s), then crack five times (the Alps': four) and break.</item>
 /// <item>A snowball that bonks a scout gives 30 cold and knocks them down for 2 s (the game: no cold,
-/// 1 s). Holding one chills from ascent 17 (see A17_Hazards).</item>
+/// 1 s). Holding one chills 2.5 a second, and it melts after 20 s in the hands (its use bar shows what is left;
+/// stashed or on the ground it keeps).</item>
 /// <item>A Remedy Fungus's cloud lasts 8 s (the game: 15 s). The Anti-Zooka's bubble is 8 m across and
 /// lasts 40 s (the game: 10 m, 60 s). A Portable Stove burns for 30 s (the game: 60 s).</item>
 /// <item>The Book of Bones: becoming a skeleton costs 50 curse, 35 after its cure (its curse is not
@@ -137,6 +138,12 @@ internal static class A14_Items
 
     private const float SnowballCold = 0.3f;
     private const float SnowballKnockdown = 2f;
+
+    /// <summary>Holding a snowball: 2.5 cold a second (the game: none).</summary>
+    private const float HeldSnowballCold = 0.025f;
+
+    /// <summary>How long a snowball lasts in the hands before it melts.</summary>
+    internal const float SnowballSeconds = 20f;
 
     /// <summary>
     /// The knock-down a snowball's bonk sends: 2 s plus a mark, so the scout it hit can tell it from
@@ -385,8 +392,8 @@ internal static class A14_Items
     private static float beanVineSeconds;
 
     /// <summary>
-    /// Called every frame: a Magic Bean's vine sticks thorns into whoever stands on it or climbs it, and
-    /// they work their way out again.
+    /// Called every frame: a snowball held in the hand chills; a Magic Bean's vine sticks thorns into whoever
+    /// stands on it or climbs it, and they work their way out again.
     /// </summary>
     internal static void Tick()
     {
@@ -397,6 +404,11 @@ internal static class A14_Items
             return;
         }
         CharacterAfflictions afflictions = local.refs.afflictions;
+        Item inHand = local.data.currentItem;
+        if (inHand != null && inHand.TryGetComponent(out Snowball _))
+        {
+            ExactStatus.Add(afflictions, Cold, A15_StrongerAilments.FromAscent15(Cold, HeldSnowballCold * Time.deltaTime), "held snowball");
+        }
         bool changed = false;
         int added = 0;
         float now = Time.time;
@@ -775,6 +787,35 @@ internal static class A14_Items
             {
                 ClearBeanThorns(__instance.refs.afflictions);
             }
+        }
+    }
+
+    /// <summary>
+    /// A snowball melts in the hands: 20 s held in all, then it is gone (the game's own consuming, as when food is
+    /// eaten). Its use bar shows what is left; stashed, dropped or rolled on the ground it keeps. Counted by its
+    /// holder's game; the time left travels with the snowball.
+    /// </summary>
+    [HarmonyPatch(typeof(Snowball), "Update")]
+    private static class MeltingSnowball
+    {
+        private static void Postfix(Snowball __instance)
+        {
+            Item item = __instance.item;
+            if (!On || item == null || item.photonView == null || !item.photonView.IsMine || item.consuming)
+            {
+                return;
+            }
+            FloatItemData left = item.GetData(DataEntryKey.Fuel, () => new FloatItemData { Value = SnowballSeconds });
+            Character holder = item.holderCharacter;
+            if (item.itemState == ItemState.Held && holder != null && holder.IsLocal && left.Value > 0f)
+            {
+                left.Value = Mathf.Max(0f, left.Value - Time.deltaTime);
+                if (left.Value <= 0f)
+                {
+                    item.StartCoroutine(item.ConsumeDelayed(ignoreActions: true));
+                }
+            }
+            item.SetUseRemainingPercentage(left.Value / SnowballSeconds);
         }
     }
 

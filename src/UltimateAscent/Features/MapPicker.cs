@@ -6,6 +6,7 @@ using Photon.Pun;
 using TMPro;
 using UltimateAscent.Core;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using Zorro.Core;
 
@@ -15,7 +16,7 @@ namespace UltimateAscent.Features;
 /// The boarding pass picks the map: any map of the game's current rotation (the maps it goes through one a day),
 /// at the bottom right of the ascent card: the map's name in a rounded blue outline, "<" and ">" beside it (with the
 /// game's button hover and click sounds). The arrows go by number (from today's 9, left is 8 and right is 10), round
-/// at the ends; today's map keeps its own name among them. It opens on
+/// at the ends; today's map keeps its own name among them. An arrow held down runs through the maps, faster and faster. It opens on
 /// today's map, "TODAY'S MAP (12)" (the game's lettering has no number sign); the others are "MAP 5". The pick is kept
 /// in the mod's save with the day it was made, so it stays for the day's later climbs and goes back to today's map
 /// when the day changes. The host's pick is the map (the host's game loads it); guests do not see the line. True
@@ -209,7 +210,7 @@ internal static class MapPicker
         fit.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
         fit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-        Chevron(pass, holder.transform, "Previous", "<", blue, () => Step(-1));
+        Chevron(pass, holder.transform, "Previous", "<", blue, -1);
 
         GameObject frame = new GameObject("Outline", typeof(RectTransform));
         frame.transform.SetParent(holder.transform, false);
@@ -243,12 +244,15 @@ internal static class MapPicker
         LayoutElement width = words.AddComponent<LayoutElement>();
         width.preferredWidth = Enumerable.Range(0, Mathf.Max(Count, 1)).Select(m => name.GetPreferredValues(Name(m)).x).DefaultIfEmpty(120f).Max() + 4f;
 
-        Chevron(pass, holder.transform, "Next", ">", blue, () => Step(1));
+        Chevron(pass, holder.transform, "Next", ">", blue, 1);
         return holder;
     }
 
-    /// <summary>One end of the picker: the chevron in the pass's lettering and blue, its end of the outline taking the click.</summary>
-    private static void Chevron(BoardingPass pass, Transform parent, string name, string glyph, Color blue, System.Action click)
+    /// <summary>
+    /// One end of the picker: the chevron in the pass's lettering and blue, its end of the outline taking the click (one
+    /// map that way); held down, it runs through the maps (see <see cref="Hold"/>).
+    /// </summary>
+    private static void Chevron(BoardingPass pass, Transform parent, string name, string glyph, Color blue, int by)
     {
         GameObject end = new GameObject("UltimateAscent Map " + name, typeof(RectTransform));
         end.transform.SetParent(parent, false);
@@ -285,10 +289,21 @@ internal static class MapPicker
         Navigation none = button.navigation;
         none.mode = Navigation.Mode.None;
         button.navigation = none;
-        button.onClick.AddListener(() => click());
         // The game's button sounds: a button's on the pass if it has one, otherwise the Custom Run screen's (its
         // options' hover and click, as the challenge boxes use).
         (SFX_Instance clickSound, SFX_Instance hoverSound) = ButtonSounds(pass);
+        Hold hold = end.AddComponent<Hold>();
+        hold.by = by;
+        hold.tick = clickSound;
+        button.onClick.AddListener(() =>
+        {
+            // The release that ends a run through the maps is not one more step.
+            if (!hold.ran)
+            {
+                Step(by);
+            }
+            hold.ran = false;
+        });
         if (clickSound != null || hoverSound != null)
         {
             NicksButtonSFX sounds = end.AddComponent<NicksButtonSFX>();
@@ -299,6 +314,66 @@ internal static class MapPicker
         else
         {
             Plugin.Log.LogWarning("Map picker: no button sounds found; its arrows are silent.");
+        }
+    }
+
+    /// <summary>
+    /// An arrow held down runs through the maps: after <see cref="Delay"/> it takes a step, faster and faster (from
+    /// <see cref="SlowStep"/> to <see cref="FastStep"/> apart over <see cref="SpeedUp"/>), each with the click sound
+    /// (at most every <see cref="TickGap"/>), until it is let go or the pointer leaves it.
+    /// </summary>
+    internal sealed class Hold : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerExitHandler
+    {
+        internal const float Delay = 0.4f;
+        internal const float SlowStep = 0.12f;
+        internal const float FastStep = 0.025f;
+        internal const float SpeedUp = 1.5f;
+        private const float TickGap = 0.08f;
+
+        internal int by;
+        internal SFX_Instance tick;
+
+        /// <summary>The arrow ran through maps since it was pressed.</summary>
+        internal bool ran;
+
+        private bool held;
+        private float runFrom;
+        private float nextStep;
+        private float lastTick;
+
+        public void OnPointerDown(PointerEventData eventData)
+        {
+            if (eventData.button != PointerEventData.InputButton.Left)
+            {
+                return;
+            }
+            held = true;
+            ran = false;
+            runFrom = Time.unscaledTime + Delay;
+            nextStep = runFrom;
+        }
+
+        public void OnPointerUp(PointerEventData eventData) => held = false;
+
+        public void OnPointerExit(PointerEventData eventData) => held = false;
+
+        private void OnDisable() => held = false;
+
+        private void Update()
+        {
+            float now = Time.unscaledTime;
+            if (!held || now < nextStep)
+            {
+                return;
+            }
+            ran = true;
+            Step(by);
+            if (tick != null && SFX_Player.instance != null && now - lastTick >= TickGap)
+            {
+                lastTick = now;
+                SFX_Player.instance.PlaySFX(tick, transform.position);
+            }
+            nextStep = now + Mathf.Lerp(SlowStep, FastStep, (now - runFrom) / SpeedUp);
         }
     }
 
