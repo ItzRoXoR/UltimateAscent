@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection.Emit;
 using HarmonyLib;
 using Photon.Pun;
 using UltimateAscent.Core;
@@ -12,7 +13,7 @@ namespace UltimateAscent.Features;
 /// <summary>
 /// The Stick: the game's cut stick (its own model, name, icon and two-handed grip) made something to hit
 /// with. Sticks lie on the ground in every climb (see <see cref="GroundItems"/>). Swinging one (the use
-/// button) costs 33% stamina (not possible out of stamina, like a kick) and knocks down for 3 s every
+/// button) costs 33% stamina (not possible out of stamina, like a kick) and knocks down for 4 s every
 /// scout and zombie a kick would reach, in front of the swinger; it does not hurt them.
 /// <para>The swing moves the whole hold, both hands with the stick in them, as the game moves held items:
 /// up and back over the head, then a chop forward and down, played on every client. (The Ritual Dagger's
@@ -26,7 +27,7 @@ internal static class StickItem
     internal const string SwingPrompt = "SWING";
 
     internal const float SwingStamina = 0.33f;
-    internal const float Knockdown = 3f;
+    internal const float Knockdown = 4f;
 
     /// <summary>
     /// The swing, from the press: where the hold is (as for every held item: from the head, x right, y up,
@@ -52,8 +53,12 @@ internal static class StickItem
 
     private static readonly string[] SwingSounds = { "SFXI KickAttempt", "SFXI ScoutMaster Grab Swing 1", "SFXI ScoutMaster Grab Swing 2" };
 
+    /// <summary>The game stands a knocked-down zombie up again after 3 s, whatever knocked it down.</summary>
+    private const float GameZombieKnockdown = 3f;
+
     private static Item template;
     private static float readyAt;
+    private static bool striking;
     private static SFX_Instance swingSound;
     private static bool soundLooked;
     private static Vector3 restHold;
@@ -162,11 +167,56 @@ internal static class StickItem
             }
             Vector3 point = holder.Center + look * distance;
             holder.refs.view.RPC(nameof(CharacterGrabbing.RPCA_KickImpact), RpcTarget.All, point);
-            target.Fall(knockdown(target, zombies.Contains(target)));
+            striking = true;
+            try
+            {
+                target.Fall(knockdown(target, zombies.Contains(target)));
+            }
+            finally
+            {
+                striking = false;
+            }
             target.AddForceAtPosition(look * push, point, spread);
             LastHits.Add(target);
         }
+        // Snakes in reach are pushed back and stunned as long as a zombie would be knocked down.
+        Snakes.SwingHits(holder, knockdown(null, true), reach, aim, look);
     }
+
+    /// <summary>
+    /// A zombie a swing knocks down stays down as long as the swing knocks it down, if that is longer than the game's 3 s
+    /// (the game sets 3 s on every knock-down of a zombie, the one a zombie gets after its own bite included; those stay).
+    /// </summary>
+    [HarmonyPatch(typeof(MushroomZombie), "TestCharacterFell")]
+    private static class ZombieStaysDown
+    {
+        private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        {
+            List<CodeInstruction> code = new List<CodeInstruction>(instructions);
+            List<int> at = new List<int>();
+            for (int i = 0; i < code.Count; i++)
+            {
+                if (code[i].opcode == OpCodes.Ldc_R4 && code[i].operand is float value && value == GameZombieKnockdown)
+                {
+                    at.Add(i);
+                }
+            }
+            if (at.Count != 1)
+            {
+                Plugin.Log.LogWarning($"Stick: the game's 3 s zombie knock-down was found {at.Count} times; zombies keep the game's.");
+                return code;
+            }
+            code.InsertRange(at[0] + 1, new[]
+            {
+                new CodeInstruction(OpCodes.Ldarg_2),
+                new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(StickItem), nameof(ZombieKnockdown))),
+            });
+            return code;
+        }
+    }
+
+    /// <summary>A zombie's knock-down: the game's, or a swing's if that is longer.</summary>
+    private static float ZombieKnockdown(float game, float hit) => striking ? Mathf.Max(game, hit) : game;
 
     /// <summary>The swing on every client (the Stick's, a Torch's): the hold's motion and the sound of a swing.</summary>
     [HarmonyPatch(typeof(Action_PlayItemAnimation), nameof(Action_PlayItemAnimation.PlayAnimationRPC))]

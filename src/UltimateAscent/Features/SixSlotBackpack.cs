@@ -248,6 +248,22 @@ internal static class SixSlotBackpack
                 Arrange(__instance, slotCount >= Slots);
             }
         }
+
+        /// <summary>
+        /// The game hides the slices past the slot count only as far as the pack's own slots reach (four), so the two
+        /// added ones stayed on every later wheel (a Backpack's, a Jetpack's...) once a six-slot wheel had opened.
+        /// </summary>
+        private static void Postfix(BackpackWheel __instance, int slotCount)
+        {
+            BackpackWheelSlice[] slices = __instance.slices;
+            for (int i = Math.Max(slotCount + 1, Slots - 1); slices != null && i < slices.Length; i++)
+            {
+                if (slices[i] != null)
+                {
+                    slices[i].gameObject.SetActive(false);
+                }
+            }
+        }
     }
 
     /// <summary>The backpack a reference points at is the six-slot one (in hands or on the ground, or on a scout's back).</summary>

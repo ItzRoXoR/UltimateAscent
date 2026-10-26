@@ -18,12 +18,12 @@ namespace UltimateAscent.Compat;
 /// <list type="bullet">
 /// <item>Items (and the cooked item's next stage): this ascent's numbers (<see cref="ItemFigures"/>),
 /// plus what the rules add: a raw egg's or tick's poison, a raw Mandrake's spores, a scorpion's poison
-/// (14). Cure-alls take at most 50 of each status (14). Cooking is not previewed from ascent 17, where
-/// it ruins the food at once; from 14 it keeps poison and spores.</item>
-/// <item>A Remedy Fungus cloud lasts 8 s, so it heals less (14); feeding the Jetpack gives 35% less
-/// fuel (14).</item>
+/// (15). Cure-alls take at most 50 of each status (15). Cooking is not previewed from ascent 17, where
+/// it ruins the food at once; from 15 it keeps poison and spores.</item>
+/// <item>A Remedy Fungus cloud lasts 8 s, so it heals less (15); feeding the Jetpack gives 35% less
+/// fuel (15).</item>
 /// <item>Lighting a campfire takes 10 petrification off (17); cannibalism costs 25 curse and 50
-/// poison (11, 28.6 below 15); suitcases hurt (21; the clown chest's trick is random, so not shown).</item>
+/// poison (11, 28.6 below 14); suitcases hurt (21; the clown chest's trick is random, so not shown).</item>
 /// <item>The Ritual Dagger aimed at a zombie (9+) gives nothing, so nothing is previewed.</item>
 /// <item>Scout's Generosity aimed at the Warp Compass or the Toxic Drink costs what a mystical item costs
 /// (<see cref="MysticalItems"/>).</item>
@@ -41,7 +41,7 @@ internal static class EffectPreview
     private static FieldInfo petrifyReduction;
     private static FieldInfo removalCaps;
 
-    /// <summary>The game's Remedy Fungus cloud lasts this long (ascent 14 cuts it to <see cref="A14_Items.RemedyCloudSeconds"/>).</summary>
+    /// <summary>The game's Remedy Fungus cloud lasts this long (ascent 15 cuts it to <see cref="A14_Items.RemedyCloudSeconds"/>).</summary>
     private const float GameRemedyCloudSeconds = 15f;
 
     /// <summary>Effect Preview's own list of the statuses a cure-all clears.</summary>
@@ -58,7 +58,7 @@ internal static class EffectPreview
         CharacterAfflictions.STATUSTYPE.FlyTrap,
     };
 
-    /// <summary>A preview whose cure-all only partly cures (ascent 14), with what that cure-all leaves alone.</summary>
+    /// <summary>A preview whose cure-all only partly cures (ascent 15), with what that cure-all leaves alone.</summary>
     private sealed class PartialCure
     {
         internal Action_ClearAllStatus action;
@@ -145,7 +145,7 @@ internal static class EffectPreview
         }
     }
 
-    /// <summary>What eating it adds from ascent 14 that is not in the item's own actions.</summary>
+    /// <summary>What eating it adds from ascent 15 that is not in the item's own actions.</summary>
     private static void RuleExtras(Item item, object preview)
     {
         bool food = false;
@@ -236,7 +236,7 @@ internal static class EffectPreview
         }
     }
 
-    /// <summary>From ascent 14 cooking leaves the food's poison and spores on.</summary>
+    /// <summary>From ascent 15 cooking leaves the food's poison and spores on.</summary>
     [HarmonyPatch]
     private static class CookingKeepsPoison
     {

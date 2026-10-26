@@ -12,7 +12,7 @@ namespace UltimateAscent.Features;
 /// and, while you are airborne under open sky, pulls you down harder (an extra 40 m/s², 60 in the
 /// Tropics: about twice, in the Tropics three times, the pull of a normal jump); snowstorms chill 20%
 /// more in the Alpine segment and at night, and scorch you by day elsewhere, a heat only sunscreen keeps
-/// off (from ascent 14 all but a quarter of it). While a snowstorm blows where you are, no sun burns
+/// off (from ascent 15 all but a quarter of it). While a snowstorm blows where you are, no sun burns
 /// through it: the scorching sun (the Mesa's, and ascent 23's everywhere) neither heats you nor roasts
 /// what shields you.</item>
 /// <item>Tornadoes spawn every 20-120 s; one that catches you spins, drags and lifts you 2.5 times as
@@ -40,10 +40,10 @@ internal static class A18_ExtremeWeather
     /// <summary>How much harder a tornado spins, drags and lifts the scouts it has caught.</summary>
     internal const float TornadoPull = 2.5f;
 
-    /// <summary>The Mesa's midday sun, a second (the game: about 1.6, 2.4 with ascent 15's boost).</summary>
+    /// <summary>The Mesa's midday sun, a second (the game: about 1.6, 2.4 with ascent 14's boost).</summary>
     internal const float MesaSunHeat = 0.06f;
 
-    /// <summary>The Gloom's fog, a second (the game: 0.9, 1.17 with ascent 15's boost).</summary>
+    /// <summary>The Gloom's fog, a second (the game: 0.9, 1.17 with ascent 14's boost).</summary>
     internal const float GloomFogDrowsiness = 0.025f;
 
     private static float mesaSunTime;
@@ -206,7 +206,7 @@ internal static class A18_ExtremeWeather
                 }
                 else if (segment != Segment.Caldera)
                 {
-                    // Only sunscreen keeps this heat off (from ascent 14 all but a quarter); a parasol or a glider does not.
+                    // Only sunscreen keeps this heat off (from ascent 15 all but a quarter); a parasol or a glider does not.
                     if (!character.data.wearingSunscreen)
                     {
                         character.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Hot, amount);
@@ -320,7 +320,7 @@ internal static class A18_ExtremeWeather
     /// <summary>
     /// The Mesa's midday sun (the game's own, in its box over the Mesa, while the sun is at full strength and
     /// nothing shades the scout from it) burns 6 heat a second, exactly as it lands on the bar. An open
-    /// parasol or a glider held overhead still keeps it off, and sunscreen too (but for the quarter ascent 14
+    /// parasol or a glider held overhead still keeps it off, and sunscreen too (but for the quarter ascent 15
     /// lets through); a snowstorm blowing on the scout hides it. Not while True Final Ascent runs a weather;
     /// in its Apocalypse mode TFA switches the game's sun off and burns with its own.
     /// </summary>

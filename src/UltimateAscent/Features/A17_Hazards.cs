@@ -28,7 +28,7 @@ internal static class A17_Hazards
 
     private const CharacterAfflictions.STATUSTYPE Poison = CharacterAfflictions.STATUSTYPE.Poison;
 
-    // Targets: what lands on the bar from this ascent on, ascent 15's boost included (see A15_StrongerAilments.Raw).
+    // Targets: what lands on the bar from this ascent on, ascent 14's boost included (see A15_StrongerAilments.Raw).
 
     /// <summary>A jellyfish sting: 20 poison (the game: 5).</summary>
     private const float JellyfishPoison = 0.2f;
@@ -305,7 +305,7 @@ internal static class A17_Hazards
             Overrides.Set(__instance, nameof(BeeSwarm.beesAngerTimeHiveStolen), BeeAngerSeconds);
             Overrides.Set(__instance, nameof(BeeSwarm.beesAngerTimeHiveDestroyed), BeeAngerSeconds);
             Overrides.Set(__instance, nameof(BeeSwarm.maxHiveDistance), BeeChaseDistance);
-            // Entering a swarm stings for the game's 5 poison, which ascent 15 already makes 7.5.
+            // Entering a swarm stings for the game's 5 poison, which ascent 14 already makes 7.5.
             Overrides.Set(__instance.stingerField, nameof(StatusField.radius), StingRadius);
         }
     }
@@ -724,21 +724,56 @@ internal static class A17_Hazards
         }
     }
 
-    /// <summary>Cactus thorns pop out by themselves after 120 s when you play alone (the game: 30 s); with others they stay until pulled out (the game: 120 s).</summary>
-    private const float SoloThornSeconds = 120f;
-
+    /// <summary>
+    /// Thorns on the body stay until pulled out, alone or with others (the game: they pop out after 30 s alone, 120 s
+    /// with others). Thorns in the face, which a scout cannot see to pull out, still pop out at the game's times.
+    /// </summary>
     [HarmonyPatch(typeof(ThornOnMe), nameof(ThornOnMe.GetPopOutTime))]
     private static class StubbornThorns
     {
-        private static bool Prefix(ThornOnMe __instance, bool solo, ref float __result)
+        private static bool Prefix(ThornOnMe __instance, ref float __result)
         {
-            if (!On || !__instance.isThorn)
+            if (!On || !__instance.isThorn || InTheFace(__instance))
             {
                 return true;
             }
-            __result = solo ? SoloThornSeconds : float.PositiveInfinity;
+            __result = float.PositiveInfinity;
             return false;
         }
+    }
+
+    /// <summary>The thorn sits in the face: it hangs on the head, or the head is the body part nearest to it.</summary>
+    internal static bool InTheFace(ThornOnMe thorn)
+    {
+        for (Transform up = thorn.transform.parent; up != null; up = up.parent)
+        {
+            if (up.name.IndexOf("Head", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return true;
+            }
+            if (up.GetComponent<Character>() != null)
+            {
+                break;
+            }
+        }
+        Character character = thorn.character != null ? thorn.character : thorn.GetComponentInParent<Character>();
+        if (character == null || character.refs.ragdoll == null)
+        {
+            return false;
+        }
+        Vector3 at = thorn.transform.position;
+        Bodypart nearest = null;
+        float best = float.MaxValue;
+        foreach (Bodypart part in character.refs.ragdoll.partList)
+        {
+            float distance = part != null ? (part.transform.position - at).sqrMagnitude : float.MaxValue;
+            if (distance < best)
+            {
+                best = distance;
+                nearest = part;
+            }
+        }
+        return nearest != null && nearest.partType == BodypartType.Head;
     }
 
     /// <summary>Share of the tick spots that hold a tick (the game: 1%).</summary>
@@ -1017,6 +1052,16 @@ internal static class A17_Hazards
     /// <summary>Tumbleweeds roll 15% faster than in the game.</summary>
     private const float TumbleweedRollForce = 1.15f;
 
+    /// <summary>A tumbleweed's hit is this much harder (the game's power per m/s times this).</summary>
+    internal const float TumbleweedPower = 1.5f;
+
+    /// <summary>
+    /// The cone a tumbleweed steers for scouts in, around its fixed direction: drawn per tumbleweed between these (the
+    /// game: 50-180 degrees), mostly near the narrow end as in the game; from 180 on it turns toward a scout anywhere.
+    /// </summary>
+    internal const float TumbleweedConeMin = 10f;
+    internal const float TumbleweedConeMax = 240f;
+
     [HarmonyPatch(typeof(TumbleWeed), nameof(TumbleWeed.Start))]
     private static class TumbleweedSpawn
     {
@@ -1026,12 +1071,13 @@ internal static class A17_Hazards
             if (On)
             {
                 __instance.rollForce *= TumbleweedRollForce;
-                __instance.powerMultiplier *= 2f;
+                __instance.powerMultiplier *= TumbleweedPower;
+                __instance.maxAngle = Mathf.Lerp(TumbleweedConeMin, TumbleweedConeMax, Mathf.Pow(UnityEngine.Random.value, 5f));
             }
         }
     }
 
-    /// <summary>Tumbleweeds hit twice as hard and always leave an extra thorn.</summary>
+    /// <summary>Tumbleweeds hit 1.5 times as hard and always leave an extra thorn.</summary>
     [HarmonyPatch(typeof(TumbleWeed), nameof(TumbleWeed.OnCollisionEnter))]
     private static class TumbleweedHit
     {
@@ -1409,7 +1455,7 @@ internal static class A17_Hazards
     /// <summary>
     /// An eruption at its height (its strong heat zones, from about 21 s to 28 s) burns 20 heat a second on the bar,
     /// however many of them reach you; before that its mild zones burn 6 a second each (the game's, four times as
-    /// strong), as they land from ascent 15 on.
+    /// strong), as they land from ascent 14 on.
     /// </summary>
     internal const float EruptionPeakHeat = 0.2f;
 
@@ -1716,7 +1762,7 @@ internal static class A17_Hazards
 
         private static void Prefix(AOE __instance, out Scope __state)
         {
-            // A Shroomberry's spore burst has its own numbers (ascent 14), not an explosion's, and a cooked Toxic
+            // A Shroomberry's spore burst has its own numbers (ascent 15), not an explosion's, and a cooked Toxic
             // Drink's burst is no explosion; True Final Ascent's blasts (its mines, its cactus rain's dynamite)
             // keep TFA's. A cooked Energy Drink's burst is an explosion that knocks nobody out.
             __state = new Scope

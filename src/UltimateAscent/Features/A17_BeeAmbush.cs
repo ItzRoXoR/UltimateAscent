@@ -9,7 +9,7 @@ namespace UltimateAscent.Features;
 
 /// <summary>
 /// Ascent 17: bee ambushes in the Tropics. Twice per in-game day, at the middle of the day and at the
-/// middle of the night, every scout in the Tropics has a 30% chance to be attacked by an angry swarm
+/// middle of the night, every scout in the Tropics has a 50% chance to be attacked by an angry swarm
 /// (no beehive needed), so several scouts can be hit at the same time. The swarm appears right next
 /// to its scout.
 /// Escaping works like with a stolen beehive: the swarm is tied to the spot it appeared at (it
@@ -21,19 +21,36 @@ internal static class A17_BeeAmbush
 {
     internal const string Marker = "UltimateAscent.bees";
 
-    private const float ChancePerMoment = 0.3f;
+    private const float ChancePerMoment = 0.5f;
     internal const float AngrySeconds = A17_Hazards.BeeAngerSeconds;
 
     /// <summary>An ambush swarm follows its scout up to 120 m from where it appeared, like a hive's bees from their hive.</summary>
     private const float Leash = A17_Hazards.BeeChaseDistance;
     private const string FallbackPrefab = "BeeSwarm";
-    private const float FallbackSpawnDistance = 3f;
+    private const float MinSpawnDistance = 2f;
+    private const float MaxSpawnDistance = 3f;
+
+    /// <summary>An ambush swarm chases its scout at least this long, however far they run (then the usual leash applies).</summary>
+    internal const float MinChaseSeconds = 20f;
+
+    private sealed class Chase
+    {
+        internal float until;
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<BeeSwarm, Chase> chases = new System.Runtime.CompilerServices.ConditionalWeakTable<BeeSwarm, Chase>();
+
+    /// <summary>For the tests: an ambush swarm still in its sure chase.</summary>
+    internal static bool StillChasing(BeeSwarm swarm) => swarm != null && chases.TryGetValue(swarm, out Chase chase) && Time.time < chase.until;
 
     /// <summary>The time of day (hours) seen last frame; -1 before the first look.</summary>
     private static float lastTime = -1f;
     private static float lastMomentAt = -1000f;
     private static string prefabName;
     private static BeeSwarm template;
+
+    /// <summary>For the tests: no ambushes while a check needs the scout's statuses to itself.</summary>
+    internal static bool HeldOff;
 
     internal static void Reset()
     {
@@ -73,7 +90,7 @@ internal static class A17_BeeAmbush
     /// <summary>Host only; called every frame.</summary>
     internal static void Tick()
     {
-        if (!Rules.Enabled(Lvl.Hazards) || !Rules.IsHost || !PhotonNetwork.InRoom || DayNightManager.instance == null || LoadingScreenHandler.loading || !MapHandler.ExistsAndInitialized)
+        if (HeldOff || !Rules.Enabled(Lvl.Hazards) || !Rules.IsHost || !PhotonNetwork.InRoom || DayNightManager.instance == null || LoadingScreenHandler.loading || !MapHandler.ExistsAndInitialized)
         {
             return;
         }
@@ -146,21 +163,16 @@ internal static class A17_BeeAmbush
         swarm.maxHiveDistance = Leash;
         swarm.currentAggroCharacter = target;
         swarm.GetAngry(AngrySeconds);
+        chases.AddOrUpdate(swarm, new Chase { until = Time.time + MinChaseSeconds });
         Plugin.Log.LogInfo($"Ascent 17: a bee swarm ambushes {target.characterName}.");
     }
 
     /// <summary>
-    /// Right next to the scout, in open air. The game's bees drop any target outside their aggro
-    /// range, so a swarm appearing farther away would only hover there and disperse.
+    /// 2-3 m from the scout, in open air; it chases them from there (<see cref="ChasesItsScout"/>).
     /// </summary>
     private static Vector3 SpawnPoint(Character target)
     {
-        float distance = FallbackSpawnDistance;
-        if (template != null)
-        {
-            float range = Mathf.Min(template.hiveAggroDistance, Mathf.Min(template.deAggroDistance, template.defaultAggroDistance));
-            distance = Mathf.Clamp(range * 0.5f, 1.5f, 5f);
-        }
+        float distance = Random.Range(MinSpawnDistance, MaxSpawnDistance);
         Vector3 center = target.Center;
         for (int attempt = 0; attempt < 8; attempt++)
         {
@@ -213,6 +225,20 @@ internal static class A17_BeeAmbush
             }
             __instance.beehiveID = -1;
             return false;
+        }
+    }
+
+    /// <summary>
+    /// For its first 20 s an ambush swarm keeps after its scout however far they run or however far from where it
+    /// appeared (the game drops a target beyond its aggro range or leash); only a scout who passes out loses it.
+    /// </summary>
+    [HarmonyPatch(typeof(BeeSwarm), nameof(BeeSwarm.TryDeAggro))]
+    private static class ChasesItsScout
+    {
+        private static bool Prefix(BeeSwarm __instance)
+        {
+            Character target = __instance.currentAggroCharacter;
+            return !(StillChasing(__instance) && target != null && target.data.fullyConscious);
         }
     }
 

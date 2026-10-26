@@ -10,10 +10,10 @@ namespace UltimateAscent.Features;
 /// On every ascent the Ritual Dagger works on mushroom zombies, the Roots' and the scouts who turned into
 /// zombies (the game never lets you aim an item at one). As on a teammate, only a stab in the back
 /// counts (any side once it is out cold, as the game allows on a teammate). A zombie dies after 5 stabs
-/// (8 with ascent 14's rule) the way zombies die in the game: it drops, and 10 s later it is gone,
+/// (8 with ascent 15's rule) the way zombies die in the game: it drops, and 10 s later it is gone,
 /// leaving a skeleton. A stab on a zombie gives nobody the sacrifice's cure and extra stamina (they are
 /// for teammates) and keeps the dagger; the stab that kills it takes 15 crab off the scout who made it,
-/// exactly 15 on every ascent (ascent 14's rule, which keeps cure-alls off the crab status, included).
+/// exactly 15 on every ascent (ascent 15's rule, which keeps cure-alls off the crab status, included).
 /// <para>The stabbing scout's game picks the zombie; the stab reaches the zombie's own game (the
 /// host's) through the game's own message, and is counted there. Every stab that counts is heard by every
 /// player: the game's sound of a scout taking a hit, at the zombie (the Roots' mushroom men make no sound of
@@ -25,7 +25,7 @@ internal static class ZombieDagger
     /// <summary>Stabs that kill a zombie...</summary>
     internal const int Stabs = 5;
 
-    /// <summary>...and with ascent 14's rule.</summary>
+    /// <summary>...and with ascent 15's rule.</summary>
     internal const int StabsWorse = 8;
 
     /// <summary>What a stab's prompt calls a zombie (the game's name for every computer-controlled character is "Bot").</summary>

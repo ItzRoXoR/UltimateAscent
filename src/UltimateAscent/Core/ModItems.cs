@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using HarmonyLib;
 using Photon.Pun;
 using UnityEngine;
@@ -37,6 +38,8 @@ internal static class ModItems
         Features.ToxicDrink.Build,
         Features.TorchItem.Build,
         Features.SixSlotBackpack.Build,
+        Features.Crabs.Build,
+        Features.A14_Items.BuildPlacedPiton,
     };
 
     /// <summary>The templates' parent: inactive and kept across scenes, so no template ever runs.</summary>
@@ -128,6 +131,20 @@ internal static class ModItems
         }
         Plugin.Debug($"Registered item {template.gameObject.name} (id {id}).");
         return true;
+    }
+
+    /// <summary>
+    /// The game's own prefab pool: the network's, or the one PEAKLib's pool keeps inside it (its own pool takes over
+    /// once PEAKLib starts, and hands every prefab it does not know to the game's). Null if there is none.
+    /// </summary>
+    internal static DefaultPool GamePool()
+    {
+        IPunPrefabPool pool = PhotonNetwork.PrefabPool;
+        if (pool is DefaultPool own)
+        {
+            return own;
+        }
+        return pool?.GetType().GetProperty("DefaultPool", BindingFlags.Public | BindingFlags.Instance)?.GetValue(pool) as DefaultPool;
     }
 
     /// <summary>Builds and registers every item of this mod, once.</summary>

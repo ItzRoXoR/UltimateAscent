@@ -23,7 +23,7 @@ public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "UltimateAscent";
     public const string Name = "Ultimate Ascent";
-    public const string Version = "1.5.6";
+    public const string Version = "1.6.0";
 
     internal static ManualLogSource Log;
     internal static Plugin Instance;
@@ -50,6 +50,18 @@ public sealed class Plugin : BaseUnityPlugin
 
     /// <summary>On: in multiplayer the Backpack at the start of the beach is the six-slot one (the host's switch).</summary>
     internal static ConfigEntry<bool> SixSlotBackpackMultiplayer;
+
+    /// <summary>Ascent 8, the game's own: from it a climb is won only in the Nadir (on by default).</summary>
+    internal static ConfigEntry<bool> Ascent8;
+
+    /// <summary>Half as much wild food again in multiplayer (off by default).</summary>
+    internal static ConfigEntry<bool> MoreWildFood;
+
+    /// <summary>Off: the mod's new creatures (crabs, snakes, mountain goats) do not appear.</summary>
+    internal static ConfigEntry<bool> NewMobs;
+
+    /// <summary>Off: no icons above the stamina bar for the Climbing Chalk's effect and a tree snake's paralysis.</summary>
+    internal static ConfigEntry<bool> EffectIcons;
 
     private Harmony harmony;
 
@@ -94,6 +106,7 @@ public sealed class Plugin : BaseUnityPlugin
         Features.ZombieDagger.Listen();
         Features.GloomCrows.Listen();
         Features.A22_Episodes.Listen();
+        Features.SnakeParalysis.Listen();
 
         SceneManager.activeSceneChanged += OnActiveSceneChanged;
         Rules.OnActiveSceneChanged(SceneManager.GetActiveScene());
@@ -133,6 +146,13 @@ public sealed class Plugin : BaseUnityPlugin
         ExtendedProgress = Config.Bind("Unlocks", "Highest Unlocked Ascent", 0,
             new ConfigDescription("Progress through ascents 9-25, saved by the mod (the game's own Steam stat stops at ascent 8). Beating ascent N unlocks N+1. 0 means only the vanilla progress counts.",
                 new AcceptableValueRange<int>(0, Lvl.Last + 1)));
+        // Shown first in the [Ascents] list: the night switch, then the game's own ascent 8, then ascents 9-25.
+        ColdNights = Config.Bind("Ascents", "Cold Nights", true,
+            "Nights make you cold: the game's rule from ascent 5, until the third part of the climb (harsher from ascent 18, and longer in the Alpine). Off: the night itself no longer makes you cold, on every ascent; cold from anything else (storms, snow, water, the Alpine) stays. Custom runs keep their own Cold Night setting. Only the host's settings count.");
+        ColdNights.SettingChanged += (_, _) => HostOptions.Invalidate();
+        Ascent8 = Config.Bind("Ascents", "Ascent 8", true,
+            "The game's own ascent 8: from it the flares at the peak no longer call the rescue helicopter, and a climb is won only in the Nadir. Off: on every ascent from 8 the flares at the peak call the helicopter again, as below ascent 8 (the Nadir can still be visited). The other ascents keep their rules. Only the host's settings count.");
+        Ascent8.SettingChanged += (_, _) => HostOptions.Invalidate();
         AscentSwitches = new ConfigEntry<bool>[Lvl.Last + 1];
         for (int level = Lvl.First; level <= Lvl.Last; level++)
         {
@@ -140,9 +160,6 @@ public sealed class Plugin : BaseUnityPlugin
                 AscentCatalog.Description(level) + " Off: this ascent's own rule is left out; the other ascents keep theirs (ascent 25 with Ascent 20 off plays without Bing Bong's rule). Only the host's settings count.");
             AscentSwitches[level].SettingChanged += (_, _) => HostOptions.Invalidate();
         }
-        ColdNights = Config.Bind("Ascents", "Cold Nights", true,
-            "Nights make you cold: the game's rule from ascent 5, until the third part of the climb (harsher from ascent 18, and longer in the Alpine). Off: the night itself no longer makes you cold, on every ascent; cold from anything else (storms, snow, water, the Alpine) stays. Custom runs keep their own Cold Night setting. Only the host's settings count.");
-        ColdNights.SettingChanged += (_, _) => HostOptions.Invalidate();
         NewItems = Config.Bind("Items", "New Items", true,
             "The mod's new items spawn in regular runs from ascent 9: the Climbing Chalk, the Lightweight Parasol (the Roots parasol), the Auto-Parachute, the Warp Compass, the Toxic Drink, the Vanilla Wafers (half of the Scout Cookies), the Cherry Lollipop (half of the Big Lollipops), the Torch in suitcases (half as often as the Lantern), the wild Wonderberry, Green Clusterberry and Weird Shroom, and the Stones and Sticks on the ground. Off: none of them spawns in regular runs; the regular Parasol spawns wherever the Lightweight Parasol would, the Scout Cookies and the Big Lollipop keep all their spawns, and Torches hang only in the Mesa's Tomb. Custom runs keep their own switches for the items on the Custom Run screen (the Cherry Lollipop and the Vanilla Wafers have their own there); the wild foods, Stones and Sticks (not on that screen) follow this switch there too. Only the host's settings count.");
         NewItems.SettingChanged += (_, _) => HostOptions.Invalidate();
@@ -150,6 +167,13 @@ public sealed class Plugin : BaseUnityPlugin
             "Single-player only, on every ascent: the Backpack holds six items instead of four, with four pouches on its sides and its own icon. Off: the game's four-slot Backpack, as in multiplayer (where it always is). A change applies to backpacks that appear after it; one already in your hands or on your back stays as it is until the next run.");
         SixSlotBackpackMultiplayer = Config.Bind("Items", "Six-Slot Backpack in Multiplayer", false,
             "Multiplayer only, on every ascent: the Backpack lying by the crashed plane at the start of the beach is a Six-Slot Backpack (six items, four pouches on its sides, its own icon); every other backpack stays the game's four-slot one. Scout's Generosity clones it only for 100 petrification, which is death. Only the host's settings count.");
+        MoreWildFood = Config.Bind("Items", "More Wild Food in Multiplayer", false,
+            "Multiplayer only, on every ascent: every berry bush, palm, vine and mushroom patch grows half as much food again as the game gives it (the extra food lies beside the game's own). Off: the game's amounts. Only the host's settings count.");
+        NewMobs = Config.Bind("Mobs", "New Mobs", true,
+            "The mod's new creatures live in regular runs on every ascent: crabs on the beach, snakes in the Tropics and mountain goats in the Alps. Below ascent 17 all they do to you is half as strong (half the injury, poison and knockback; knocked down or paralysed half as long) and snakes chase a third slower. Off: none of them appears (a change mid-climb leaves those already out). Custom runs have a switch for each among the Custom Run screen's threats instead (on by default), and there they are half as strong. Only the host's settings count.");
+        NewMobs.SettingChanged += (_, _) => HostOptions.Invalidate();
+        EffectIcons = Config.Bind("Interface", "Effect Icons", true,
+            "The icons above the stamina bar for the mod's new effects: the Climbing Chalk's chalked hand and a tree snake's paralysis drop (with its time left). Off: neither shows; the effects still work. Each player's own.");
         VerboseLogging = Config.Bind("Debug", "Verbose Logging", false, "Writes extra diagnostic lines to the BepInEx log.");
         // The player's file is never rewritten on loading: an update only adds its new entries (with their
         // defaults), and entries a newer version no longer uses stay as the player left them (BepInEx keeps

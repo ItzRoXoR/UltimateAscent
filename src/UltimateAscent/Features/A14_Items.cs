@@ -12,7 +12,7 @@ using UnityEngine;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// Ascent 14: more items are worse.
+/// Ascent 15: more items are worse.
 /// <list type="bullet">
 /// <item>Raw food: an egg (the Caldera's and the Gloom's) or a tick eaten raw poisons for 5 at once.</item>
 /// <item>Sunscreen keeps off only 75% of the sun's heat (the game: all of it), in the Mesa and under
@@ -21,10 +21,10 @@ namespace UltimateAscent.Features;
 /// <item>The Scoutmaster's Bugle sends him after his target for 180 s (the game: 120 s).</item>
 /// <item>A Bounce Fungus pad gives back 2.5 stamina per bounce (the game: 10).</item>
 /// <item>The Roots' copy of the parasol becomes the Lightweight Parasol: it weighs nothing below
-/// ascent 14 and in custom runs, 5% of the bar from 14 (as much as the Parasol), and is the one
+/// ascent 15 and in custom runs, 5% of the bar from 15 (as much as the Parasol), and is the one
 /// parasol that never wears out (the Parasol is used up after 20 s of gliding, see A14_WorseItems). It is the
 /// Lightweight Parasol in every climb, custom runs included (see <see cref="IsLightweightParasol"/>).</item>
-/// <item>The Energy Drink keeps the game's boosts (walking +50%, climbing +150%); from ascent 15 its crash brings 50
+/// <item>The Energy Drink keeps the game's boosts (walking +50%, climbing +150%); from ascent 14 its crash brings 50
 /// drowsiness (see A14_WorseItems' energy-drink rule). The Big Lollipop's drowsiness comes over 12 s and adds up
 /// to 85 (the game: 33 over 10 s). The Cherry Lollipop's speed boost is the Energy Drink's (walking +30%),
 /// without its crash; its drowsiness is the Big Lollipop's.</item>
@@ -34,7 +34,7 @@ namespace UltimateAscent.Features;
 /// (the throw speed divided by that).</item>
 /// <item>A Magic Bean's vine grows at most 15 m (the game: 20 m); standing on it or climbing it sticks
 /// 2.5 thorns into you every 3 s, and each 2.5 works its way out again 30 s later.</item>
-/// <item>Placed pitons are the Alps' cracking pitons, 30% sturdier: they hold for 1.3-6.5 s of hanging
+/// <item>Placed pitons are the Alps' cracking pitons (keeping the piton's yellow look), 30% sturdier: they hold for 1.3-6.5 s of hanging
 /// (the Alps': 1-5 s), then crack five times (the Alps': four) and break.</item>
 /// <item>A snowball that bonks a scout gives 30 cold and knocks them down for 2 s (the game: no cold,
 /// 1 s). Holding one chills 2.5 a second, and it melts after 20 s in the hands (its use bar shows what is left;
@@ -91,7 +91,7 @@ internal static class A14_Items
     }
 
     /// <summary>
-    /// The Lightweight Parasol (name, no weight) exists in every climb; from 14 it weighs as much as
+    /// The Lightweight Parasol (name, no weight) exists in every climb; from 15 it weighs as much as
     /// the Parasol and is the one parasol that still slows your fall. Custom runs have it too,
     /// weightless, with its own switch on the Custom Run screen (<see cref="CustomRunItems"/>).
     /// </summary>
@@ -117,7 +117,7 @@ internal static class A14_Items
     /// <summary>The Cherry Lollipop's walking bonus (+30%; the Energy Drink's own: the game's +50%).</summary>
     internal const float EnergyDrinkWalking = 0.3f;
 
-    /// <summary>From ascent 15: the Energy Drink's crash (the game: 25 drowsiness).</summary>
+    /// <summary>From ascent 14: the Energy Drink's crash (the game: 25 drowsiness).</summary>
     internal const float EnergyDrinkCrash = 0.5f;
 
     /// <summary>The Big Lollipop's drowsiness, in all and over how long (the game: 33 over 10 s).</summary>
@@ -182,7 +182,7 @@ internal static class A14_Items
     /// <summary>The Ancient Idol's weight: half the bar (each point is 2.5).</summary>
     private const int AncientIdolWeight = 20;
 
-    /// <summary>The Lightweight Parasol's weight from ascent 14: 5% of the bar, as much as the Parasol.</summary>
+    /// <summary>The Lightweight Parasol's weight from ascent 15: 5% of the bar, as much as the Parasol.</summary>
     internal const int WorseLightweightParasolWeight = 2;
 
     /// <summary>A carried Balloon takes 2% of the bar off your weight, a Balloon Bunch 8% (the game, from ascent 3: 2.5% and 12.5%).</summary>
@@ -192,6 +192,8 @@ internal static class A14_Items
     private const float BalloonBunchLift = 0.08f;
 
     private const string CrackingPitonPrefab = "0_Items/ClimbingSpikeHammered_Shitty";
+    /// <summary>The cracking piton placed from ascent 15, under the mod's own name (see <see cref="BuildPlacedPiton"/>).</summary>
+    private const string PlacedPitonName = "UA_PitonCracking";
     private const float PitonSturdiness = 1.3f;
     private const int PitonCracks = 5;
 
@@ -512,8 +514,37 @@ internal static class A14_Items
 
     /// <summary>Where this client just hammered a piton in (the spike appears a frame later).</summary>
     private static readonly List<(Vector3 point, float time)> placedPitons = new List<(Vector3, float)>();
+    /// <summary>The piton placed from ascent 15 (null if it could not be built: placed pitons stay the game's).</summary>
     private static GameObject crackingPiton;
-    private static bool lookedForCrackingPiton;
+
+    /// <summary>
+    /// The piton placed from ascent 15, built on every game (the network spawns it by name): the Alps' cracking piton (it
+    /// cracks and breaks under a hanging scout) with the materials of the piton the scouts carry, so it stays the yellow
+    /// piton that was in the hand (PEAK 3.0.0 gave the piton its yellow look; the Alps' kept its old ring).
+    /// </summary>
+    internal static void BuildPlacedPiton()
+    {
+        GameObject placed = ItemDatabase.TryGetItem("ClimbingSpike", out Item piton) && piton != null && piton.TryGetComponent(out ClimbingSpikeComponent spike) ? spike.hammeredVersionPrefab : null;
+        GameObject alps = Resources.Load<GameObject>(CrackingPitonPrefab);
+        DefaultPool pool = ModItems.GamePool();
+        if (placed == null || alps == null || pool == null)
+        {
+            Plugin.Log.LogWarning("Ascent 15: the piton or the Alps' cracking piton was not found; placed pitons stay the game's.");
+            return;
+        }
+        GameObject copy = ModItems.Keep(alps, PlacedPitonName);
+        foreach (string part in new[] { "ClimbingSpike/Ring", "ClimbingSpike/Spike" })
+        {
+            Transform from = placed.transform.Find(part);
+            Transform to = copy.transform.Find(part);
+            if (from != null && to != null && from.TryGetComponent(out Renderer look) && to.TryGetComponent(out Renderer old))
+            {
+                old.sharedMaterials = look.sharedMaterials;
+            }
+        }
+        pool.ResourceCache["0_Items/" + PlacedPitonName] = copy;
+        crackingPiton = copy;
+    }
 
     internal static void Reset()
     {
@@ -531,15 +562,6 @@ internal static class A14_Items
             if (!On || spike == null)
             {
                 return;
-            }
-            if (!lookedForCrackingPiton)
-            {
-                lookedForCrackingPiton = true;
-                crackingPiton = Resources.Load<GameObject>(CrackingPitonPrefab);
-                if (crackingPiton == null)
-                {
-                    Plugin.Log.LogWarning("Ascent 14: the Alps' cracking piton was not found; placed pitons stay as they are.");
-                }
             }
             if (crackingPiton == null)
             {

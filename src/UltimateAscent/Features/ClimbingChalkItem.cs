@@ -18,9 +18,9 @@ namespace UltimateAscent.Features;
 /// <item>On every ascent (with the config's "New Items" on) it turns up wherever the Energy Drink does, as
 /// rarely as the Big Lollipop (its rarity, Legendary). Outside a climb it never spawns. A custom run lists it on the Custom Run screen
 /// with the other items (<see cref="CustomRunItems"/>), and its switch there decides.</item>
-/// <item>It has three uses (a use bar like the game's other multi-use items); from ascent 14 two, as
+/// <item>It has three uses (a use bar like the game's other multi-use items); from ascent 15 two, as
 /// that ascent takes two uses per use of every item. Each use takes 1 s (the game: 2 s). For 20 s, climbing (walls,
-/// ropes and vines alike) costs 60% of its stamina; from ascent 14, 75% for 15 s. Another use restarts
+/// ropes and vines alike) costs 60% of its stamina; from ascent 15, 75% for 15 s. Another use restarts
 /// the time.</item>
 /// <item>Cooking darkens it but gives it none of the game's food changes (extra stamina, poison once
 /// incinerated); a burned chalk (cooked three times or more) can no longer be used.</item>
@@ -54,13 +54,13 @@ internal static class ClimbingChalkItem
     internal const float Stamina = 0.6f;
     internal const float Seconds = 20f;
 
-    /// <summary>How many times one chalk can be used (ascent 14's two uses per use leave two).</summary>
+    /// <summary>How many times one chalk can be used (ascent 15's two uses per use leave two).</summary>
     internal const int Uses = 3;
 
     /// <summary>How long one use takes (the game: 2 s).</summary>
     internal const float UseSeconds = 1f;
 
-    /// <summary>From ascent 14.</summary>
+    /// <summary>From ascent 15.</summary>
     internal const float WorseStamina = 0.75f;
     internal const float WorseSeconds = 15f;
 
@@ -89,13 +89,16 @@ internal static class ClimbingChalkItem
     /// end is where stamina-number mods put their labels). Measured from the bar's top-right corner.
     /// </summary>
     private const float StatusIconSize = 40f;
-    private static readonly Vector2 StatusIconPosition = new Vector2(32f, 22.5f);
+    internal static readonly Vector2 StatusIconPosition = new Vector2(32f, 22.5f);
 
     private static Texture2D icon;
     private static bool iconFailed;
     private static Sprite statusSprite;
     private static bool statusFailed;
     private static GameObject statusIcon;
+
+    /// <summary>The chalked hand shows now (a tree snake's paralysis drop goes beside it then).</summary>
+    internal static bool StatusIconShowing => statusIcon != null && statusIcon.activeSelf;
     private static SFX_Instance rub;
     private static bool rubFailed;
     private static SFX_Player.SoundEffectHandle rubbing;
@@ -521,7 +524,7 @@ internal static class ClimbingChalkItem
     }
 
     /// <summary>
-    /// The chalked hand shows while the scout the HUD follows has the chalk's effect (a teammate's
+    /// The chalked hand shows (with the config's Effect Icons on) while the scout the HUD follows has the chalk's effect (a teammate's
     /// reaches every player, and its end too). It hangs off the bar itself: the game's own bar icons
     /// (campfire, shield) sit inside the bar's outline, whose mask would cut off anything above the bar.
     /// </summary>
@@ -531,7 +534,7 @@ internal static class ClimbingChalkItem
         private static void Postfix(StaminaBar __instance)
         {
             Character observed = Character.observedCharacter;
-            bool chalked = observed != null && observed.refs.afflictions.HasAfflictionType(Affliction.AfflictionType.ClimbingChalk, out _);
+            bool chalked = Plugin.EffectIcons.Value && observed != null && observed.refs.afflictions.HasAfflictionType(Affliction.AfflictionType.ClimbingChalk, out _);
             if (statusIcon == null || statusIcon.transform.parent != __instance.transform)
             {
                 if (!chalked)

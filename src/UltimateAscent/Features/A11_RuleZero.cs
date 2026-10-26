@@ -9,8 +9,10 @@ namespace UltimateAscent.Features;
 
 /// <summary>
 /// Ascent 11 (13DDA): rule zero is stricter.
-/// A scout who is far ahead of somebody and has nobody within 15 m gets hunted by the Scoutmaster
-/// for 30 s (70 s from ascent 17); regrouping calls him off. Every death curses the survivors, and
+/// A scout who is far ahead of somebody and has nobody within 35 m gets hunted by the Scoutmaster
+/// for 30 s (70 s from ascent 17); a scout coming within 35 m calls him off. On every ascent the game's own
+/// Scoutmaster also gives up on his target when another scout is within 35 m of them (the game: 15 m).
+/// Every death curses the survivors, and
 /// being thrown adds curse. Eating a scout poisons you for 50 and curses you for 25 (the game: 10
 /// curse).
 /// </summary>
@@ -20,11 +22,13 @@ internal static class A11_RuleZero
     private const float ForceSeconds = 30f;
     private const float HazardForceSeconds = 70f;
 
-    /// <summary>Cannibalism: 50 poison from ascent 15 (28.6 below it, without that ascent's boost) and 25 curse in all (the game adds 10 curse itself).</summary>
+    /// <summary>Cannibalism: 50 poison from ascent 14 (28.6 below it, without that ascent's boost) and 25 curse in all (the game adds 10 curse itself).</summary>
     internal const float CannibalPoison = 0.5f;
     internal const float CannibalCurse = 0.25f;
     internal const float GameCannibalCurse = 0.1f;
-    private const double CompanionRadiusSq = 15.0 * 15.0;
+    /// <summary>Nobody within this of a scout: alone (the hunt starts on them; anyone coming this near calls it off).</summary>
+    internal const float CompanionRadius = 35f;
+    private const double CompanionRadiusSq = CompanionRadius * CompanionRadius;
     private const double LeadDistance = 150.0;
 
     private readonly struct Scout
@@ -186,6 +190,35 @@ internal static class A11_RuleZero
         return true;
     }
 
+    /// <summary>The game's Scoutmaster gives up on a target with another scout this near (on every ascent; the game: 15 m).</summary>
+    internal static float GiveUpDistance() => CompanionRadius;
+
+    private const float GameGiveUpDistance = 15f;
+
+    [HarmonyPatch(typeof(Scoutmaster), nameof(Scoutmaster.VerifyTarget))]
+    private static class GivesUpNearOthers
+    {
+        private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        {
+            List<CodeInstruction> code = new List<CodeInstruction>(instructions);
+            List<int> at = new List<int>();
+            for (int i = 0; i < code.Count; i++)
+            {
+                if (code[i].opcode == System.Reflection.Emit.OpCodes.Ldc_R4 && code[i].operand is float value && value == GameGiveUpDistance)
+                {
+                    at.Add(i);
+                }
+            }
+            if (at.Count != 1)
+            {
+                Plugin.Log.LogWarning($"Scoutmaster: the game's 15 m give-up distance was found {at.Count} times; it stays the game's.");
+                return code;
+            }
+            code[at[0]] = new CodeInstruction(System.Reflection.Emit.OpCodes.Call, AccessTools.Method(typeof(A11_RuleZero), nameof(GiveUpDistance))).MoveLabelsFrom(code[at[0]]);
+            return code;
+        }
+    }
+
     /// <summary>Survivors are cursed whenever a scout dies; bigger lobbies get less.</summary>
     [HarmonyPatch(typeof(Character), nameof(Character.RPCA_Die))]
     private static class CurseOnDeath
@@ -197,7 +230,8 @@ internal static class A11_RuleZero
 
         private static void Postfix(Character __instance, bool __state)
         {
-            if (__state || !Rules.Enabled(Lvl.RuleZero) || __instance.isBot || __instance.isScoutmaster)
+            // A scout who has only just appeared and dies is the game's dead-on-arrival for a joiner, not a death.
+            if (__state || !Rules.Enabled(Lvl.RuleZero) || __instance.isBot || __instance.isScoutmaster || LateJoiners.JustArrived(__instance))
             {
                 return;
             }

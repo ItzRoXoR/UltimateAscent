@@ -16,7 +16,7 @@ namespace UltimateAscent.Features;
 /// The Auto-Parachute, the game's cut item, comes back as something to wear in the backpack slot
 /// (slot 4) instead of a backpack. Worn, it opens by itself after 1.5 s of falling (the game's own
 /// parachute, which the game still has on every scout) and saves you from the fall. It holds 3
-/// charges (shown on its slot); from ascent 14 each save takes 2 (multi-use items lose 2 uses per
+/// charges (shown on its slot); from ascent 15 each save takes 2 (multi-use items lose 2 uses per
 /// use), so it saves twice. With the last charge it is gone.
 /// <para>It spawns where the Jetpack does, as rare (Mythic), on every ascent (the config's "New Items"
 /// switch) and in custom runs (its own switch on the Custom Run screen).</para>
@@ -31,7 +31,7 @@ internal static class AutoParachute
     internal const BackpackSlot.BackpackType Type = (BackpackSlot.BackpackType)5;
     internal const int Charges = 3;
 
-    /// <summary>A save from ascent 14 takes this many charges (multi-use items lose 2 uses per use there).</summary>
+    /// <summary>A save from ascent 15 takes this many charges (multi-use items lose 2 uses per use there).</summary>
     internal const int WorseItemsCost = 2;
 
     private const string JetpackPrefab = "Jetpack";

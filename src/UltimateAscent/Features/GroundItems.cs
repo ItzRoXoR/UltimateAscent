@@ -111,7 +111,7 @@ internal static class GroundItems
     }
 
     /// <summary>The ground under the game's mushroom patches and berry bushes of this part of the map.</summary>
-    private static List<Vector3> Anchors(Transform segment)
+    internal static List<Vector3> Anchors(Transform segment)
     {
         List<Vector3> anchors = new List<Vector3>();
         const SpawnPool bushes = SpawnPool.BerryBushBeach | SpawnPool.BerryBushJungle;
@@ -126,7 +126,7 @@ internal static class GroundItems
         return anchors;
     }
 
-    private static bool TryFindSpot(List<Vector3> anchors, List<Vector3> taken, WaterZone[] water, out RaycastHit ground)
+    internal static bool TryFindSpot(List<Vector3> anchors, List<Vector3> taken, WaterZone[] water, out RaycastHit ground)
     {
         Vector3 anchor = anchors[Random.Range(0, anchors.Count)];
         Vector2 offset = Random.insideUnitCircle * Scatter;

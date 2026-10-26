@@ -6,7 +6,7 @@ using UltimateAscent.Core;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// Ascent 14: the scout statues' gems (the game's "amulets") cost more petrification and do less.
+/// Ascent 15: the scout statues' gems (the game's "amulets") cost more petrification and do less.
 /// <list type="bullet">
 /// <item>Scout's Initiative (red): 15 petrification per use (the game: 7); the super jump reaches the
 /// scouts within 6 m (8 m) and the low gravity after it lasts 2 s (3 s).</item>

@@ -27,9 +27,9 @@ internal static class Lvl
     // More Ascents: butter fingers.
     internal const int ButterFingers = 13;
     // 13DDA: items are worse.
-    internal const int WorseItems = 14;
+    internal const int WorseItems = 15;
     // 13DDA: cold, drowsy, poison and heat apply more.
-    internal const int StrongerAilments = 15;
+    internal const int StrongerAilments = 14;
     // 13DDA + More Ascents: heat heals slower in the Caldera/Kiln (0.5/s), drowsiness in the
     // Gloom/Citadel (1/s).
     internal const int SlowRecovery = 16;

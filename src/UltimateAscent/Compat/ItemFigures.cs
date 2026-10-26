@@ -11,17 +11,17 @@ namespace UltimateAscent.Compat;
 /// What an item does on the ascent being climbed, written into the item's own numbers for as long as
 /// a mod that shows item effects reads them (Item Stats, Effect Preview), then put back exactly. The
 /// rules change most of these numbers only while the item is being used, so such mods would show the
-/// game's. Numbers are shown as they land on the bar: the rules' exact amounts, ascent 15's boost
+/// game's. Numbers are shown as they land on the bar: the rules' exact amounts, ascent 14's boost
 /// included.
 /// <list type="bullet">
-/// <item>Food: half the hunger (14), none from ticks.</item>
-/// <item>Status changes: cures at 60% (the Early Worm and the Green Clusterberry's poison 50%; 14), what they add with ascent 15's boost,
-/// the exact Napberry, Scorchberry, Green Kingberry and Shroomberry amounts (15).</item>
-/// <item>Extra stamina: half (14). Poisonous food: its exact total (15) or the boosted poison. The Toxic Drink's poison
-/// after its boost (shown on a poison action of its own that never runs): 8 a second with ascent 14's rule.</item>
-/// <item>Effects: the Energy Drink's 50 crash and the boost on other crashes (15), the Big Lollipop's
-/// crash (14), every drowsiness over time (14), the Heat Pack's 20 s and the Wonderberry's 6 s (14), the gems' numbers (14),
-/// the Cherry Lollipop's 4 s and Fortified Milk's 12 s (20 s cooked) (14).</item>
+/// <item>Food: half the hunger (15), none from ticks.</item>
+/// <item>Status changes: cures at 60% (the Early Worm and the Green Clusterberry's poison 50%; 14), what they add with ascent 14's boost,
+/// the exact Napberry, Scorchberry, Green Kingberry and Shroomberry amounts (14).</item>
+/// <item>Extra stamina: half (15). Poisonous food: its exact total (14) or the boosted poison. The Toxic Drink's poison
+/// after its boost (shown on a poison action of its own that never runs): 8 a second with ascent 15's rule.</item>
+/// <item>Effects: the Energy Drink's 50 crash and the boost on other crashes (14), the Big Lollipop's
+/// crash (15), every drowsiness over time (15), the Heat Pack's 20 s and the Wonderberry's 6 s (15), the gems' numbers (15),
+/// the Cherry Lollipop's 4 s and Fortified Milk's 12 s (20 s cooked) (15).</item>
 /// <item>Weight (for Item Stats, which reads the raw field): the rules' weight, in custom runs too
 /// (the Lightweight Parasol weighs nothing there as well).</item>
 /// </list>

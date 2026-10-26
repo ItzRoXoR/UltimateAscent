@@ -9,7 +9,7 @@ namespace UltimateAscent.Features;
 /// The Warp Compass and the Toxic Drink come only from where the game's mystical items come from (Ancient
 /// Luggage and the Ancient Statues), so they count as mystical where the game sorts or prices by that mark:
 /// the Custom Run screen lists them among the mystical items (see <see cref="CustomRunItems"/>), and Scout's
-/// Generosity clones them at a mystical item's cost (the game: 45 petrification instead of 25; ascent 14:
+/// Generosity clones them at a mystical item's cost (the game: 45 petrification instead of 25; ascent 15:
 /// 60 instead of 35). The mark itself is never set on them for real: picking up a marked item also counts
 /// toward a badge, which stays the game's.
 /// </summary>
@@ -32,7 +32,7 @@ internal static class MysticalItems
 
     /// <summary>
     /// Cloning one costs what a mystical item costs: the gem's price for the item aimed at (the game's own
-    /// look, the same reach) is the mystical one for that use. After ascent 14's prices are set.
+    /// look, the same reach) is the mystical one for that use. After ascent 15's prices are set.
     /// </summary>
     [HarmonyPatch(typeof(Action_CloneSelectedItem), nameof(Action_CloneSelectedItem.RunAction))]
     [HarmonyPriority(Priority.Low)]

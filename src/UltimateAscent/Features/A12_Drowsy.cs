@@ -6,14 +6,14 @@ namespace UltimateAscent.Features;
 
 /// <summary>
 /// Ascent 12 (13DDA + More Ascents): falling and helping people make you drowsy.
-/// Taking fall damage makes you 60 drowsy (46.2 below ascent 15, without its boost). Pulling someone up makes you
-/// 10 drowsy a second while you help (7.7 below ascent 15). Falls can no longer be
+/// Taking fall damage makes you 60 drowsy (46.2 below ascent 14, without its boost). Pulling someone up makes you
+/// 10 drowsy a second while you help (7.7 below ascent 14). Falls can no longer be
 /// cancelled by snapping the ragdoll to its animation (e.g. by switching items mid-air).
 /// </summary>
 internal static class A12_Drowsy
 {
     /// <summary>
-    /// Drowsiness from fall damage and per second of helping, as they land from ascent 15 on (below 15
+    /// Drowsiness from fall damage and per second of helping, as they land from ascent 14 on (below 14
     /// without that ascent's boost: 46.2 and 7.7).
     /// </summary>
     internal const float FallDrowsiness = 0.6f;

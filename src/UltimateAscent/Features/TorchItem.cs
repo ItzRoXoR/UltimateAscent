@@ -10,12 +10,12 @@ namespace UltimateAscent.Features;
 /// included.
 /// <list type="bullet">
 /// <item>The use button, held, lights it or puts it out, as in the game. Lit, it warms like the Lantern: 2.5
-/// cold a second off every scout within 4.5 m, 2 from ascent 14 (A14_Items' weaker lanterns). It burns its 40 s
+/// cold a second off every scout within 4.5 m, 2 from ascent 15 (A14_Items' weaker lanterns). It burns its 40 s
 /// of fuel only while lit.</item>
 /// <item>The second use button (the right mouse button) swings it, only while it burns: the Stick's swing (33%
 /// stamina, the kick's reach, aim and push, see <see cref="StickItem"/>), knocking every scout and zombie it
-/// reaches down for 2 s (the Stick: 3 s). The scouts it hits also take 10 heat, 20 with ascent 14's rule (as it
-/// lands from ascent 15 on); zombies take no heat. A swing burns 4 s of the fuel: a full Torch gives 10 swings,
+/// reaches down for 2 s (the Stick: 3 s). The scouts it hits also take 10 heat, 20 with ascent 15's rule (as it
+/// lands from ascent 14 on); zombies take no heat. A swing burns 4 s of the fuel: a full Torch gives 10 swings,
 /// 40 s of light, or a mix of both.</item>
 /// <item>Lit in a scout's hands, it keeps the Gloom's ghosts away like a lit bell tower: a ghost hunting the holder
 /// or anyone within 4.5 m of the Torch is pushed back until it is out of blast range of them, and cannot arm while
@@ -39,7 +39,7 @@ internal static class TorchItem
     /// </summary>
     internal const float KnockdownMarked = Knockdown + 0.0031f;
 
-    /// <summary>The heat of a hit, as it lands on the bar; with ascent 14's rule as it lands from ascent 15 on.</summary>
+    /// <summary>The heat of a hit, as it lands on the bar; with ascent 15's rule as it lands from ascent 14 on.</summary>
     internal const float Heat = 0.1f;
     internal const float HeatWorse = 0.2f;
 

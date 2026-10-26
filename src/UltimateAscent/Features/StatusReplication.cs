@@ -60,7 +60,7 @@ internal static class StatusReplication
 
     /// <summary>
     /// A checkpoint flag that saves a scout puts back the statuses saved when it was planted, through
-    /// AddStatus; ascent 15's boost (and the other multipliers) must not grow them.
+    /// AddStatus; ascent 14's boost (and the other multipliers) must not grow them.
     /// </summary>
     [HarmonyPatch(typeof(CharacterAfflictions), nameof(CharacterAfflictions.ApplyStatusesFromFloatArray))]
     internal static class Restore

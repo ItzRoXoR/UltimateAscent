@@ -6,10 +6,10 @@ using UnityEngine;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// Ascent 15 (13DDA): cold and drowsiness apply 30% more, heat 50% more, spores 65% more and
-/// poison 75% more, on everything but the night's cold and the sun's heat, which land as they come. The mod's exact numbers are what lands from ascent 15 on, this
-/// boost included; below 15 the same rules land them without the boost (<see cref="FromAscent15"/>),
-/// so ascent 14 always gets less than 15. <see cref="Raw"/> and <see cref="ExactStatus"/> put an
+/// Ascent 14 (13DDA): cold and drowsiness apply 30% more, heat 50% more, spores 65% more and
+/// poison 75% more, on everything but the night's cold and the sun's heat, which land as they come. The mod's exact numbers are what lands from ascent 14 on, this
+/// boost included; below 14 the same rules land them without the boost (<see cref="FromAscent15"/>),
+/// so ascent 15 always gets less than 15. <see cref="Raw"/> and <see cref="ExactStatus"/> put an
 /// amount on the bar exactly. True Final Ascent's Apocalypse events land what TFA gives
 /// (<see cref="Compat.Tfa.Causing"/>).
 /// </summary>
@@ -25,13 +25,13 @@ internal static class A15_StrongerAilments
     /// <summary>The game puts statuses on the bar in whole steps of this size and drops the rest.</summary>
     internal const float Step = CharacterAfflictions.STATUS_INCREMENT;
 
-    /// <summary>How much this ascent scales a status right now (1 below ascent 15).</summary>
+    /// <summary>How much this ascent scales a status right now (1 below ascent 14).</summary>
     internal static float Factor(CharacterAfflictions.STATUSTYPE type)
     {
         return Rules.Enabled(Lvl.StrongerAilments) ? FullFactor(type) : 1f;
     }
 
-    /// <summary>What a number given for ascent 15 or higher comes to now: itself from 15 on, without this ascent's factor below 15.</summary>
+    /// <summary>What a number given for ascent 14 or higher comes to now: itself from 14 on, without this ascent's factor below 14.</summary>
     internal static float FromAscent15(CharacterAfflictions.STATUSTYPE type, float value)
     {
         return value * Factor(type) / FullFactor(type);

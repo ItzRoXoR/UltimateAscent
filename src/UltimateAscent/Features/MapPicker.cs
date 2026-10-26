@@ -177,12 +177,18 @@ internal static class MapPicker
         {
             label.text = Name(Picked);
         }
+        // At the card's bottom right; in a custom run the Custom Options button is there, so at its bottom left.
+        bool custom = RunSettings.IsCustomRun;
+        RectTransform rect = (RectTransform)line.transform;
+        rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(custom ? 0f : 1f, 0f);
+        rect.anchoredPosition = new Vector2(custom ? 12f : -12f, 8f);
 
     }
 
     /// <summary>
-    /// The picker at the card's bottom right: "&lt;", the map's name in a rounded outline in the pass's blue (always as
-    /// wide as the longest name), "&gt;"; the chevrons in the pass's lettering and blue, each taking the click.
+    /// The picker at the card's bottom right (bottom left in a custom run): "&lt;", the map's name in a rounded outline in
+    /// the pass's blue (always as wide as the longest name), "&gt;"; the chevrons in the pass's lettering and blue, each
+    /// taking the click.
     /// </summary>
     private static GameObject Make(BoardingPass pass)
     {

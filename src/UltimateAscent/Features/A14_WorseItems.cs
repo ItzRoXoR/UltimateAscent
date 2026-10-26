@@ -10,14 +10,14 @@ using UnityEngine;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// Ascent 14 (13DDA): items are worse.
+/// Ascent 15 (13DDA): items are worse.
 /// Food and stamina items give half, healing gives 60% (the Green Clusterberry's poison cure half), cure-alls only partly cure, consumables
 /// lose two uses at a time, ropes are shorter, chain/balloons weaker, energy drinks slower,
 /// the lollipop's crash is 85 drowsiness, cooking no longer removes poison or spores, eating a scorpion
 /// poisons you, the Parasol wears out after 20 s of gliding, gliders drain more stamina, letting go of a rescue
 /// hook makes you fall, the cannon burns, skeletons are fragile and invincibility only blocks 75%. The gems
 /// (<see cref="A14_Gems"/>) and Shroomberries (<see cref="A14_Shroomberries"/>) are worse too;
-/// poisonous food gets far worse from ascent 15 on (<see cref="A15_FoodPoison"/>).
+/// poisonous food gets far worse from ascent 14 on (<see cref="A15_FoodPoison"/>).
 /// </summary>
 internal static class A14_WorseItems
 {
@@ -40,7 +40,7 @@ internal static class A14_WorseItems
         return type <= CharacterAfflictions.STATUSTYPE.Web ? CureAllCap : 5f;
     }
 
-    /// <summary>How much of what an item's status change takes off lands, from ascent 14 (1 for what it adds, and for petrification).</summary>
+    /// <summary>How much of what an item's status change takes off lands, from ascent 15 (1 for what it adds, and for petrification).</summary>
     internal static float CureScale(Action_ModifyStatus action)
     {
         if (!On || action == null || action.changeAmount >= 0f || action.statusType == CharacterAfflictions.STATUSTYPE.Petrify)
@@ -147,7 +147,7 @@ internal static class A14_WorseItems
     /// <summary>
     /// What items cure works at 60%; the Gloom's Early Worm wakes you only half as much (50 of the
     /// game's 100 drowsiness). What items cost you (a Napberry's sleep, a Scorchberry's heat, the Book
-    /// of Bones' curse) stays the game's, so ascent 14 is never easier than 13 there.
+    /// of Bones' curse) stays the game's, so ascent 15 is never easier than 13 there.
     /// </summary>
     [HarmonyPatch(typeof(Action_ModifyStatus), nameof(Action_ModifyStatus.RunAction))]
     private static class WeakerMedicine
@@ -197,7 +197,7 @@ internal static class A14_WorseItems
         }
     }
 
-    /// <summary>A scorpion is poisonous to eat: 15 poison at once from ascent 15, 8.6 at 14 without that ascent's boost (the game: none).</summary>
+    /// <summary>A scorpion is poisonous to eat: 15 poison at once (the game: none).</summary>
     internal const float ScorpionPoison = 0.15f;
 
 
@@ -239,7 +239,7 @@ internal static class A14_WorseItems
         }
     }
 
-    /// <summary>A script that poisons or gives spores: cooking leaves it on from ascent 14 (a cooked Toxic Drink brings no poison at all).</summary>
+    /// <summary>A script that poisons or gives spores: cooking leaves it on from ascent 15 (a cooked Toxic Drink brings no poison at all).</summary>
     internal static bool Poisonous(MonoBehaviour script)
     {
         return (script is Action_InflictPoison && !ToxicDrink.ShowsPoison(script)) ||
@@ -248,9 +248,8 @@ internal static class A14_WorseItems
     }
 
     /// <summary>
-    /// The lollipop's crash: what <see cref="A14_Items"/> sets (85 over 12 s) lands exactly from ascent
-    /// 15 on, and without ascent 15's boost at 14 (65). 13DDA's three times the game's 33 at 14 was
-    /// more than 15 gave.
+    /// The lollipop's crash: what <see cref="A14_Items"/> sets (85 over 12 s) lands exactly (ascent 14's boost is
+    /// always on from 15, where this rule starts).
     /// </summary>
     [HarmonyPatch(typeof(Affliction_AdjustDrowsyOverTime), nameof(Affliction_AdjustDrowsyOverTime.UpdateEffect))]
     private static class SleepierLollipop
@@ -277,7 +276,7 @@ internal static class A14_WorseItems
         {
             if (On && !ToxicDrink.IsBoost(__instance))
             {
-                // The Energy Drink itself keeps the game's boosts (walking +50%, climbing +150%), and from ascent 15 its
+                // The Energy Drink itself keeps the game's boosts (walking +50%, climbing +150%), and from ascent 14 its
                 // crash is exactly 50 drowsiness. The Cherry Lollipop's boost walks +30% without a crash. Other speed
                 // boosts keep at most 13DDA's +60% walking and +70% climbing.
                 bool energyDrink = A14_Items.InEnergyDrink;
@@ -559,7 +558,7 @@ internal static class A14_WorseItems
         private static void Prefix(CharacterAfflictions __instance, bool excludeCurse, bool excludePetrify, out float[] __state)
         {
             __state = null;
-            if (!On || CheckpointScope.Depth > 0 || !Rules.Owns(__instance.character) || Compat.Tfa.Causing)
+            if (!On || CheckpointScope.Depth > 0 || StatueRevive.Depth > 0 || !Rules.Owns(__instance.character) || Compat.Tfa.Causing)
             {
                 return;
             }
@@ -597,21 +596,92 @@ internal static class A14_WorseItems
         }
     }
 
-    /// <summary>A checkpoint flag restores its saved statuses exactly; no residue there.</summary>
+    /// <summary>How near a revive statue a revive lands when the statue did it (it puts the scouts around itself).</summary>
+    private const float StatueReach = 20f;
+
+    /// <summary>
+    /// A revive statue revives as in the game: every status cleared, then the game's revive curse and hunger; keeping
+    /// a share of the old statuses belongs to the other revives (and the flag puts back its own). Petrification it
+    /// leaves as it was (the game takes 75 off). Its revive carries the statue's segment and lands around the statue.
+    /// </summary>
+    [HarmonyPatch(typeof(Character), nameof(Character.RPCA_ReviveAtPosition))]
+    internal static class StatueRevive
+    {
+        [ThreadStatic] internal static int Depth;
+
+        /// <summary>The scout's petrification before a statue's revive (-1: another revive).</summary>
+        private static void Prefix(Character __instance, Vector3 position, int statueSegment, out int __state)
+        {
+            __state = statueSegment > -1 && NearAStatue(position) ? __instance.data.petrifyAmount : -1;
+            if (__state >= 0)
+            {
+                Depth++;
+            }
+        }
+
+        private static void Postfix(Character __instance, int __state)
+        {
+            KeepPetrification(__instance, __state);
+        }
+
+        private static Exception Finalizer(int __state, Exception __exception)
+        {
+            if (__state >= 0)
+            {
+                Depth--;
+            }
+            return __exception;
+        }
+
+        private static bool NearAStatue(Vector3 position)
+        {
+            foreach (Luggage luggage in Luggage.ALL_LUGGAGE)
+            {
+                if (luggage is RespawnChest statue && statue != null && Vector3.Distance(statue.transform.position, position) < StatueReach)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// A checkpoint flag restores its saved statuses exactly (no residue there); petrification it leaves as it was
+    /// when more than when the flag was planted (the game sets it back to that).
+    /// </summary>
     [HarmonyPatch(typeof(Character), nameof(Character.TryCheckpoint))]
     internal static class CheckpointScope
     {
         [ThreadStatic] internal static int Depth;
 
-        private static void Prefix()
+        private static void Prefix(Character __instance, out int __state)
         {
             Depth++;
+            __state = __instance.data.petrifyAmount;
+        }
+
+        private static void Postfix(Character __instance, bool __result, int __state)
+        {
+            if (__result)
+            {
+                KeepPetrification(__instance, __state);
+            }
         }
 
         private static Exception Finalizer(Exception __exception)
         {
             Depth--;
             return __exception;
+        }
+    }
+
+    /// <summary>A revive statue's or a checkpoint flag's revive takes no petrification away: as much as before it.</summary>
+    private static void KeepPetrification(Character scout, int before)
+    {
+        if (On && before > 0 && scout.IsLocal && scout.data.petrifyAmount < before)
+        {
+            scout.data.SetPetrify(before);
         }
     }
 

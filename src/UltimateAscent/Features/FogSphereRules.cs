@@ -62,7 +62,7 @@ internal static class FogSphereRules
                 amount *= 3f;
             }
         }
-        // Ascent 14 makes injuries lethal for skeletons outside the fog; the fog's own damage is not "outside".
+        // Ascent 15 makes injuries lethal for skeletons outside the fog; the fog's own damage is not "outside".
         CharacterData data = character.data;
         bool markFog = Rules.Enabled(Lvl.WorseItems) && Rules.Owns(character) && data.isSkeleton && !data.isInFog;
         if (markFog)

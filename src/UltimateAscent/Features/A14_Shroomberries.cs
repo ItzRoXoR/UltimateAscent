@@ -9,7 +9,7 @@ using UnityEngine;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// Ascent 14: the Roots' Shroomberries. Each colour still gets one random effect per run (the
+/// Ascent 15: the Roots' Shroomberries. Each colour still gets one random effect per run (the
 /// game's own pick), but the effects are worse:
 /// <list type="bullet">
 /// <item>low gravity 8 s (the game: 15 s); invincibility 5 s (10 s); the healing one restores 7.5
@@ -34,7 +34,7 @@ internal static class A14_Shroomberries
     /// <summary>The healing effect: 7.5 hunger, injury and poison (whole steps; the bar drops anything less).</summary>
     private const float Healing = 0.0751f;
 
-    /// <summary>The spore effect: 30 spores from ascent 15 on, the game's 25 at 14.</summary>
+    /// <summary>The spore effect: 30 spores (with ascent 14's boost, always on from 15).</summary>
     private const float ExtraSpores = 0.3f;
     private const float GameExtraSpores = 0.25f;
 
@@ -123,7 +123,7 @@ internal static class A14_Shroomberries
                 character.Fall(KnockdownSeconds);
                 break;
             case 8:
-                // Never less than the game's 25 (what ascent 13 gives), which 30 without ascent 15's boost would be.
+                // Never less than the game's 25 (what ascent 13 gives), which 30 without ascent 14's boost would be.
                 CharacterAfflictions.STATUSTYPE spores = CharacterAfflictions.STATUSTYPE.Spores;
                 float amount = Mathf.Max(GameExtraSpores, A15_StrongerAilments.FromAscent15(spores, ExtraSpores));
                 ExactStatus.Add(character.refs.afflictions, spores, amount, "shroomberry");

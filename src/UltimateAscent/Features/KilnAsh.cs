@@ -10,7 +10,7 @@ namespace UltimateAscent.Features;
 /// <summary>
 /// Ascent 18: hot ash fills the Kiln once a minute. From the moment its lava starts to rise, every 60 s the
 /// ground rumbles and the ash comes in over 5 s, fills the Kiln for 15 s, burning everyone in it for 3 heat a
-/// second (45 in all) (as it lands from ascent 15 on; below 15 without that ascent's boost), and clears again within 2 s.
+/// second (45 in all) (as it lands from ascent 14 on; below 14 without that ascent's boost), and clears again within 2 s.
 /// Everyone gets it at the same moment: it keeps the time of the lava's rise, which the game keeps the same
 /// for everyone. Scouts still in the Caldera are not in it. At the top of the Kiln (as high as its lava ever
 /// rises, or higher) it does not burn. Within 3 m of a petrifying stone it neither shows nor burns: the
@@ -26,7 +26,7 @@ internal static class KilnAsh
     internal const float WarningSeconds = 5f;
     internal const float ClearingSeconds = 2f;
 
-    /// <summary>Heat a second in the ash, as it lands from ascent 15 on.</summary>
+    /// <summary>Heat a second in the ash, as it lands from ascent 14 on.</summary>
     internal const float Heat = 0.03f;
 
     /// <summary>The ash leaves this much clear air around you (the fog sphere's radius around the camera).</summary>
@@ -329,6 +329,14 @@ internal static class KilnAsh
         system.SetParticles(fading, count);
     }
 
+    /// <summary>The ash's smoke and flakes, darkest and lightest (a burned item crumbling in the sun leaves the same, see A23_HotSun).</summary>
+    internal static readonly Color SmokeDark = new Color(0.5f, 0.48f, 0.46f, 0.6f);
+    internal static readonly Color SmokeLight = new Color(0.66f, 0.63f, 0.6f, 0.85f);
+    internal static readonly Color FlakeDark = new Color(0.82f, 0.8f, 0.77f, 1f);
+    internal static readonly Color FlakeLight = new Color(0.96f, 0.94f, 0.9f, 1f);
+    internal const float FlakeSizeMin = 0.08f;
+    internal const float FlakeSizeMax = 0.2f;
+
     private static bool MakeCloud()
     {
         ParticleSystem template = A23_HotSun.SmokeTemplate();
@@ -337,9 +345,9 @@ internal static class KilnAsh
             return false;
         }
         smoke = Particles(template, "UltimateAscent Kiln Smoke", new Vector3(18f, 9f, 18f), 700, 6f, 9f, 3f, 7f, 0.2f, 0.8f,
-            new Color(0.5f, 0.48f, 0.46f, 0.6f), new Color(0.66f, 0.63f, 0.6f, 0.85f), -0.01f);
-        flakes = Particles(template, "UltimateAscent Kiln Ash", new Vector3(16f, 8f, 16f), 2400, 5f, 8f, 0.08f, 0.2f, 0.1f, 0.5f,
-            new Color(0.82f, 0.8f, 0.77f, 1f), new Color(0.96f, 0.94f, 0.9f, 1f), 0.03f);
+            SmokeDark, SmokeLight, -0.01f);
+        flakes = Particles(template, "UltimateAscent Kiln Ash", new Vector3(16f, 8f, 16f), 2400, 5f, 8f, FlakeSizeMin, FlakeSizeMax, 0.1f, 0.5f,
+            FlakeDark, FlakeLight, 0.03f);
         return true;
     }
 

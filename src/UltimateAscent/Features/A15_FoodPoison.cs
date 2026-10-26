@@ -7,7 +7,7 @@ using UnityEngine;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// Ascent 15: poisonous food poisons by exact totals, as they land on the bar with this ascent's
+/// Ascent 14: poisonous food poisons by exact totals, as they land on the bar with this ascent's
 /// boost included, over the game's own delay and duration: Button Shroom 150, Cluster Shroom 75,
 /// Bugle Shroom 120, Green Crispberry 40, Yellow Kingberry 150, Pink Berrynana 100 (the game: 30,
 /// 40, 20, 10, 25, 15). Green Kingberry poisons 35 at once (5), every Shroomberry gives 15 spores (5),
@@ -131,14 +131,14 @@ internal static class A15_FoodPoison
         }
     }
 
-    /// <summary>The whole poison a poisonous food gives from ascent 15, as it lands.</summary>
+    /// <summary>The whole poison a poisonous food gives from ascent 14, as it lands.</summary>
     internal static bool TryTotal(Item item, out float total)
     {
         total = 0f;
         return On && Totals.TryGetValue(NameOf(item), out total);
     }
 
-    /// <summary>The exact amount for a food's own status change (Green Kingberry, Shroomberries); also tells ascent 14 to leave it alone.</summary>
+    /// <summary>The exact amount for a food's own status change (Green Kingberry, Shroomberries); also tells ascent 15 to leave it alone.</summary>
     internal static bool TryExact(Action_ModifyStatus action, out float amount)
     {
         amount = 0f;

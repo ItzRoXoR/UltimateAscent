@@ -1,5 +1,111 @@
 # Changelog
 
+## 1.6.0
+
+* Ascents 14 and 15 swapped: ascent 14 is now **Ailments apply more** (cold and drowsiness ×1.3, heat ×1.5, spores
+  ×1.65, poison ×1.75) and ascent 15 **Items are worse**. From ascent 15 every number is as before (both rules run
+  there). Amounts that were lower below ascent 15 (without its boost) are now lower below 14, so ascent 14 itself gets
+  the full amounts (e.g. ascent 12's fall drowsiness: 60 from 14, 46.2 below). The "Ascent 14" and "Ascent 15" config
+  switches follow the numbers.
+* Six-Slot Backpack: after its wheel had been opened, every other wheel (Backpack, Jetpack, Auto-Parachute...)
+  showed two extra empty slices.
+* Map picker: on a custom run it covered the boarding pass's Custom Options button; there it now sits at the card's
+  bottom left.
+* Joining a climb under way (from ascent 9): you arrive alive at the current base camp (when it is safe) with the
+  starting curse and nothing else; from ascent 19 joiners arrived dead. Your arrival no longer curses everyone through
+  ascent 11's rule (two joiners had added 16–18 curse).
+* Starting curse (every ascent, a game bug): a scout on a plane seat that does not start passed out began without
+  it; now they get it.
+* Revive statues revive as in the game: every status cleared, then the game's revive curse and hunger. Keeping 25%
+  of your statuses is for the other revives (and the flag puts back its own).
+* Ascent 15: a revive statue no longer takes petrification off (the game: 75), and a checkpoint flag's save leaves
+  you the petrification you have (the game sets it back to what you had when you planted the flag).
+* The Scoutmaster: on every ascent he gives up when another scout is within 35 m of his target (the game: 15 m);
+  ascent 11's hunt starts only on a scout with nobody within 35 m and stops when someone comes that near.
+* Bee ambushes (17): every scout in the Tropics is ambushed with a 50% chance at the middle of each day and night
+  (was 30%); the swarm appears 2–3 m from the scout and chases them for at least 20 s however far they run, then up
+  to 120 m from where it appeared.
+* Thorns (17): thorns in the face pop out at the game's times (30 s alone, 120 s with others); thorns on the body
+  never pop out by themselves, solo too (before: 120 s alone, never with others, wherever they were).
+* Tumbleweeds (17): they steer for scouts within a cone of 10–240° (the game: 50–180°) and hit 1.5 times as hard
+  (was twice).
+* Scouts warm each other once nothing has made them cold for 2 s (the game: 3 s), on every ascent.
+* Waterfalls (every ascent): the falling water knocks you down when it hits you (0.5 s) and washes you out of it
+  at a steady pace, sideways where there is room, else down the stream (still in it when you get up, it knocks you
+  down again); the game knocked you
+  down again and braked you every moment you were in it, and shoved each part of you on its own, so you were held
+  fast or flung. The splash at the foot throws you only where the water lands (within 3 m) and half as hard; the
+  game threw anyone stepping anywhere into its 11 m.
+* Sun roasting (18, 23): a burned item held up to the sun still shields you, but smokes and crumbles away after 5 s
+  (7.5 s for a parasol, 2.5 s in the Mesa's sun): it goes up with the sound of burning and turns to ash, the Kiln's
+  flakes and smoke; before, it shielded for good. An item that explodes when
+  overcooked (a Lantern, a Faerie Lantern) explodes when the sun burns it, as before, but now only once (the sun's
+  burning goes through every cooking step at once and could set it off at each).
+* New creatures on every ascent: the crabs, snakes and mountain goats below live in regular runs on every ascent, with
+  the config's new *New Mobs* switch (on by default; off, none of them appears); custom runs have a switch for each among
+  the Custom Run screen's threats, in its biome's group (on by default; half as strong there). Below ascent 17
+  all they do is half as strong (half the injury, poison and knockback, knocked down or paralysed half as long), and
+  snakes chase a third slower (2.4 m/s on the ground, 2.1 m/s from the trees). The numbers below are ascent 17's.
+* Config: *Effect Icons* (on by default); off, the icons above the stamina bar for the Climbing Chalk's effect and a
+  tree snake's paralysis do not show (the effects still work). Each player's own.
+* Pitons (15): a piton you placed turned into the Alps' old piton; it now keeps the yellow look of the piton in your
+  hand (it still cracks and breaks as the Alps' do).
+* Snakes in the Tropics, as many as the map has scorpions. A third are tree snakes (about 3.6 m long and 28 cm
+  thick): they sleep curled up in a ball on a branch of the giant trees (on a map without them they live on the
+  ground); when a scout comes within 5 m they uncoil, raising the head towards them, strike, and chase until the scout
+  is 20 m away, then crawl back to the foot of their tree and climb it as snakes do, winding round the trunk and up
+  the branches; a bite deals 30 injury, then for 2 minutes the scout collapses for 4 s every 15–30 s (another bite
+  starts the 2 minutes over, it does not stack; a poison drop above the stamina bar drains as that time runs out; a
+  First Aid Kit, Cure-All, Blowgun dart, Napberry, Medicinal Root or Remedy Fungus cloud ends it). The rest are
+  ground snakes (about 1.4 m long, 11 cm thick): they never sleep, slither slowly around (0.5 m/s) and chase a scout
+  they see, as scorpions do (3.6 m/s, tree snakes 3.2 m/s; a sprinting scout makes 5.2 m/s); a bite deals 10 injury,
+  then 40 poison over 10 s. Before a strike a snake rears up into an S, then jumps at the scout with its mouth wide
+  open and its fangs out; for 3 s after a bite it slithers round the scout 3.5 m out, then goes for another scout
+  nearby if there is one (as near as it would notice them), or the same scout again. Once it goes for a scout it
+  keeps after them for at least 10 s, however far they run in the Tropics: snakes never leave the Tropics, stopping
+  where their ground ends and giving up a scout who goes beyond it. Like the game's creatures they
+  leave scouts who are out cold alone. They cannot be picked up; a Stick (4 s), a Torch (2 s), a thrown Stone (2 s) or
+  a kick (1 s) knocks one back 1.5 m, and it curls up for that long, then goes for the scout who stunned it (the first,
+  if more did) when they are that near. They slither through the grass and rattle while they hunt (recordings styled
+  after PEAK's own creature sounds), and fall silent while stunned; a bite lands with the game's hit sound, and so
+  does a hit on a snake.
+* Mountain goats in the Alps: up to 12, alone or in pairs, along the whole way up the Alps (from where they begin
+  to the top of their climb). Shaped like PEAK's own creatures and fluffy (locks of off-white hair over almost all of
+  them, longer grey hair hanging below), with long thick grey banded horns curving back, a beard and dark hooves, and
+  solid: scouts bump into them. They graze, look about and roam the mountainside within 25 m of their spot, never
+  leaving the Alps (they stop where the Alps' ground ends, and do not charge a scout beyond it), surer on it than the
+  Roots' beetles: they walk slopes up to 80° (climbing, a goat's whole body lies along the cliff, its hooves on
+  the rock) and leap from foothold to foothold (up to 3.5 m up, 6 m down, 4.5 m across). Once a scout is within 20 m and in
+  sight, a goat decides whether to charge them, and again every 20 s while one is: three times in four it goes on
+  grazing; the fourth it bleats, lowers its head, paws the ground for a second and charges (7 m/s; a sprinting scout
+  makes 5.2 m/s), turning after the scout but running straight on in its last 5 m, so stepping aside then makes it
+  miss (it skids on and shakes its head); it never runs off an edge. Its ram knocks the scout down for 2 s and throws
+  them 6–8 m, with 20 injury. Goats bleat now and then (every 25–70 s), their hooves are heard while they move, and a
+  ram lands with the Roots' beetles' hit, heavier and louder.
+* Crabs on the beach: 25 small red crabs, about a scorpion's size, spread along the beach from where the scouts wake
+  up to its campfire (they are not replaced once taken). They crawl around the beach at 1 m/s from spot to spot,
+  resting a moment at each, scuttling sideways, and never leave it. A scout who comes within 2 m is chased (one at
+  random, if more are that near) at the same 1 m/s (a walking scout makes 2.5 m/s), for at least 6 s, then for as long
+  as they stay within 2 m. Near the scout a crab turns to face them and pinches: its big claw rises and opens, then
+  snaps shut, with the scorpion's glint and sparks, and a moment after the snap a pinch that lands deals 10 injury and
+  knocks whatever the scout holds out of their hands. Crabs can be picked up like scorpions, into the hands only (put
+  away, a crab is dropped), and a held crab pinches its holder and falls out of their hands. Cooked, a crab turns into
+  a cooked crab leg (its own model, darker than the live crab, and its own icon), food like any other that goes in a
+  pocket or a backpack: 10 hunger and 10 extra stamina (5 and 5 from ascent 15). From ascent 17 the campfires burn it,
+  and burnt it can still be eaten, as burnt food can: no hunger or stamina, only 35 poison (the game's 20 for food
+  burnt that far, with ascent 14's boost). A crab's pinch (one snap) and its claw clicks (now and then, while someone
+  is about) are made from the game's own scorpion clicks; its scuttle from a claw-click recording, made natural (every
+  click varied, its ring tamed).
+* Verbose Logging now also writes, each time you take out or put away an item, your stamina, the most stamina the
+  bar allows, the statuses and what your weight is made of (to track down a stamina drop seen while holding items).
+* A Stick's swing knocks down for 4 s (was 3 s), zombies too: the game stood every knocked-down zombie up again
+  after 3 s.
+* Config: Cold Nights and Ascent 8 now come first in the [Ascents] list.
+* PlayersInfo shows ∞ for thorns that never pop out (it showed -2147483648:-2147483648).
+* New config entries: Ascents > **Ascent 8** (on; off, the flares at the peak call the helicopter again from ascent
+  8) and Items > **More Wild Food in Multiplayer** (off; on, bushes, palms, vines and mushroom patches grow half as
+  much food again in multiplayer). Your config is otherwise untouched.
+
 ## 1.5.6
 
 For PEAK 3.0.0.

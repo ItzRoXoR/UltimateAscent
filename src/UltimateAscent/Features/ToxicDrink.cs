@@ -10,13 +10,13 @@ namespace UltimateAscent.Features;
 
 /// <summary>
 /// The Toxic Drink: the Energy Drink's can in the player's own purple label. Drunk, it makes you
-/// walk and climb 4 times as fast for 10 s (3 times for 7 s with ascent 14's rule); when the boost is
-/// over it poisons you for 4 a second for 5 s (8 a second with ascent 14's rule, as it lands from ascent 15
+/// walk and climb 4 times as fast for 10 s (3 times for 7 s with ascent 15's rule); when the boost is
+/// over it poisons you for 4 a second for 5 s (8 a second with ascent 15's rule, as it lands from ascent 14
 /// on). Its can looks the way a cooked Energy Drink's does (the game's first cooking tint). Cooked,
 /// it works like a cooked Energy Drink: it bursts when drunk (a knock-down and a push, never knocking you
 /// out or making you drowsy, as ascent 17's explosions would), and the poison is gone. Its drinking sound
-/// is the Energy Drink's, 1.5 times as fast. It cools you by 60 heat (the Energy Drink: 30; from ascent 14, as every
-/// cure, 60% of it: 36) and wakes you up as the Energy Drink does; from ascent 14 it takes off at most 80 of the
+/// is the Energy Drink's, 1.5 times as fast. It cools you by 60 heat (the Energy Drink: 30; from ascent 15, as every
+/// cure, 60% of it: 36) and wakes you up as the Energy Drink does; from ascent 15 it takes off at most 80 of the
 /// drowsiness you had when you drank it (its boost drains drowsiness while it lasts, as the Energy Drink's does).
 /// <para>It turns up only in Ancient Luggage and in the Ancient Statues (the pools the Ritual Dagger
 /// comes from), as rarely as the Faerie Lantern (Legendary): from ascent 9 with the config's "New Items"
@@ -38,22 +38,22 @@ internal static class ToxicDrink
     internal const float Speed = 4f;
     internal const float Seconds = 10f;
 
-    /// <summary>...and with ascent 14's rule.</summary>
+    /// <summary>...and with ascent 15's rule.</summary>
     internal const float SpeedWorse = 3f;
     internal const float SecondsWorse = 7f;
 
-    /// <summary>The poison a second once the boost is over, for 5 s (with ascent 14's rule: as it lands from ascent 15 on).</summary>
+    /// <summary>The poison a second once the boost is over, for 5 s (with ascent 15's rule: as it lands from ascent 14 on).</summary>
     internal const float PoisonPerSecond = 0.04f;
     internal const float PoisonPerSecondWorse = 0.08f;
     internal const float PoisonSeconds = 5f;
 
-    /// <summary>The heat it takes off (the Energy Drink: 30); from ascent 14 the cure share of it, as every cure.</summary>
+    /// <summary>The heat it takes off (the Energy Drink: 30); from ascent 15 the cure share of it, as every cure.</summary>
     internal const float Cooling = 0.6f;
 
-    /// <summary>From ascent 14: at most this much of the drowsiness you had when you drank it comes off.</summary>
+    /// <summary>From ascent 15: at most this much of the drowsiness you had when you drank it comes off.</summary>
     internal const float WakesWorse = 0.8f;
 
-    /// <summary>From ascent 14, while a Toxic Drink's boost runs: drowsiness goes no lower than this (the local scout's).</summary>
+    /// <summary>From ascent 15, while a Toxic Drink's boost runs: drowsiness goes no lower than this (the local scout's).</summary>
     private static float drowsyFloor = -1f;
 
     /// <summary>Its drinking sound: the Energy Drink's, played this much faster (and higher).</summary>
@@ -115,7 +115,7 @@ internal static class ToxicDrink
     }
 
     /// <summary>
-    /// From ascent 14 the Toxic Drink wakes you by at most 80: its own drowsiness cure lands only down to that, and
+    /// From ascent 15 the Toxic Drink wakes you by at most 80: its own drowsiness cure lands only down to that, and
     /// its boost (which takes 50 off as it starts and drains the rest while it lasts) goes no lower either.
     /// </summary>
     [HarmonyPatch(typeof(Action_ModifyStatus), nameof(Action_ModifyStatus.RunAction))]

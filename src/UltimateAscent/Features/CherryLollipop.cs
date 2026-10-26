@@ -10,10 +10,10 @@ namespace UltimateAscent.Features;
 /// <summary>
 /// The Cherry Lollipop: the game's Big Lollipop in pink and white stripes (the player's own texture), under
 /// a name of its own. Eaten, it gives the Big Lollipop's infinite stamina and the Energy Drink's speed boost
-/// at once, for 6 s (4 s with ascent 14's rule), from the first lick (neither holds its clock while you don't
+/// at once, for 6 s (4 s with ascent 15's rule), from the first lick (neither holds its clock while you don't
 /// climb, as the game's do for 3 s). Then the Big Lollipop's drowsiness follows, 20 more than its own on every
-/// ascent, with the ascents' changes on the 20 too (from 14 the Big Lollipop's of that ascent and 20 more, 26 more
-/// from 15 with its boost); the Energy Drink's crash does not. Cooked, like the Big Lollipop, no
+/// ascent, with the ascents' changes on the 20 too (from 15 the Big Lollipop's of that ascent and 20 more, 26 more
+/// from 14 with its boost); the Energy Drink's crash does not. Cooked, like the Big Lollipop, no
 /// drowsiness follows. It takes half of the Big Lollipop's spawns: on every ascent (the config's "New Items"
 /// switch), and in custom runs, where it has its own switch (see <see cref="CustomRunItems.VariantShare"/>).
 /// </summary>
@@ -30,13 +30,13 @@ internal static class CherryLollipop
     /// <summary>The Big Lollipop's spawns that turn out to be the Cherry Lollipop.</summary>
     internal const float Share = 0.5f;
 
-    /// <summary>How long its infinite stamina and speed boost last, and with ascent 14's rule.</summary>
+    /// <summary>How long its infinite stamina and speed boost last, and with ascent 15's rule.</summary>
     internal const float Seconds = 6f;
     internal const float SecondsWorse = 4f;
 
     /// <summary>
     /// The drowsiness it brings on top of the Big Lollipop's, on every ascent, with the ascents' changes on it too (from
-    /// ascent 15 that ascent's boost: 26 more).
+    /// ascent 14 that ascent's boost: 26 more).
     /// </summary>
     internal const float ExtraDrowsiness = 0.2f;
 
@@ -136,9 +136,9 @@ internal static class CherryLollipop
     }
 
     /// <summary>
-    /// With ascent 14's rule its rush and boost last 4 s. Its drowsiness is the Big Lollipop's and 20 more, over the same
-    /// time, on every ascent: without ascent 14's rule the game's crash and 20 (from ascent 15 the boost lands on both);
-    /// with it, ascent 14's crash and 20 in the same terms (it lands as 20 more at 14, 26 more from 15). After ascent
+    /// With ascent 15's rule its rush and boost last 4 s. Its drowsiness is the Big Lollipop's and 20 more, over the same
+    /// time, on every ascent: without ascent 15's rule the game's crash and 20 (from ascent 14 the boost lands on both);
+    /// with it, ascent 15's crash and 20 in the same terms (it lands as 20 more at 15, 26 more from 14). After ascent
     /// 14's own change to the crash (A14_Items), so the 20 go on top of it.
     /// </summary>
     [HarmonyPatch(typeof(Action_ApplyAffliction), nameof(Action_ApplyAffliction.RunAction))]
@@ -157,7 +157,7 @@ internal static class CherryLollipop
             SetTime(__instance, SecondsNow);
             if (crash != null && crash.statusPerSecond > 0f && crash.totalTime > 0f)
             {
-                // Ascent 14's crash is given as what lands from ascent 15 on (A14_WorseItems), so the 20 are too.
+                // Ascent 15's crash is given as what lands from ascent 14 on (A14_WorseItems), so the 20 are too.
                 float extra = Rules.Enabled(Lvl.WorseItems) ? ExtraDrowsiness * A15_StrongerAilments.FullFactor(CharacterAfflictions.STATUSTYPE.Drowsy) : ExtraDrowsiness;
                 crash.statusPerSecond += extra / crash.totalTime;
             }

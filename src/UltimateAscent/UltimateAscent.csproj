@@ -4,7 +4,7 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>UltimateAscent</AssemblyName>
     <RootNamespace>UltimateAscent</RootNamespace>
-    <Version>1.5.6</Version>
+    <Version>1.6.0</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -59,6 +59,24 @@
     <!-- The Stone's break: the smash at 4 s of the user's rock-smash clip (mono, 16-bit PCM). -->
     <EmbeddedResource Include="Resources\Stone_break.wav" LogicalName="UltimateAscent.Stone_break.wav" />
     <EmbeddedResource Include="Resources\Nausea_stomach.wav" LogicalName="UltimateAscent.Nausea_stomach.wav" />
+    <EmbeddedResource Include="Resources\Snake_slither.wav" LogicalName="UltimateAscent.Snake_slither.wav" />
+    <EmbeddedResource Include="Resources\Snake_rattle.wav" LogicalName="UltimateAscent.Snake_rattle.wav" />
+    <EmbeddedResource Include="Resources\Paralysis_status.png" LogicalName="UltimateAscent.Paralysis_status.png" />
+    <EmbeddedResource Include="Resources\Goat_bleat_1.wav" LogicalName="UltimateAscent.Goat_bleat_1.wav" />
+    <EmbeddedResource Include="Resources\Crab_icon.png" LogicalName="UltimateAscent.Crab_icon.png" />
+    <EmbeddedResource Include="Resources\CrabLeg_icon.png" LogicalName="UltimateAscent.CrabLeg_icon.png" />
+    <EmbeddedResource Include="Resources\Crab_pinch_1.wav" LogicalName="UltimateAscent.Crab_pinch_1.wav" />
+    <EmbeddedResource Include="Resources\Crab_pinch_2.wav" LogicalName="UltimateAscent.Crab_pinch_2.wav" />
+    <EmbeddedResource Include="Resources\Crab_click_1.wav" LogicalName="UltimateAscent.Crab_click_1.wav" />
+    <EmbeddedResource Include="Resources\Crab_click_2.wav" LogicalName="UltimateAscent.Crab_click_2.wav" />
+    <EmbeddedResource Include="Resources\Crab_click_3.wav" LogicalName="UltimateAscent.Crab_click_3.wav" />
+    <EmbeddedResource Include="Resources\Crab_click_4.wav" LogicalName="UltimateAscent.Crab_click_4.wav" />
+    <EmbeddedResource Include="Resources\Crab_scuttle.wav" LogicalName="UltimateAscent.Crab_scuttle.wav" />
+    <EmbeddedResource Include="Resources\Goat_bleat_2.wav" LogicalName="UltimateAscent.Goat_bleat_2.wav" />
+    <EmbeddedResource Include="Resources\Goat_hooves.wav" LogicalName="UltimateAscent.Goat_hooves.wav" />
+    <EmbeddedResource Include="Resources\Goat_gallop.wav" LogicalName="UltimateAscent.Goat_gallop.wav" />
+    <EmbeddedResource Include="Resources\Goat_land.wav" LogicalName="UltimateAscent.Goat_land.wav" />
+    <EmbeddedResource Include="Resources\Goat_ram.wav" LogicalName="UltimateAscent.Goat_ram.wav" />
     <EmbeddedResource Include="Resources\PinkLollipop.png" LogicalName="UltimateAscent.PinkLollipop.png" />
     <EmbeddedResource Include="Resources\PinkLollipop_icon.png" LogicalName="UltimateAscent.PinkLollipop_icon.png" Condition="Exists('Resources\PinkLollipop_icon.png')" />
     <EmbeddedResource Include="Resources\ToxicDrink.png" LogicalName="UltimateAscent.ToxicDrink.png" />

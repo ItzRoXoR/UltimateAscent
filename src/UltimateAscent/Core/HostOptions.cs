@@ -5,8 +5,8 @@ using UnityEngine;
 namespace UltimateAscent.Core;
 
 /// <summary>
-/// Options that must be identical for everyone: the switches of ascents 9-25 and of the cold nights
-/// (config section "Ascents") and the new items (section "Items"). The host's config wins and is
+/// Options that must be identical for everyone: the switches of ascents 8-25 and of the cold nights
+/// (config section "Ascents"), the new items (section "Items") and the new mobs (section "Mobs"). The host's config wins and is
 /// published as a room property; clients read it.
 /// </summary>
 internal static class HostOptions
@@ -21,6 +21,12 @@ internal static class HostOptions
 
     /// <summary>Set when the mod's new items are switched off for regular runs (missing: they spawn).</summary>
     private const int NewItemsOff = ColdNightsOff << 1;
+
+    /// <summary>Set when the game's ascent 8 (win only in the Nadir) is switched off (missing: it applies).</summary>
+    private const int Ascent8Off = NewItemsOff << 1;
+
+    /// <summary>Set when the mod's new creatures are switched off (missing: they live).</summary>
+    private const int NewMobsOff = Ascent8Off << 1;
 
     private static int cachedMask;
     private static int cachedFrame = -1;
@@ -40,6 +46,12 @@ internal static class HostOptions
 
     /// <summary>The mod's new items spawn in regular runs, unless the host switched them off.</summary>
     internal static bool NewItemsOn => (Mask & NewItemsOff) == 0;
+
+    /// <summary>The game's ascent 8 applies (a climb from ascent 8 is won only in the Nadir), unless the host switched it off.</summary>
+    internal static bool Ascent8On => (Mask & Ascent8Off) == 0;
+
+    /// <summary>The mod's new creatures live in regular runs, unless the host switched them off.</summary>
+    internal static bool NewMobsOn => (Mask & NewMobsOff) == 0;
 
     /// <summary>A switch changed: read them again.</summary>
     internal static void Invalidate()
@@ -89,6 +101,14 @@ internal static class HostOptions
             if (Plugin.NewItems != null && !Plugin.NewItems.Value)
             {
                 mask |= NewItemsOff;
+            }
+            if (Plugin.Ascent8 != null && !Plugin.Ascent8.Value)
+            {
+                mask |= Ascent8Off;
+            }
+            if (Plugin.NewMobs != null && !Plugin.NewMobs.Value)
+            {
+                mask |= NewMobsOff;
             }
             return mask;
         }

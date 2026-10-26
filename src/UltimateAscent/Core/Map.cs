@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using Zorro.Core;
 
@@ -172,6 +173,32 @@ internal static class Map
         Biome owner = component != null ? component.GetComponentInParent<Biome>(includeInactive: true) : null;
         biome = owner != null ? owner.biomeType : Biome.BiomeType.Shore;
         return owner != null;
+    }
+
+    private static readonly Dictionary<int, int> colliderBiomes = new Dictionary<int, int>();
+
+    /// <summary>
+    /// Whether ground (a collider) is another biome's than the given one: true for ground under another
+    /// <see cref="Biome"/>; false for that biome's own ground and for ground of no biome at all (the map's shared things).
+    /// Remembered per collider.
+    /// </summary>
+    internal static bool IsOtherBiome(Collider ground, Biome.BiomeType own)
+    {
+        if (ground == null)
+        {
+            return false;
+        }
+        int id = ground.GetInstanceID();
+        if (!colliderBiomes.TryGetValue(id, out int biome))
+        {
+            if (colliderBiomes.Count > 8192)
+            {
+                colliderBiomes.Clear();
+            }
+            biome = TryGetBiome(ground, out Biome.BiomeType found) ? (int)found : -1;
+            colliderBiomes[id] = biome;
+        }
+        return biome >= 0 && biome != (int)own;
     }
 
     /// <summary>The biome of the ground below a point (up to 100 m down), if that ground belongs to one.</summary>

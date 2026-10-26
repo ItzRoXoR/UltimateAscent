@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using HarmonyLib;
 using Photon.Pun;
 using UltimateAscent.Core;
@@ -13,7 +14,7 @@ namespace UltimateAscent.Features;
 /// to shield yourself from it is roasted.
 /// <list type="bullet">
 /// <item>Standing in direct sunlight adds heat (the Mesa keeps its own, stronger sun). Sunscreen
-/// still protects, though from ascent 14 a quarter of the heat gets through (<see cref="A14_Items"/>).
+/// still protects, though from ascent 15 a quarter of the heat gets through (<see cref="A14_Items"/>).
 /// In the Alpine the sun does nothing at all; its nights are long instead
 /// (<see cref="A18_AlpineNights"/>).</item>
 /// <item>Whatever you shield yourself with against direct sunlight protects you, but takes the sun
@@ -24,7 +25,9 @@ namespace UltimateAscent.Features;
 /// <item>A roasting item first stays clean for 5 s, then smokes heavily for 15 s, and is then
 /// fully burned at once, skipping the cooking stages in between. A parasol, made for the sun, takes
 /// 1.5 times as long; the Mesa's sun roasts twice as fast. In the shade it stops smoking and cools
-/// down again at a third of the speed it roasted at. A burned item stays in your hands.</item>
+/// down again at a third of the speed it roasted at. A burned item still shields you, but smokes and crumbles
+/// away after 5 s more in the sun (7.5 s for a parasol, 2.5 s in the Mesa): it goes up with the sound of burning
+/// and turns to the Kiln's ash where it was.</item>
 /// </list>
 /// Burned items burn your hands from ascent 17 on (<see cref="BurnedItems"/>). While True Final
 /// Ascent runs an Apocalypse weather the sun rules rest, heat and roasting alike, the way TFA rests
@@ -40,8 +43,11 @@ internal static class A23_HotSun
     internal static bool ScorchingHere => Rules.Enabled(Lvl.HotSun) && A09_FogAndKiln.BeforeTheVolcano;
 
     /// <summary>How long an item takes to burn in the sun, and the share of it before it starts smoking (5 of 20 s).</summary>
-    private const float BurnSeconds = 20f;
+    internal const float BurnSeconds = 20f;
     private const float SmokeFrom = 0.25f;
+
+    /// <summary>A burned item held up to the sun crumbles away after this long (a quarter of the time it took to burn).</summary>
+    internal const float CrumbleSeconds = 5f;
 
     private const float ParasolSlowdown = 1.5f;
     private const float MesaSpeedup = 2f;
@@ -56,13 +62,25 @@ internal static class A23_HotSun
     /// </summary>
     private const ItemCooking.NetworkedCooking SunSmokeOn = (ItemCooking.NetworkedCooking)86;
     private const ItemCooking.NetworkedCooking SunSmokeOff = (ItemCooking.NetworkedCooking)87;
+    /// <summary>A burned item crumbles away: the sound of it burning and its ash, on every client.</summary>
+    private const ItemCooking.NetworkedCooking SunCrumbles = (ItemCooking.NetworkedCooking)88;
+
+    /// <summary>The ash a crumbling item leaves where it was (the Kiln's flakes and smoke): flakes per cubic metre of the item, and a few puffs.</summary>
+    private const float FlakesPerCubicMetre = 900f;
+    private const int FewestFlakes = 60;
+    private const int MostFlakes = 400;
+    private const int AshPuffsEach = 6;
 
     internal const string SunSmokeName = "UltimateAscent Sun Smoke";
 
     private sealed class Exposure
     {
-        /// <summary>0 = cold, 1 = burned.</summary>
+        /// <summary>0 = cold, 1 = burned (crumbling: 1 = crumbled away).</summary>
         internal float progress;
+        /// <summary>An already burned item, crumbling away in the sun.</summary>
+        internal bool crumbling;
+        /// <summary>Crumbled away: it is shrinking in its ash and about to be gone.</summary>
+        internal bool crumbled;
         /// <summary>How long the item would last at the sun it got last (cooling uses the same pace).</summary>
         internal float burnSeconds = BurnSeconds;
         internal bool smoking;
@@ -144,9 +162,9 @@ internal static class A23_HotSun
         {
             return roasting;
         }
-        // Ascent 14: sunscreen keeps off only three quarters of the heat.
+        // Ascent 15: sunscreen keeps off only three quarters of the heat.
         float share = local.data.wearingSunscreen ? A14_Items.SunscreenLeak : 1f;
-        // The sun's heat lands as it comes, without ascent 15's boost.
+        // The sun's heat lands as it comes, without ascent 14's boost.
         A15_StrongerAilments.AddUnboosted(local.refs.afflictions, CharacterAfflictions.STATUSTYPE.Hot, HeatPerSecond * heat * share * Time.deltaTime);
         return roasting;
     }
@@ -154,14 +172,13 @@ internal static class A23_HotSun
     private static void Roast(Item item, float burnSeconds)
     {
         exposures.TryGetValue(item, out Exposure exposure);
-        if (item.cooking == null || BurnedItems.CookedLevel(item) >= BurnedItems.BurntCookLevel)
+        if (item.cooking == null)
         {
-            // Already burned: nothing left to roast.
-            if (exposure != null)
-            {
-                SetSmoke(item, exposure, false);
-                exposures.Remove(item);
-            }
+            return;
+        }
+        if (BurnedItems.CookedLevel(item) >= BurnedItems.BurntCookLevel)
+        {
+            Crumble(item, exposure, burnSeconds * CrumbleSeconds / BurnSeconds);
             return;
         }
         if (exposure == null)
@@ -178,6 +195,136 @@ internal static class A23_HotSun
             BurnNow(item);
         }
     }
+
+    /// <summary>
+    /// An item already burned still shields you, but smokes and crumbles away after <see cref="CrumbleSeconds"/> in
+    /// the sun (the parasol's and the Mesa's paces as for roasting; in the shade it recovers at a third of that pace).
+    /// </summary>
+    private static void Crumble(Item item, Exposure exposure, float crumbleSeconds)
+    {
+        if (exposure == null || !exposure.crumbling)
+        {
+            exposure = new Exposure { crumbling = true };
+            exposures[item] = exposure;
+        }
+        if (exposure.crumbled)
+        {
+            return;
+        }
+        exposure.burnSeconds = crumbleSeconds;
+        exposure.progress += Time.deltaTime / crumbleSeconds;
+        SetSmoke(item, exposure, true);
+        if (exposure.progress >= 1f && !item.consuming && item.photonView != null && item.photonView.IsMine)
+        {
+            SetSmoke(item, exposure, false);
+            exposure.crumbled = true;
+            Crumbled++;
+            item.photonView.RPC("SyncCookingStateRPC", RpcTarget.All, SunCrumbles);
+            item.StartCoroutine(item.ConsumeDelayed(ignoreActions: true));
+            Plugin.Log.LogInfo($"Ascent 23: {NameOf(item)} crumbled away in the sun.");
+        }
+    }
+
+    /// <summary>On every client: the sound of the item burning up, and the item turned to the Kiln's ash where it was.</summary>
+    private static void ShowCrumbling(ItemCooking cooking)
+    {
+        Bounds bounds = BoundsOf(cooking);
+        SFX_Instance[] sounds = BurnSounds();
+        foreach (SFX_Instance sound in sounds)
+        {
+            sound.Play(bounds.center);
+        }
+        if (sounds.Length > 0)
+        {
+            CrumbleSoundPlays++;
+        }
+        if (!MakeAsh())
+        {
+            return;
+        }
+        Vector3 size = Vector3.Max(bounds.size, Vector3.one * 0.15f);
+        int count = Mathf.Clamp(Mathf.RoundToInt(size.x * size.y * size.z * FlakesPerCubicMetre), FewestFlakes, MostFlakes);
+        Emit(ashFlakes, bounds.center, size, count);
+        Emit(ashSmoke, bounds.center, size, AshPuffsEach);
+        AshPuffs++;
+        AshFlakes += count;
+    }
+
+    /// <summary>Where the item is drawn: all its renderers together (a parasol's canopy as well as its handle).</summary>
+    private static Bounds BoundsOf(ItemCooking cooking)
+    {
+        Bounds bounds = new Bounds(cooking.item != null ? cooking.item.Center() : cooking.transform.position, Vector3.zero);
+        foreach (Renderer renderer in cooking.GetComponentsInChildren<Renderer>())
+        {
+            if (renderer.enabled && !(renderer is ParticleSystemRenderer))
+            {
+                bounds.Encapsulate(renderer.bounds);
+            }
+        }
+        return bounds;
+    }
+
+    private static void Emit(ParticleSystem particles, Vector3 at, Vector3 size, int count)
+    {
+        ParticleSystem.ShapeModule shape = particles.shape;
+        shape.scale = size;
+        particles.Emit(new ParticleSystem.EmitParams { position = at, applyShapeToPosition = true }, count);
+    }
+
+    /// <summary>The game's sound of fire burning a scout (a campfire's when lit), and wood splintering as the item falls apart.</summary>
+    private static readonly string[] BurnSoundNames = { "SFXI Dmg Fire 1", "SFXI Torch Impact 2" };
+    private static SFX_Instance[] burnSounds;
+
+    private static SFX_Instance[] BurnSounds()
+    {
+        if (burnSounds == null || burnSounds.Length < BurnSoundNames.Length || burnSounds.Any(s => s == null))
+        {
+            SFX_Instance[] loaded = Resources.FindObjectsOfTypeAll<SFX_Instance>();
+            burnSounds = BurnSoundNames.Select(name => loaded.FirstOrDefault(s => s != null && s.name == name)).Where(s => s != null).ToArray();
+        }
+        return burnSounds;
+    }
+
+    private static ParticleSystem ashFlakes;
+    private static ParticleSystem ashSmoke;
+
+    /// <summary>
+    /// The Kiln's ash flakes and smoke (see <see cref="KilnAsh"/>), made once, emitting only when an item crumbles: the flakes
+    /// drift down and the smoke rises; both show at once and fade at the end of their lives.
+    /// </summary>
+    private static bool MakeAsh()
+    {
+        if (ashFlakes != null && ashSmoke != null)
+        {
+            return true;
+        }
+        ParticleSystem template = SmokeTemplate();
+        if (template == null)
+        {
+            return false;
+        }
+        ashFlakes = KilnAsh.Particles(template, "UltimateAscent Crumbled Ash", Vector3.one, 2000, 2.5f, 4.5f, KilnAsh.FlakeSizeMin, KilnAsh.FlakeSizeMax, 0.1f, 0.6f,
+            KilnAsh.FlakeDark, KilnAsh.FlakeLight, 0.12f);
+        ashSmoke = KilnAsh.Particles(template, "UltimateAscent Crumbled Ash Smoke", Vector3.one, 300, 1.2f, 2.2f, 0.12f, 0.3f, 0.15f, 0.45f,
+            KilnAsh.SmokeDark, KilnAsh.SmokeLight, -0.02f);
+        foreach (ParticleSystem made in new[] { ashFlakes, ashSmoke })
+        {
+            Object.DontDestroyOnLoad(made.gameObject);
+            ParticleSystem.ColorOverLifetimeModule fade = made.colorOverLifetime;
+            Gradient gradient = new Gradient();
+            gradient.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+                new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(1f, 0.6f), new GradientAlphaKey(0f, 1f) });
+            fade.color = new ParticleSystem.MinMaxGradient(gradient);
+            made.Play(true);
+        }
+        return true;
+    }
+
+    /// <summary>For the tests: items crumbled away in the sun, and the burning sounds, the ash and its flakes this client showed for them.</summary>
+    internal static int Crumbled;
+    internal static int CrumbleSoundPlays;
+    internal static int AshPuffs;
+    internal static int AshFlakes;
 
     private static void SetSmoke(Item item, Exposure exposure, bool on)
     {
@@ -211,8 +358,29 @@ internal static class A23_HotSun
         for (int level = BurnedItems.CookedLevel(item); level < BurnedItems.BurntCookLevel; level++)
         {
             item.cooking.FinishCooking();
+            if (ExplodesWhenCooked(item.cooking, level + 1))
+            {
+                // It blew up as overcooked items do (a Lantern, a Faerie Lantern) and is gone: no more steps, so it
+                // cannot go off again before the game removes it.
+                Plugin.Log.LogInfo($"Ascent 23: {NameOf(item)} exploded in the sun.");
+                return;
+            }
         }
         Plugin.Log.LogInfo($"Ascent 23: {NameOf(item)} burned in the sun.");
+    }
+
+    /// <summary>The item's own explosion goes off at this cooking step (the game's rule, its fuel condition included).</summary>
+    private static bool ExplodesWhenCooked(ItemCooking cooking, int cooked)
+    {
+        foreach (AdditionalCookingBehavior behavior in cooking.additionalCookingBehaviors)
+        {
+            if (behavior is CookingBehavior_Explode explode && cooked >= explode.cookedAmountToTrigger
+                && (!explode.dontRunIfOutOfFuel || cooking.item.GetData<FloatItemData>(DataEntryKey.Fuel).Value > 0f))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// <summary>
@@ -224,6 +392,11 @@ internal static class A23_HotSun
     {
         private static bool Prefix(ItemCooking __instance, ItemCooking.NetworkedCooking newState)
         {
+            if (newState == SunCrumbles)
+            {
+                ShowCrumbling(__instance);
+                return false;
+            }
             if (newState != SunSmokeOn && newState != SunSmokeOff)
             {
                 return true;

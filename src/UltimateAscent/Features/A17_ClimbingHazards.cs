@@ -16,7 +16,7 @@ internal static class A17_ClimbingHazards
     /// <summary>Ice rocks' climbing interval.</summary>
     private const float TickSeconds = 0.3f;
 
-    /// <summary>What an ice rock's climbing tick puts on the bar at this ascent: 1 cold, x2 for ascent 17, x1.3 for ascent 15, in steps of 2.5.</summary>
+    /// <summary>What an ice rock's climbing tick puts on the bar at this ascent: 1 cold, x2 for ascent 17, x1.3 for ascent 14, in steps of 2.5.</summary>
     private const float HeatPerTick = 0.025f;
 
     private static float lastTick = -10f;

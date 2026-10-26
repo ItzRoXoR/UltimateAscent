@@ -43,10 +43,10 @@ internal static class AscentCatalog
         new Entry("Fall damage makes you drop everything.",
             new Color32(230, 72, 72, 255)),
         // 14
-        new Entry("Items are worse.",
+        new Entry("Cold, drowsiness, poison, spores and heat apply more.",
             new Color32(217, 56, 80, 255)),
         // 15
-        new Entry("Cold, drowsiness, poison, spores and heat apply more.",
+        new Entry("Items are worse.",
             new Color32(204, 46, 92, 255)),
         // 16
         new Entry("Heat in the Caldera and drowsiness in the Gloom heal slower.",
@@ -180,6 +180,8 @@ internal static class AscentCatalog
         [Features.CherryLollipop.NameKey] = "Cherry Lollipop",
         [Features.VanillaWafers.NameKey] = "Vanilla Wafers",
         [Features.SixSlotBackpack.NameKey] = Features.SixSlotBackpack.ItemName,
+        [Features.Crabs.NameKey] = "Crab",
+        [Features.Crabs.LegNameKey] = "Crab Leg",
     };
 
     /// <summary>The Russian for the names above and the prompts below (the game's style: berries named like its own "-ика" berries; prompts in the infinitive); every other language shows the English.</summary>
@@ -192,6 +194,8 @@ internal static class AscentCatalog
         [Features.CherryLollipop.NameKey] = "Вишневый леденец",
         [Features.VanillaWafers.NameKey] = "Ванильные вафли",
         [Features.SixSlotBackpack.NameKey] = "Рюкзак на шесть мест",
+        [Features.Crabs.NameKey] = "Краб",
+        [Features.Crabs.LegNameKey] = "Крабовая ножка",
         [Features.StickItem.SwingPrompt] = "ударить",
     };
 
@@ -224,6 +228,20 @@ internal static class AscentCatalog
             {
                 Put(table, prompt.Key, prompt.Value, Russian.TryGetValue(prompt.Key, out string russian) ? russian : null);
             }
+        }
+        // The new mobs' threats on the Custom Run screen, in capitals if the game writes its own "Scorpions" so.
+        bool capitals = false;
+        foreach (List<string> texts in table.Values)
+        {
+            if (texts.Count > 0 && texts[0] == "SCORPIONS")
+            {
+                capitals = true;
+                break;
+            }
+        }
+        foreach ((_, string key, string english, string russian, _) in Features.NewMobs.Threats)
+        {
+            Put(table, key, capitals ? english.ToUpperInvariant() : english, capitals ? russian.ToUpperInvariant() : russian);
         }
         textsAdded = true;
     }
