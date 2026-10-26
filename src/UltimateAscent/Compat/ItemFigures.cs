@@ -175,6 +175,10 @@ internal static class ItemFigures
         {
             Set(affliction.totalTime, CherryLollipop.SecondsWorse, v => affliction.totalTime = v);
         }
+        if (worse && name == A14_Items.EnergyDrinkName && affliction is Affliction_FasterBoi)
+        {
+            Set(affliction.totalTime, A14_Items.EnergyDrinkTime(item), v => affliction.totalTime = v);
+        }
         switch (affliction)
         {
             case Affliction_Invincibility milk when worse && milk.isFromMilk:

@@ -1,7 +1,7 @@
 # Threats at ascent 24
 
 Every value below is from PEAK 3.0.0 (read from the game code and the game data) and from
-Ultimate Ascent 1.6.0's rules. Status amounts use the stamina bar's scale: **100 = the whole bar**. A rule
+Ultimate Ascent 1.6.1's rules. Status amounts use the stamina bar's scale: **100 = the whole bar**. A rule
 marked *(17)* comes from that ascent; ascent 24 contains every ascent up to 24. Ultimate Ascent's
 numbers are what lands on the bar, ascent 14's boost included; below ascent 14 the same rules land
 them without that boost, so they are always lower there. Distances are the game's own units,
@@ -46,7 +46,7 @@ nothing below the minimum factor. "Knocked down" is ragdoll time.
 ### Crabs
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
-| Where | none | the beach, **25** small red crabs (about a scorpion's size) spread along it from where the scouts wake up to its campfire; never leaving the beach, not replaced once taken *(every ascent; below 17 half as strong)* |
+| Where | none | the beach, **25** small red crabs (about a scorpion's size) spread along it from where the scouts wake up to its campfire, **seven in ten on the climb itself** (the cliff up to the campfire), the rest on the sand; never leaving the beach, not replaced once taken *(every ascent; below 17 half as strong)* |
 | Getting about | — | crawl around the beach at **1 m/s** from spot to spot, resting a moment at each, scuttling sideways; a scout within **2 m** is chased at the same 1 m/s (a scout walks 2.5 m/s and sprints 5.2 m/s), one at random if more are that near, for at least **6 s**, then for as long as they stay within 2 m *(17)* |
 | Pinch | — | facing the scout, the big claw rises and opens for 1 s, then snaps shut (the scorpion's glint and sparks), and 0.15 s after the snap, within 1.5 m, it lands: **10 injury**, and whatever you hold falls out of your hands; again after 2 s *(17)* |
 | Picked up | — | like a scorpion, into your hands only (put away, it is dropped): held, it pinches you (10 injury) and falls out of your hands *(17)* |
@@ -82,9 +82,9 @@ nothing below the minimum factor. "Knocked down" is ragdoll time.
 ### Snakes (Tropics)
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
-| Where | none | the Tropics, as many as the map has scorpions *(every ascent; below 17 half as strong and chasing a third slower)*: a third tree snakes in the giant trees, the rest ground snakes near the bushes and mushroom patches; they never leave the Tropics (a snake stops where their ground ends and gives up a scout who goes beyond it) |
+| Where | none | the Tropics, whatever the map *(every ascent; below 17 half as strong and chasing a third slower)*: **21 ground snakes**, **seven in ten of them on the climb itself** (the cliff up to the Tropics' campfire), the rest on the jungle floor, and **7 tree snakes** (a third as many) in the giant trees; they never leave the Tropics (a snake stops where their ground ends and gives up a scout who goes beyond it) |
 | Tree snake (about 3.6 m, 28 cm thick) | — | sleeps curled up in a ball on a branch; when a scout comes within **5 m** it uncoils (0.8 s), strikes and chases at **3.2 m/s**; once the scout is **20 m** away it climbs back up its tree, winding round the trunk; a bite: **30 injury**, then for **2 minutes** a **4 s** collapse every **15–30 s** (the first 5–15 s after the bite; another bite starts the 2 minutes over, it does not stack); a poison drop above the stamina bar drains over those 2 minutes, and a First Aid Kit, Cure-All, Blowgun dart, Napberry, Medicinal Root or Remedy Fungus cloud ends it *(17)* |
-| Ground snake (about 1.4 m, 11 cm thick) | — | never sleeps, slithers around within 20 m of its spot at **0.5 m/s**; chases a scout it sees (as near as a scorpion notices one) at **3.6 m/s**, up to 20 m (a scout walks 2.5 m/s and sprints 5.2 m/s); a bite: **10 injury**, then **40 poison over 10 s** *(17)* |
+| Ground snake (about 1.4 m, 11 cm thick) | — | never sleeps, slithers around within **40 m** of its spot at **0.5 m/s**; chases a scout it sees (as near as a scorpion notices one) at **3.6 m/s**, up to 20 m (a scout walks 2.5 m/s and sprints 5.2 m/s); a bite: **10 injury**, then **40 poison over 10 s** *(17)* |
 | Attack | — | once it goes for a scout it keeps after them for at least **10 s**, however far they run (only then does 20 m make it give up); from 2.5 m it rears up (0.3 s) and jumps at the scout's legs, mouth open (bites within 1.5 m); then for **3 s** it slithers round the scout 3.5 m out, then goes for another scout within its noticing range if there is one, or the same scout again *(17)* |
 | Fending off | — | cannot be picked up; a Stick (4 s), a Torch (2 s), a Stone thrown at 10 m/s or more (2 s) or a kick (1 s) knocks it back 1.5 m, and it curls up for that long; then it goes for the scout who stunned it (the first, if more did), when within its noticing range *(17)* |
 
@@ -170,8 +170,8 @@ amount of extra stamina; most effects start 3 s after eating.
 ### Mountain goats
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
-| Where | none | the Alps, up to **12**, alone or in pairs, along the whole way up (from where the Alps begin to the top of their climb) *(every ascent; below 17 half as strong)* |
-| Getting about | — | graze, look about and roam within 25 m of their spot, never leaving the Alps (a goat stops where their ground ends, and does not charge a scout beyond it); walk slopes up to **80°** (climbing, the whole body along the cliff, the hooves on the rock) and leap from foothold to foothold, up to **3.5 m** up, **6 m** down and **4.5 m** across (the Roots' beetles crawl on surfaces up to 70°, but never leap); solid: scouts bump into them *(17)* |
+| Where | none | the Alps, up to **12**, alone or in pairs, along the whole way up (from where the Alps begin to the top of their climb), **seven in ten on the climb itself** (the Alps' cliffs up to their campfire), the rest on the snowfield *(every ascent; below 17 half as strong)* |
+| Getting about | — | graze, look about and roam within **150 m** of their spot, up and down the cliffs (a ledge above or below, the foot of the cliff), never leaving the Alps (a goat stops where their ground ends, and does not charge a scout beyond it); walk slopes up to **80°** (climbing, the whole body along the cliff, the hooves on the rock) and leap from foothold to foothold, up to **3.5 m** up, **6 m** down and **8 m** forward, across gaps (the Roots' beetles crawl on surfaces up to 70°, but never leap); solid: scouts bump into them *(17)* |
 | Charge | — | a scout within **20 m** and in sight: the goat decides at once, then every **20 s** while one is; three times in four it goes on grazing, the fourth it bleats, lowers its head and paws the ground for **1 s**, then charges at **7 m/s** (a scout walks 2.5 m/s and sprints 5.2 m/s), turning after the scout, but straight on in its last **5 m**: step aside then and it misses, skids on and shakes its head; it never runs off an edge, and gives up after 4 s or 30 m *(17)* |
 | Ram | — | knocked down **2 s**, thrown **6–8 m** along the charge, **20 injury** *(17)* |
 | Sounds | — | a bleat every 25–70 s (while a scout is within 60 m) and always right before a charge; hooves while they move; a ram lands with the Roots' beetles' hit, heavier and louder *(17)* |

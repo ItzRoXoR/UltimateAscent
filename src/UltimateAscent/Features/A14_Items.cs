@@ -24,8 +24,9 @@ namespace UltimateAscent.Features;
 /// ascent 15 and in custom runs, 5% of the bar from 15 (as much as the Parasol), and is the one
 /// parasol that never wears out (the Parasol is used up after 20 s of gliding, see A14_WorseItems). It is the
 /// Lightweight Parasol in every climb, custom runs included (see <see cref="IsLightweightParasol"/>).</item>
-/// <item>The Energy Drink keeps the game's boosts (walking +50%, climbing +150%); from ascent 14 its crash brings 50
-/// drowsiness (see A14_WorseItems' energy-drink rule). The Big Lollipop's drowsiness comes over 12 s and adds up
+/// <item>The Energy Drink keeps the game's boosts (walking +50%, climbing +150%), but they last 6 s, cooked 8 s,
+/// counted from the first moment (the game holds its clock for the first 3 s unless you climb); from ascent 14 its
+/// crash brings 50 drowsiness (see A14_WorseItems' energy-drink rule). The Big Lollipop's drowsiness comes over 12 s and adds up
 /// to 85 (the game: 33 over 10 s). The Cherry Lollipop's speed boost is the Energy Drink's (walking +30%),
 /// without its crash; its drowsiness is the Big Lollipop's.</item>
 /// <item>Fortified Milk makes you invincible for 12 s, 20 s cooked (the game: 15 s and 25 s).</item>
@@ -119,6 +120,16 @@ internal static class A14_Items
 
     /// <summary>From ascent 14: the Energy Drink's crash (the game: 25 drowsiness).</summary>
     internal const float EnergyDrinkCrash = 0.5f;
+
+    /// <summary>
+    /// From ascent 15: how long the Energy Drink's boost lasts, drunk as it is and cooked, its clock running at once (the
+    /// game holds it for the first 3 s unless you climb).
+    /// </summary>
+    internal const float EnergyDrinkSeconds = 6f;
+    internal const float EnergyDrinkCookedSeconds = 8f;
+
+    /// <summary>From ascent 15: how long this can's boost lasts (cooked or not).</summary>
+    internal static float EnergyDrinkTime(Item drink) => BurnedItems.CookedLevel(drink) > 0 ? EnergyDrinkCookedSeconds : EnergyDrinkSeconds;
 
     /// <summary>The Big Lollipop's drowsiness, in all and over how long (the game: 33 over 10 s).</summary>
     internal const float LollipopDrowsiness = 0.85f;
@@ -293,6 +304,13 @@ internal static class A14_Items
             {
                 energyDrinkScope++;
                 __state = 1;
+                if (__instance.affliction is Affliction_FasterBoi boost)
+                {
+                    // 6 s drunk as it is, 8 s cooked, counted from the first moment (the game's holds its clock for its
+                    // first 3 s unless you climb).
+                    Overrides.Set(boost, nameof(Affliction.totalTime), EnergyDrinkTime(__instance.item));
+                    Overrides.Set(boost, nameof(Affliction_FasterBoi.climbDelay), 0f);
+                }
             }
             else if (name == FortifiedMilkName && __instance.affliction is Affliction_Invincibility milk)
             {

@@ -1255,7 +1255,8 @@ internal sealed partial class Runner
     /// <summary>
     /// What the Energy Drink and the Toxic Drink take off and the boost they give, drunk the game's way with 90 heat
     /// and 90 drowsiness, with ascent 15's rule on and switched off (in memory). The Energy Drink: 30 heat (from 15,
-    /// 60% of it), all the drowsiness, the game's boosts (walking +50%, climbing +150%) on every ascent. The Toxic
+    /// 60% of it), all the drowsiness, the game's boosts (walking +50%, climbing +150%) on every ascent, from 15 for 6 s
+    /// (cooked 8 s) from the moment it is drunk (the game holds its clock for the first 3 s unless you climb). The Toxic
     /// Drink: 60 heat (from 15, 60% of it), all the drowsiness, from 15 at most 80. Heat lands in 2.5 steps.
     /// </summary>
     private IEnumerator DrinkNumbers()
@@ -1271,7 +1272,7 @@ internal sealed partial class Runner
             {
                 worse.Value = rule && saved;
                 HostOptions.Invalidate();
-                foreach (Item drink in new[] { ItemByName("Energy Drink"), ToxicDrink.Template })
+                foreach ((Item drink, bool cooked) in new[] { (ItemByName("Energy Drink"), false), (ItemByName("Energy Drink"), true), (ToxicDrink.Template, false) })
                 {
                     if (drink == null)
                     {
@@ -1281,6 +1282,12 @@ internal sealed partial class Runner
                     if (held == null)
                     {
                         continue;
+                    }
+                    if (cooked)
+                    {
+                        // Cooked once in the hand (the cooked can's own boost; it bursts when drunk).
+                        held.cooking.FinishCooking();
+                        yield return new WaitForSeconds(0.5f);
                     }
                     ClearStatuses(Afflictions);
                     foreach (Peak.Afflictions.Affliction old in Afflictions.afflictionList.ToList())
@@ -1293,6 +1300,7 @@ internal sealed partial class Runner
                     float hot = Afflictions.GetCurrentStatus(Status.Hot);
                     float drowsy = Afflictions.GetCurrentStatus(Status.Drowsy);
                     yield return EatHeld();
+                    float drunkAt = Time.time;
                     yield return new WaitForSeconds(0.5f);
                     float hotTaken = hot - Afflictions.GetCurrentStatus(Status.Hot);
                     float drowsyTaken = drowsy - Afflictions.GetCurrentStatus(Status.Drowsy);
@@ -1302,13 +1310,35 @@ internal sealed partial class Runner
                     float heatWanted = (toxic ? ToxicDrink.Cooling : 0.3f) * (on ? A14_WorseItems.CureShare : 1f);
                     float drowsyWanted = toxic && on ? ToxicDrink.WakesWorse : drowsy;
                     bool boostRight = toxic || (boost != null && Mathf.Abs(boost.moveSpeedMod - 0.5f) < 0.01f && Mathf.Abs(boost.climbSpeedMod - 1.5f) < 0.01f);
-                    Check($"the {(toxic ? "Toxic Drink" : "Energy Drink")} takes off {heatWanted * 100f:0} heat and {(drowsyWanted >= drowsy ? "all the drowsiness" : $"{drowsyWanted * 100f:0} drowsiness")}"
-                        + (toxic ? "" : ", and walks +50% and climbs +150%") + $", ascent 15's rule {(on ? "on" : "off")} (15)",
-                        Mathf.Abs(hotTaken - heatWanted) <= 0.026f && Mathf.Abs(drowsyTaken - drowsyWanted) <= 0.011f && boostRight,
-                        $"took {hotTaken * 100f:0.#} heat, {drowsyTaken * 100f:0.#} drowsiness" + (boost != null ? $"; walking +{boost.moveSpeedMod * 100f:0}%, climbing +{boost.climbSpeedMod * 100f:0}%" : ""));
-                    Info($"{drink.GetName()} drunk, ascent 15's rule {(rule && saved ? "on" : "off")} (climb on ascent {target})",
+                    if (!cooked)
+                    {
+                        Check($"the {(toxic ? "Toxic Drink" : "Energy Drink")} takes off {heatWanted * 100f:0} heat and {(drowsyWanted >= drowsy ? "all the drowsiness" : $"{drowsyWanted * 100f:0} drowsiness")}"
+                            + (toxic ? "" : ", and walks +50% and climbs +150%") + $", ascent 15's rule {(on ? "on" : "off")} (15)",
+                            Mathf.Abs(hotTaken - heatWanted) <= 0.026f && Mathf.Abs(drowsyTaken - drowsyWanted) <= 0.011f && boostRight,
+                            $"took {hotTaken * 100f:0.#} heat, {drowsyTaken * 100f:0.#} drowsiness" + (boost != null ? $"; walking +{boost.moveSpeedMod * 100f:0}%, climbing +{boost.climbSpeedMod * 100f:0}%" : ""));
+                    }
+                    Info($"{(cooked ? "cooked " : "")}{drink.GetName()} drunk, ascent 15's rule {(rule && saved ? "on" : "off")} (climb on ascent {target})",
                         $"heat {hot * 100f:0} -> {Afflictions.GetCurrentStatus(Status.Hot) * 100f:0} (took {hotTaken * 100f:0.#}), drowsiness {drowsy * 100f:0} -> {Afflictions.GetCurrentStatus(Status.Drowsy) * 100f:0} (took {drowsyTaken * 100f:0.#}); "
                         + (boost != null ? $"boost walking +{boost.moveSpeedMod * 100f:0}%, climbing +{boost.climbSpeedMod * 100f:0}%, {boost.totalTime:0.#} s, drowsiness at its end {boost.drowsyOnEnd * 100f:0.#}" : "no speed boost"));
+                    if (!toxic && boost != null)
+                    {
+                        // How long the boost lasts, the scout standing (not climbing): from 15, 6 s (cooked 8 s) from the
+                        // moment it is drunk; without the rule the game's time, its clock held for the first 3 s.
+                        // Its whole life: what it has run (and held) when found, then until it ends.
+                        float hold = boost.climbDelay;
+                        float foundAt = Time.time;
+                        float before = boost.timeElapsed + Mathf.Max(0f, hold - Mathf.Max(0f, boost.bonusTime));
+                        while (Time.time - drunkAt < 16f && Afflictions.afflictionList.Contains(boost))
+                        {
+                            yield return null;
+                        }
+                        float lasted = before + Time.time - foundAt;
+                        float wanted = cooked ? A14_Items.EnergyDrinkCookedSeconds : A14_Items.EnergyDrinkSeconds;
+                        Check($"the {(cooked ? "cooked " : "")}Energy Drink's boost lasts {(on ? $"{wanted:0} s from the moment it is drunk, its clock not held" : "the game's time, its clock held at first")}, "
+                            + $"ascent 15's rule {(on ? "on" : "off")} (15)",
+                            on ? Mathf.Abs(lasted - wanted) <= 0.3f && hold == 0f : lasted >= 8f,
+                            $"lasted {lasted:0.0} s standing (counted from its own clock); {boost.totalTime:0.#} s, the clock held for {hold:0.#} s");
+                    }
                     ClearStatuses(Afflictions);
                     foreach (Peak.Afflictions.Affliction left in Afflictions.afflictionList.ToList())
                     {
@@ -2485,7 +2515,7 @@ internal sealed partial class Runner
     }
 
     /// <summary>
-    /// Snakes (17), in the Tropics: as many as the map has scorpions, a third in trees. A ground snake chases and bites
+    /// Snakes (17), in the Tropics: 21 on the ground, seven in ten of them on the climb itself, and 7 in trees. A ground snake chases and bites
     /// a scout standing near it (10 injury, then 40 poison over 10 s); a Stick's swing stuns a snake; a tree snake
     /// sleeps coiled, wakes for a scout within 5 m and bites (30 injury), and the scout collapses within 15 s after.
     /// </summary>
@@ -2506,10 +2536,10 @@ internal sealed partial class Runner
         }
         List<Snake> snakes = Snakes.All.Where(s => s != null).ToList();
         int trees = snakes.Count(s => s.IsTree);
-        int scorpions = Snakes.ScorpionCount();
-        Check("snakes live in the Tropics, as many as the map's scorpions, a third of them in trees (17)",
-            snakes.Count > 0 && snakes.Count <= scorpions && trees <= scorpions / 3,
-            $"{snakes.Count} snakes ({trees} in trees, {snakes.Count - trees} on the ground); the map's scorpions {scorpions}; tree snakes {string.Join(", ", snakes.Where(s => s.IsTree).Select(s => s.Doing))}");
+        Check("snakes live in the Tropics, 21 on the ground and a third as many (7) in trees, whatever the map (17)",
+            snakes.Count == Snakes.GroundCount + Snakes.TreeCount && trees <= Snakes.TreeCount,
+            $"{snakes.Count} snakes ({trees} in trees, {snakes.Count - trees} on the ground); this map's third part: {Singleton<MapHandler>.Instance.segments[(int)Segment.Alpine].biome}; "
+            + $"tree snakes {string.Join(", ", snakes.Where(s => s.IsTree).Select(s => s.Doing))}");
         Protect(false);
         Action calm = CalmForMeasuring();
         // No bee ambush meanwhile (the scout stands unprotected to be bitten; stung too, they would die at 24).

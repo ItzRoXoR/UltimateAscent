@@ -21,6 +21,159 @@ internal sealed partial class Runner
     /// a ram that lands runs on the scout); snakes chase a third slower. With the config's New Mobs off none spawns; with
     /// Effect Icons off the paralysis drop does not show.
     /// </summary>
+    /// <summary>
+    /// Where the new mobs live (on a map with the beach, the Tropics and the Alps, as 80): seven in ten of the crabs, of
+    /// the ground snakes and of the goats (as whole groups) on the climb itself (the segment's wall up to its campfire),
+    /// the rest on the way to it; 21 ground snakes and 7 tree snakes whatever the map. One of each on the climb pictured, where the scout is in its
+    /// part of the map (the crabs from the beach, the snakes once the Tropics are reached, the goats in the Alps).
+    /// </summary>
+    private IEnumerator NewMobPlacement()
+    {
+        Character local = Local;
+        Protect(true);
+        try
+        {
+            // The beach's crabs.
+            for (float until = Time.time + 10f; Time.time < until && Map.CurrentPlace == Place.Shore && Crabs.Spawned == 0;)
+            {
+                yield return null;
+            }
+            List<BeachCrab> crabs = BeachCrabs();
+            Crabs.Way(out Vector3 start, out Vector3 end);
+            List<BeachCrab> highCrabs = crabs.Where(c => NewMobs.OnTheClimb(c.transform.position)).ToList();
+            Check("seven in ten of the crabs live on the climb itself (the beach's wall up to its campfire), the rest on the sand before it",
+                Crabs.Spawned > 0 && Crabs.OnClimb == NewMobs.OnClimb(Crabs.Spawned),
+                $"put on the climb {Crabs.OnClimb} of {Crabs.Spawned} (wanted {NewMobs.OnClimb(Crabs.Spawned)}); on it now {highCrabs.Count} of {crabs.Count}, "
+                + $"{string.Join(", ", highCrabs.Select(c => (c.transform.position.y - start.y).ToString("0")))} m above where the scouts wake; spots found {Crabs.SpotsFound} of {Crabs.SpotsTried}");
+            if (Map.CurrentPlace == Place.Shore)
+            {
+                BeachCrab shown = highCrabs.OrderBy(c => c.transform.position.y).Skip(highCrabs.Count / 2).FirstOrDefault();
+                if (shown != null)
+                {
+                    yield return Picture(local, shown.transform.position, "crab-on-the-climb");
+                }
+            }
+
+            // The Tropics' snakes: they come out once the Tropics are reached.
+            if (Snakes.All.Count == 0 && Map.CurrentPlace == Place.Shore)
+            {
+                MapHandler.JumpToSegment(Segment.Tropics);
+                yield return new WaitForSeconds(8f);
+                for (float until = Time.time + 10f; Time.time < until && Snakes.All.Count == 0;)
+                {
+                    yield return null;
+                }
+            }
+            if (Snakes.All.Count == 0)
+            {
+                Info("the snakes' placement is not checked", $"no snakes out ({Map.CurrentPlace}; a map with the Tropics, as 80)");
+            }
+            else
+            {
+                List<Snake> snakes = Snakes.All.Where(s => s != null).ToList();
+                List<Snake> grounded = snakes.Where(s => !s.IsTree).ToList();
+                List<Snake> high = grounded.Where(s => NewMobs.OnTheClimb(s.Home)).ToList();
+                // On the ground: not on a giant tree (nothing of it under the spot's first surface from above), and close
+                // above the map's own ground or wall.
+                List<string> upTrees = new List<string>();
+                foreach (Snake snake in grounded)
+                {
+                    bool onTree = Physics.Raycast(snake.Home + Vector3.up * 0.5f, Vector3.down, out RaycastHit below, 2f, HelperFunctions.terrainMapMask) && Snakes.InGiantTree(below.collider);
+                    float up = NewMobs.AboveTerrain(snake.Home);
+                    if (onTree || up > 2.2f)
+                    {
+                        upTrees.Add($"{snake.Home:F0} ({(onTree ? "on a giant tree, " : "")}{up:0.0} m above the ground)");
+                    }
+                }
+                Check("ground snakes live on the ground, never on a giant tree or its crown",
+                    grounded.Count > 0 && upTrees.Count == 0,
+                    $"{grounded.Count} ground snakes; up off the ground: {(upTrees.Count == 0 ? "none" : string.Join(", ", upTrees))}");
+                Check("21 ground snakes and 7 tree snakes in the Tropics, whatever the map; seven in ten of the ground snakes on the climb itself (the Tropics' wall up to their campfire), the rest on the jungle floor",
+                    snakes.Count == Snakes.GroundCount + Snakes.TreeCount && snakes.Count - grounded.Count <= Snakes.TreeCount
+                    && Snakes.OnClimb == NewMobs.OnClimb(grounded.Count) && high.Count == Snakes.OnClimb,
+                    $"{snakes.Count} snakes, {snakes.Count - grounded.Count} in trees; on the climb {high.Count} of {grounded.Count} ground snakes (put there {Snakes.OnClimb}, wanted {NewMobs.OnClimb(grounded.Count)}); "
+                    + $"this map's third part: {Singleton<MapHandler>.Instance.segments[(int)Segment.Alpine].biome}; "
+                    + $"the ground snakes' spots {string.Join(", ", grounded.Select(s => $"{s.Home.y:0} m{(NewMobs.OnTheClimb(s.Home) ? " (climb)" : "")}"))}; spots found {Snakes.SpotsFound} of {Snakes.SpotsTried}");
+                if (Map.CurrentPlace == Place.Tropics)
+                {
+                    Snake shown = high.OrderBy(s => s.Home.y).Skip(high.Count / 2).FirstOrDefault();
+                    if (shown != null)
+                    {
+                        yield return Picture(local, shown.Head, "snake-on-the-climb");
+                    }
+                }
+            }
+
+            // The Alps' goats.
+            if (Map.CurrentPlace != Place.Alpine)
+            {
+                MapHandler.JumpToSegment(Segment.Alpine);
+                yield return new WaitForSeconds(8f);
+                for (float until = Time.time + 10f; Time.time < until && Goats.All.Count == 0;)
+                {
+                    yield return null;
+                }
+            }
+            List<Goat> goats = Goats.All.Where(g => g != null).ToList();
+            if (goats.Count == 0)
+            {
+                Info("the goats' placement is not checked", $"no goats out ({Map.CurrentPlace}; a map with the Alps, as 80)");
+            }
+            else
+            {
+                List<Goat> high = goats.Where(g => NewMobs.OnTheClimb(g.Home)).ToList();
+                Check("seven in ten of the goats live on the climb itself (the Alps' walls up to their campfire), as whole groups, the rest on the snowfield before it",
+                    Mathf.Abs(Goats.OnClimb - NewMobs.OnClimb(goats.Count)) <= 1 && high.Count == Goats.OnClimb,
+                    $"on the climb {high.Count} of {goats.Count} (put there {Goats.OnClimb}, wanted {NewMobs.OnClimb(goats.Count)}); "
+                    + $"their spots {string.Join(", ", goats.Select(g => $"{g.Home.y:0} m{(NewMobs.OnTheClimb(g.Home) ? " (climb)" : "")}"))}");
+                Goat shown = high.OrderBy(g => g.Home.y).Skip(high.Count / 2).FirstOrDefault();
+                if (shown != null)
+                {
+                    yield return Picture(local, shown.Feet + Vector3.up * 0.6f, "goat-on-the-climb");
+                }
+            }
+
+            // None of them under the map: their spots, nor where they are now.
+            List<string> under = new List<string>();
+            foreach (BeachCrab crab in BeachCrabs().Where(c => NewMobs.UnderTheMap(c.transform.position)))
+            {
+                under.Add($"a crab at {crab.transform.position:F0}");
+            }
+            foreach (Snake snake in Snakes.All.Where(s => s != null && (NewMobs.UnderTheMap(s.Home) || NewMobs.UnderTheMap(s.Head))))
+            {
+                under.Add($"a snake at {snake.Head:F0} (its spot {snake.Home:F0})");
+            }
+            foreach (Goat goat in Goats.All.Where(g => g != null && (NewMobs.UnderTheMap(g.Home) || NewMobs.UnderTheMap(g.Feet))))
+            {
+                under.Add($"a goat at {goat.Feet:F0} (its spot {goat.Home:F0})");
+            }
+            Check("none of the new mobs is under the map, at its spot or where it is now", under.Count == 0,
+                $"{(under.Count == 0 ? "none" : string.Join("; ", under))}; spots found under the map and passed over when they spawned {NewMobs.UnderMapSpots}, "
+                + $"mobs found under the map since and put back {NewMobs.PutBack}");
+        }
+        finally
+        {
+            Protect(false);
+        }
+    }
+
+    /// <summary>The scout taken to a place a few metres from a point, with it in sight, looking at it, and the view pictured.</summary>
+    private IEnumerator Picture(Character local, Vector3 point, string name)
+    {
+        Vector3? see = StandNear(point, 3f, 7f, seeIt: true) ?? StandNear(point, 3f, 11f, seeIt: true, firm: false);
+        if (!see.HasValue)
+        {
+            Info($"no picture of {name}", $"no place to stand 3-11 m from {point:F0} with it in sight");
+            yield break;
+        }
+        local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, see.Value + Vector3.up * 1.2f, false);
+        yield return new WaitForSeconds(1.5f);
+        LookAtPoint(local, point);
+        yield return new WaitForSeconds(0.5f);
+        Screenshot(name);
+        yield return new WaitForSeconds(1f);
+    }
+
     private IEnumerator NewMobsBelow17()
     {
         Character local = Local;

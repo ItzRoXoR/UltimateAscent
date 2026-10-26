@@ -10,12 +10,13 @@ using Zorro.Core;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// Mountain goats in the Alps, at most 12, alone or in pairs, spread from where the Alps begin to the top of their climb;
-/// on every ascent, their ram half as strong below 17 (see <see cref="NewMobs"/>).
+/// Mountain goats in the Alps, at most 12, alone or in pairs, spread from where the Alps begin to the top of their climb,
+/// seven in ten on the climb itself; on every ascent, their ram half as strong below 17 (see <see cref="NewMobs"/>).
 /// <list type="bullet">
-/// <item>They graze, look about and roam the mountainside around their spot, surer on it than the Roots' beetles: they
-/// walk slopes up to 80 degrees and leap from foothold to foothold, up to 3.5 m up, 6 m down and 4.5 m across. They never
-/// leave the Alps: they stop where the Alps' ground ends, and do not go for a scout beyond it.</item>
+/// <item>They graze, look about and roam the mountainside up to 150 m from their spot, surer on it than the Roots'
+/// beetles: they walk slopes up to 80 degrees, up or down, and leap from foothold to foothold, up to 3.5 m up, 6 m down
+/// and 8 m forward (across a gap that wide), so they come down the cliffs they climb, ledge by ledge. They never leave the Alps: they stop where
+/// the Alps' ground ends, and do not go for a scout beyond it.</item>
 /// <item>Once a scout is within 20 m (and in sight) a goat decides whether to charge them, and again every 20 s while one
 /// is: three times in four it goes on grazing; the fourth it bleats, lowers its head, paws the ground for a second and
 /// charges (7 m/s; a sprinting scout makes 5.2), turning after the scout, but running straight on in its last 5 m. Its
@@ -69,7 +70,15 @@ internal static class Goats
     // Roaming.
     internal const float WalkSpeed = 1.3f;
     /// <summary>A goat roams within this distance of its spot (one of a pair keeps near the other).</summary>
-    internal const float RoamRange = 25f;
+    internal const float RoamRange = 150f;
+    /// <summary>
+    /// Where it roams to next: this far off, on ground it can rest on as high above it or as far below it as this (a ledge
+    /// over or under it, the foot of the cliff it stands on).
+    /// </summary>
+    internal const float RoamStepMin = 4f;
+    internal const float RoamStepMax = 15f;
+    internal const float RoamUp = 12f;
+    internal const float RoamDown = 30f;
     /// <summary>
     /// It walks on slopes up to this steep (the Roots' beetles crawl on surfaces up to 70 degrees, but never leap), rests
     /// and grazes on ground up to this steep, lands from a leap on ground up to this steep, and leaps up to these heights
@@ -80,7 +89,8 @@ internal static class Goats
     internal const float LandSlope = 60f;
     internal const float MaxLeapUp = 3.5f;
     internal const float MaxLeapDown = 6f;
-    internal const float MaxLeapAcross = 4.5f;
+    /// <summary>How far forward it leaps (a gap between ledges this wide it clears).</summary>
+    internal const float MaxLeapAcross = 8f;
 
     // Where they live.
     /// <summary>Spots for the goats: ground in the Alps no steeper than this, this far from the campfires, groups this far apart.</summary>
@@ -134,6 +144,8 @@ internal static class Goats
     /// <summary>For the tests: the spots found for the goats when they spawned, and how many places were looked at.</summary>
     internal static int SpotsFound;
     internal static int SpotsTried;
+    /// <summary>For the tests: how many of the goats were put on the climb itself.</summary>
+    internal static int OnClimb;
 
     private static GameObject template;
     private static AudioClip[] bleats;
@@ -166,7 +178,7 @@ internal static class Goats
         }
     }
 
-    /// <summary>The host's spawn of the Alps' goats (none below ascent 17): groups of one or two up to 12, spread along the Alps.</summary>
+    /// <summary>The host's spawn of the Alps' goats (when they live in this climb): groups of one or two up to 12, spread along the Alps.</summary>
     internal static List<PhotonView> Spawn(Transform segment)
     {
         List<PhotonView> spawned = new List<PhotonView>();
@@ -194,7 +206,7 @@ internal static class Goats
         }
         spawned.RemoveAll(v => v == null);
         Plugin.Log.LogInfo($"New mobs: {spawned.Count} mountain goats in {segment.name} ({places.Count(p => p.Length == 1)} alone, {places.Count(p => p.Length == 2)} pairs; "
-            + $"{SpotsFound} spots found in {SpotsTried} places looked at).");
+            + $"{OnClimb} on the climb itself, {spawned.Count - OnClimb} on the way to it; {SpotsFound} spots found in {SpotsTried} places looked at).");
         return spawned;
     }
 
@@ -207,9 +219,9 @@ internal static class Goats
 
     /// <summary>
     /// Where the groups live: open ground in the Alps (no steeper than 30 degrees, room to stand, not in water), away from
-    /// the campfires, found along the way from the Alps' first campfire to their last; each group is put at its share
-    /// of that way (the first near the start, the last near the top), 25 m or more from the others, the second of a pair
-    /// a couple of metres from the first.
+    /// the campfires, found along the way from the Alps' first campfire to their last; seven in ten of the goats on the
+    /// climb itself (the Alps' two walls up to their campfire), the rest on the snowfield before it, each part's groups
+    /// spread along its stretch, 25 m or more from the others, the second of a pair a couple of metres from the first.
     /// </summary>
     private static List<Vector3[]> Places(List<int> groups)
     {
@@ -253,29 +265,38 @@ internal static class Goats
             found.Add((hit.point, share));
         }
         SpotsFound = found.Count;
-        for (int g = 0; g < groups.Count; g++)
+        List<(Vector3 spot, float share)> climb = new List<(Vector3, float)>();
+        List<(Vector3 spot, float share)> way = new List<(Vector3, float)>();
+        foreach ((Vector3 spot, float share) f in found)
         {
-            float wanted = (g + 0.5f) / groups.Count;
-            float band = 0.5f / groups.Count;
-            List<Vector3> taken = places.Select(p => p[0]).ToList();
-            List<(Vector3 spot, float share)> open = found.Where(f => taken.All(t => Flat(t, f.spot) >= GroupsApart)).ToList();
-            List<(Vector3 spot, float share)> inBand = open.Where(f => Mathf.Abs(f.share - wanted) <= band).ToList();
-            List<(Vector3 spot, float share)> pick = inBand.Count > 0 ? inBand : open.OrderBy(f => Mathf.Abs(f.share - wanted)).Take(5).ToList();
-            if (pick.Count == 0)
-            {
-                continue;
-            }
-            Vector3 spot = pick[Random.Range(0, pick.Count)].spot;
-            if (groups[g] == 2 && Beside(spot, out Vector3 second))
-            {
-                places.Add(new[] { spot, second });
-            }
-            else
-            {
-                places.Add(new[] { spot });
-            }
+            (NewMobs.OnTheClimb(f.spot) ? climb : way).Add(f);
         }
+        // The climb's share of the goats on the climb itself, as whole groups (as many as fit), the others on the way to it;
+        // where one part has too little room, its groups go to the other.
+        int onClimb = NewMobs.OnClimb(groups.Sum());
+        List<int> high = new List<int>();
+        List<int> low = new List<int>();
+        foreach (int size in groups)
+        {
+            (high.Sum() + size <= onClimb ? high : low).Add(size);
+        }
+        List<Vector3> taken = new List<Vector3>();
+        List<int> left = Settle(climb, high, taken, places);
+        left = Settle(way, low.Concat(left).ToList(), taken, places);
+        Settle(climb, left, taken, places);
+        OnClimb = places.SelectMany(p => p).Count(NewMobs.OnTheClimb);
         return places;
+    }
+
+    /// <summary>Groups of these sizes put on spots out of those found, spread along their stretch (the second of a pair beside the first); the sizes of those that found no room.</summary>
+    private static List<int> Settle(List<(Vector3 spot, float share)> found, List<int> sizes, List<Vector3> taken, List<Vector3[]> places)
+    {
+        List<Vector3> spots = NewMobs.Spread(found, sizes.Count, GroupsApart, taken);
+        for (int i = 0; i < spots.Count; i++)
+        {
+            places.Add(sizes[i] == 2 && Beside(spots[i], out Vector3 second) ? new[] { spots[i], second } : new[] { spots[i] });
+        }
+        return sizes.Skip(spots.Count).ToList();
     }
 
     /// <summary>Ground about level a little way round a spot (not a pinnacle to fall from).</summary>
@@ -292,14 +313,15 @@ internal static class Goats
         return true;
     }
 
-    /// <summary>A spot for the second of a pair, 1.5-3 m from the first, about as level.</summary>
+    /// <summary>A spot for the second of a pair, 1.5-3 m from the first, about as level, not under the map.</summary>
     private static bool Beside(Vector3 at, out Vector3 second)
     {
         for (int attempt = 0; attempt < 16; attempt++)
         {
             Vector3 probe = at + Quaternion.Euler(0f, Random.Range(0f, 360f), 0f) * Vector3.forward * Random.Range(1.5f, 3f);
             if (Physics.Raycast(probe + Vector3.up * 2f, Vector3.down, out RaycastHit hit, 4f, HelperFunctions.terrainMapMask)
-                && Vector3.Angle(hit.normal, Vector3.up) <= SpotSlope + 10f && Mathf.Abs(hit.point.y - at.y) <= 1f && Goat.RoomAt(hit.point))
+                && Vector3.Angle(hit.normal, Vector3.up) <= SpotSlope + 10f && Mathf.Abs(hit.point.y - at.y) <= 1f && Goat.RoomAt(hit.point)
+                && !NewMobs.UnderTheMap(hit.point))
             {
                 second = hit.point;
                 return true;
@@ -1215,7 +1237,7 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
     private const float Landing = 0.15f;
     private const float LeapGravity = 22f;
     private static readonly float[] LeapAngles = { 0f, -25f, 25f, -50f, 50f, -80f, 80f };
-    private static readonly float[] LeapDistances = { 0.6f, 1.2f, 2f, 3f, 4f, Goats.MaxLeapAcross };
+    private static readonly float[] LeapDistances = { 0.6f, 1.2f, 2f, 3f, 4f, 5f, 6f, 7f, Goats.MaxLeapAcross };
     /// <summary>
     /// Where each leg (front right, front left, back right, back left) is in its stride (as a share of it) as the hind left
     /// one comes down: walking, they come down one after another (hind left, front left, hind right, front right), as
@@ -1227,8 +1249,13 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
     private const float SkidBrake = 12f;
     /// <summary>With no living scout this near, it stands still (nobody would see it).</summary>
     private const float AwakeDistance = 120f;
+    /// <summary>How often the host looks whether it has got under the map (fallen through a gap between the map's pieces).</summary>
+    private const float MapCheckEvery = 2f;
+    private float nextMapCheck;
 
     private static float WalkNormal => Mathf.Cos(Goats.MaxSlope * Mathf.Deg2Rad);
+    /// <summary>Standing on a face as steep as it walks, it keeps its footing over a bump a little steeper (it does not slip off the rock it walked onto).</summary>
+    private static float HoldNormal => Mathf.Cos((Goats.MaxSlope + 5f) * Mathf.Deg2Rad);
     private static float RestNormal => Mathf.Cos(Goats.RestSlope * Mathf.Deg2Rad);
     private static float LandNormal => Mathf.Cos(Goats.LandSlope * Mathf.Deg2Rad);
 
@@ -1238,6 +1265,10 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
     private Goat partner;
 
     private State state = State.Grazing;
+    /// <summary>The last ground it stood on that it could rest on (where it goes back to from a face it cannot get down), and whether it is on its way back there.</summary>
+    private Vector3 lastRest;
+    private bool hasRest;
+    private bool backingUp;
     private float stateSince;
     private float stateUntil;
     private Vector3 feet;
@@ -1320,10 +1351,16 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
     /// <summary>For the tests: what it is doing, where it stands, its spot, its pair (0 alone), its leaps and walking, why it last stopped, how fast it goes.</summary>
     internal string Doing => state.ToString();
     internal Vector3 Feet => feet;
-    internal Vector3 Home => home;
+    internal Vector3 Home
+    {
+        get => home;
+        set => home = value;
+    }
     internal int PairKey => pair;
+    internal bool Follower => follower;
     internal int Leaps { get; private set; }
     internal float HighestLeap { get; private set; }
+    internal float LongestLeap { get; private set; }
     internal float SteepestWalked { get; private set; }
     internal string LastStop { get; private set; } = "";
     internal float Speed => pace;
@@ -1521,6 +1558,17 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
             Drop(now);
             return;
         }
+        if (now >= nextMapCheck)
+        {
+            nextMapCheck = now + MapCheckEvery;
+            if (NewMobs.UnderTheMap(feet) && !NewMobs.UnderTheMap(home))
+            {
+                Plugin.Log.LogWarning($"New mobs: a mountain goat was under the map at {feet:F1}; put back at its spot.");
+                NewMobs.PutBack++;
+                PlaceAt(home, home + Forward);
+                return;
+            }
+        }
         if (!SomeoneWithin(AwakeDistance) && !Puppet)
         {
             speedNow = 0f;
@@ -1702,13 +1750,17 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
 
     private void StartRoam(Vector3 to)
     {
+        backingUp = false;
         roamTo = to;
         bestLeft = Distance3(feet, roamTo);
         bestSince = Time.time;
         Begin(State.Roaming, 25f);
     }
 
-    /// <summary>Somewhere to roam: 4-15 m off on ground it can rest on (up a slope or a ledge as well), within its range of its spot; one of a pair keeps near the other.</summary>
+    /// <summary>
+    /// Somewhere to roam: 4-15 m off on ground it can rest on, up a slope or a ledge, or down one or off the cliff it
+    /// stands on, within its range of its spot (beyond it, on its way back there); one of a pair keeps near the other.
+    /// </summary>
     private bool PickRoam(out Vector3 to)
     {
         if (follower && partner != null)
@@ -1717,14 +1769,15 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
         }
         for (int attempt = 0; attempt < 12; attempt++)
         {
-            Vector3 probe = feet + Quaternion.Euler(0f, Random.Range(0f, 360f), 0f) * Vector3.forward * Random.Range(4f, 15f);
-            Vector3 fromHome = probe - home;
-            fromHome.y = 0f;
-            if (fromHome.magnitude > Goats.RoamRange)
+            Vector3 probe = feet + Quaternion.Euler(0f, Random.Range(0f, 360f), 0f) * Vector3.forward * Random.Range(Goats.RoamStepMin, Goats.RoamStepMax);
+            Vector3 homeward = home - feet;
+            homeward.y = 0f;
+            if (Goats.Flat(probe, home) > Goats.RoamRange && homeward.sqrMagnitude > 0.01f)
             {
-                probe = new Vector3(home.x, probe.y, home.z) + fromHome.normalized * Random.Range(0f, Goats.RoamRange);
+                // Beyond its range (thrown or fallen there): a step back towards its spot, give or take.
+                probe = feet + Quaternion.Euler(0f, Random.Range(-45f, 45f), 0f) * homeward.normalized * Random.Range(Goats.RoamStepMin, Goats.RoamStepMax);
             }
-            if (RestingAt(probe, 12f, out to) && !ScoutNear(to, 2.5f))
+            if (RestingAt(probe, Goats.RoamUp, Goats.RoamDown, out to) && !ScoutNear(to, 2.5f))
             {
                 return true;
             }
@@ -1732,13 +1785,16 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
         to = feet;
         return false;
     }
+
+    /// <summary>For the tests: where it would roam to next (as it picks, nothing done).</summary>
+    internal bool TryPickRoam(out Vector3 to) => PickRoam(out to);
 
     private bool PickNear(Vector3 centre, float min, float max, out Vector3 to)
     {
         for (int attempt = 0; attempt < 10; attempt++)
         {
             Vector3 probe = centre + Quaternion.Euler(0f, Random.Range(0f, 360f), 0f) * Vector3.forward * Random.Range(min, max);
-            if (RestingAt(probe, 3f, out to) && !ScoutNear(to, 2f))
+            if (RestingAt(probe, 3f, 15f, out to) && !ScoutNear(to, 2f))
             {
                 return true;
             }
@@ -1747,17 +1803,46 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
         return false;
     }
 
-    /// <summary>Ground it could rest on below a point (looked for from a little above it): the Alps', not too steep, room for its body.</summary>
-    private static bool RestingAt(Vector3 probe, float above, out Vector3 at)
+    /// <summary>
+    /// Ground it could rest on along the line straight down through a point, from this far above it to this far below:
+    /// the Alps', not too steep, room for its body, not under the map. Every such ground on the line counts (a ledge under another, the foot
+    /// of a cliff below its top) and one is taken at random: the first from above alone would always send it up.
+    /// </summary>
+    private static bool RestingAt(Vector3 probe, float above, float below, out Vector3 at)
     {
         at = probe;
-        if (!Physics.Raycast(probe + Vector3.up * above, Vector3.down, out RaycastHit hit, above + 15f, HelperFunctions.terrainMapMask) || hit.normal.y < RestNormal
-            || Foreign(hit.collider) || !RoomAt(hit.point))
+        List<Vector3> rests = new List<Vector3>();
+        foreach (RaycastHit hit in Surfaces(probe + Vector3.up * above, above + below))
+        {
+            if (hit.normal.y >= RestNormal && !Foreign(hit.collider) && RoomAt(hit.point) && !NewMobs.UnderTheMap(hit.point))
+            {
+                rests.Add(hit.point);
+            }
+        }
+        if (rests.Count == 0)
         {
             return false;
         }
-        at = hit.point;
+        at = rests[Random.Range(0, rests.Count)];
         return true;
+    }
+
+    /// <summary>
+    /// The ground a line straight down meets, from the top: each surface's upper side, on through the rock to whatever
+    /// lies under it (a ledge, then the ledge below, then the foot of the cliff), at most this many.
+    /// </summary>
+    private static List<RaycastHit> Surfaces(Vector3 from, float length, int most = 8)
+    {
+        List<RaycastHit> hits = new List<RaycastHit>();
+        Vector3 at = from;
+        float left = length;
+        while (hits.Count < most && left > 0f && Physics.Raycast(at, Vector3.down, out RaycastHit hit, left, HelperFunctions.terrainMapMask))
+        {
+            hits.Add(hit);
+            left -= at.y - hit.point.y + 0.05f;
+            at = hit.point + Vector3.down * 0.05f;
+        }
+        return hits;
     }
 
     /// <summary>Room for a goat standing here: nothing solid where its body and head go.</summary>
@@ -1776,6 +1861,7 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
         float left = Distance3(feet, roamTo);
         if (Goats.Flat(feet, roamTo) < 0.4f && Mathf.Abs(feet.y - roamTo.y) < 1f || now >= stateUntil)
         {
+            backingUp = false;
             Begin(State.Grazing, Random.Range(6f, 15f));
             return;
         }
@@ -1787,7 +1873,7 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
         else if (now - bestSince > 3f)
         {
             LastStop = "no way on";
-            Begin(State.Standing, Random.Range(1f, 2.5f));
+            GiveUpRoam();
             return;
         }
         if (ScoutNear(feet + Forward * 0.9f, 0.9f))
@@ -1805,8 +1891,30 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
             StartLeap(landing, State.Roaming);
             return;
         }
+        GiveUpRoam();
+    }
+
+    /// <summary>
+    /// No way on: part way down a face too steep to rest on (it cannot leap down from there), it goes back up to the last
+    /// ground it could rest on, rather than wait there and lose its footing; anywhere else it stops and looks about.
+    /// </summary>
+    private void GiveUpRoam()
+    {
+        if (!backingUp && groundUp.y < RestNormal && hasRest && Distance3(feet, lastRest) > 0.5f)
+        {
+            Vector3 back = lastRest;
+            StartRoam(back);
+            backingUp = true;
+            LastStop += "; back up to firm ground";
+            BackedUp++;
+            return;
+        }
+        backingUp = false;
         Begin(State.Standing, Random.Range(1f, 2.5f));
     }
+
+    /// <summary>For the tests: how often it went back up a face it could not get down.</summary>
+    internal int BackedUp { get; private set; }
 
     /// <summary>Distance with height counting a little less (a goat on the ledge right above is nearly there).</summary>
     private static float Distance3(Vector3 a, Vector3 b)
@@ -1825,6 +1933,16 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
         {
             speedNow = 0f;
             return true;
+        }
+        if (!charging && flat.sqrMagnitude < 0.16f && towards.y < feet.y - StepHeight && groundUp.y < RestNormal)
+        {
+            // Coming down a steep face, right over where it is going: on down the face.
+            Vector3 down = Vector3.ProjectOnPlane(Vector3.down, groundUp);
+            down.y = 0f;
+            if (down.sqrMagnitude > 1e-6f)
+            {
+                flat = down.normalized;
+            }
         }
         if (!charging && flat.sqrMagnitude < 0.16f && Mathf.Abs(towards.y - feet.y) > StepHeight)
         {
@@ -1858,7 +1976,18 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
         }
         feet = ground.point;
         groundUp = ground.normal;
+        NoteFooting();
         return true;
+    }
+
+    /// <summary>On ground it can rest on: remembered, to go back to from a face it cannot get down.</summary>
+    private void NoteFooting()
+    {
+        if (groundUp.y >= RestNormal)
+        {
+            lastRest = feet;
+            hasRest = true;
+        }
     }
 
     /// <summary>
@@ -1965,24 +2094,30 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
         return true;
     }
 
-    /// <summary>Kept on the ground under it, ground it can walk (with none, or only a face too steep for it, it falls).</summary>
+    /// <summary>Kept on the ground under it, ground it can walk (a bump a little steeper too; with none, or only a face too steep for it, it falls).</summary>
     private void StayOnGround()
     {
-        if ((Physics.Raycast(feet + groundUp * 0.4f, -groundUp, out RaycastHit hit, 0.9f, HelperFunctions.terrainMapMask) && hit.normal.y >= WalkNormal)
-            || (Physics.Raycast(feet + Vector3.up * 0.5f, Vector3.down, out hit, 1.2f, HelperFunctions.terrainMapMask) && hit.normal.y >= WalkNormal))
+        if ((Physics.Raycast(feet + groundUp * 0.4f, -groundUp, out RaycastHit hit, 0.9f, HelperFunctions.terrainMapMask) && hit.normal.y >= HoldNormal)
+            || (Physics.Raycast(feet + Vector3.up * 0.5f, Vector3.down, out hit, 1.2f, HelperFunctions.terrainMapMask) && hit.normal.y >= HoldNormal))
         {
             feet = hit.point;
             groundUp = hit.normal;
+            NoteFooting();
             return;
         }
+        Falls++;
         fallSpeed = 0f;
         Begin(State.Falling, 0f);
     }
 
+    /// <summary>For the tests: how often it lost its footing and fell.</summary>
+    internal int Falls { get; private set; }
+
     /// <summary>
-    /// A foothold to leap to, nearer where it is going: there itself, ahead and to the sides, 0.6-4.5 m off, up to 3.5 m
-    /// higher or 6 m lower, ground it can stand on with room for it, and nothing in the way of the leap; the nearest its
-    /// goal (smaller leaps first among equals).
+    /// A foothold to leap to, nearer where it is going: there itself, ahead and to the sides, 0.6-8 m off, up to 3.5 m
+    /// higher or 6 m lower (any ground along each line down, a ledge below the one in front of it as well), ground it can
+    /// stand on with room for it, not under the map, and nothing in the way of the leap; the nearest its goal (smaller
+    /// leaps first among equals).
     /// </summary>
     private bool FindLeap(Vector3 goal, out Vector3 landing)
     {
@@ -1992,7 +2127,7 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
         float now = Distance3(feet, goal);
         Vector3 ahead = toGoal.sqrMagnitude > 0.01f ? toGoal.normalized : Forward;
         float best = float.MaxValue;
-        int tried = 0, noGround = 0, outOfReach = 0, tooSteep = 0, otherBiome = 0, noRoom = 0, scout = 0, noNearer = 0, inTheWay = 0;
+        int tried = 0, noGround = 0, outOfReach = 0, tooSteep = 0, otherBiome = 0, noRoom = 0, scout = 0, noNearer = 0, underMap = 0, inTheWay = 0;
         List<Vector3> probes = new List<Vector3>();
         if (toGoal.magnitude <= Goats.MaxLeapAcross)
         {
@@ -2007,62 +2142,71 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
         }
         foreach (Vector3 probe in probes)
         {
-            tried++;
-            if (!Physics.Raycast(new Vector3(probe.x, feet.y + Goats.MaxLeapUp + 0.5f, probe.z), Vector3.down, out RaycastHit hit, Goats.MaxLeapUp + 0.5f + Goats.MaxLeapDown, HelperFunctions.terrainMapMask))
+            List<RaycastHit> footholds = Surfaces(new Vector3(probe.x, feet.y + Goats.MaxLeapUp + 0.5f, probe.z), Goats.MaxLeapUp + 0.5f + Goats.MaxLeapDown, 4);
+            if (footholds.Count == 0)
             {
+                tried++;
                 noGround++;
-                continue;
             }
-            float rise = hit.point.y - feet.y;
-            float across = Goats.Flat(feet, hit.point);
-            if (rise > Goats.MaxLeapUp || rise < -Goats.MaxLeapDown || across < 0.3f)
+            foreach (RaycastHit hit in footholds)
             {
-                outOfReach++;
-                continue;
+                tried++;
+                float rise = hit.point.y - feet.y;
+                float across = Goats.Flat(feet, hit.point);
+                if (rise > Goats.MaxLeapUp || rise < -Goats.MaxLeapDown || across < 0.3f)
+                {
+                    outOfReach++;
+                    continue;
+                }
+                if (hit.normal.y < LandNormal)
+                {
+                    tooSteep++;
+                    continue;
+                }
+                if (LeavesAlps(hit.collider, hit.point))
+                {
+                    otherBiome++;
+                    continue;
+                }
+                if (!RoomAt(hit.point))
+                {
+                    noRoom++;
+                    continue;
+                }
+                if (ScoutNear(hit.point, 1.2f))
+                {
+                    scout++;
+                    continue;
+                }
+                float left = Distance3(hit.point, goal);
+                if (left >= now - 0.5f)
+                {
+                    noNearer++;
+                    continue;
+                }
+                float turned = Vector3.Angle(ahead, Vector3.ProjectOnPlane(hit.point - feet, Vector3.up));
+                float score = left + Mathf.Abs(rise) * 0.15f + across * 0.1f + turned * 0.01f;
+                if (score >= best)
+                {
+                    continue;
+                }
+                if (NewMobs.UnderTheMap(hit.point))
+                {
+                    underMap++;
+                    continue;
+                }
+                if (!ArcClear(feet, hit.point))
+                {
+                    inTheWay++;
+                    continue;
+                }
+                best = score;
+                landing = hit.point;
             }
-            if (hit.normal.y < LandNormal)
-            {
-                tooSteep++;
-                continue;
-            }
-            if (LeavesAlps(hit.collider, hit.point))
-            {
-                otherBiome++;
-                continue;
-            }
-            if (!RoomAt(hit.point))
-            {
-                noRoom++;
-                continue;
-            }
-            if (ScoutNear(hit.point, 1.2f))
-            {
-                scout++;
-                continue;
-            }
-            float left = Distance3(hit.point, goal);
-            if (left >= now - 0.5f)
-            {
-                noNearer++;
-                continue;
-            }
-            float turned = Vector3.Angle(ahead, Vector3.ProjectOnPlane(hit.point - feet, Vector3.up));
-            float score = left + Mathf.Abs(rise) * 0.15f + across * 0.1f + turned * 0.01f;
-            if (score >= best)
-            {
-                continue;
-            }
-            if (!ArcClear(feet, hit.point))
-            {
-                inTheWay++;
-                continue;
-            }
-            best = score;
-            landing = hit.point;
         }
         LeapReport = $"from {feet:F1} towards {goal:F1} ({now:0.0} m): {tried} footholds tried; no ground {noGround}, out of reach {outOfReach}, too steep {tooSteep}, "
             + $"another biome's {otherBiome}, no room {noRoom}, "
-            + $"a scout there {scout}, no nearer {noNearer}, something in the way {inTheWay}; {(best < float.MaxValue ? $"leaps to {landing:F1}" : "no leap")}";
+            + $"a scout there {scout}, no nearer {noNearer}, under the map {underMap}, something in the way {inTheWay}; {(best < float.MaxValue ? $"leaps to {landing:F1}" : "no leap")}";
         return best < float.MaxValue;
     }
 
@@ -2123,6 +2267,7 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
         afterLeap = then;
         Leaps++;
         HighestLeap = Mathf.Max(HighestLeap, to.y - feet.y);
+        LongestLeap = Mathf.Max(LongestLeap, Goats.Flat(feet, to));
         Arc(feet, to, out float peak, out float seconds);
         Begin(State.Leaping, Crouch + seconds + Landing);
         photonView.RPC(nameof(RPC_Leap), RpcTarget.All, feet, to, peak, seconds);
@@ -2166,6 +2311,7 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
             leaping = false;
             feet = leapTo;
             groundUp = Vector3.up;
+            NoteFooting();
             Begin(afterLeap, afterLeap == State.Roaming ? 25f : Random.Range(1f, 2.5f));
             if (afterLeap == State.Roaming)
             {
@@ -2372,6 +2518,9 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
         home = at;
         netFeet = at;
         groundUp = Vector3.up;
+        lastRest = at;
+        hasRest = true;
+        backingUp = false;
         Vector3 flat = towards - at;
         flat.y = 0f;
         if (flat.sqrMagnitude > 0.01f)

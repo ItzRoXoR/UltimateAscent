@@ -10,8 +10,8 @@ using Zorro.Core;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// Snakes in the Tropics, as many as the map has scorpions, a third of them in the giant trees; on every ascent, below 17
-/// half as strong and a third slower to chase (see <see cref="NewMobs"/>).
+/// Snakes in the Tropics: 21 on the ground, seven in ten of them on the climb itself, and a third as many (7) in the
+/// giant trees; on every ascent, below 17 half as strong and a third slower to chase (see <see cref="NewMobs"/>).
 /// <list type="bullet">
 /// <item>Ground snakes (about 1.4 m long, 11 cm thick) never sleep: they slither around, and once they see a scout (as near as a
 /// scorpion notices one) they chase them. A bite: 10 injury, then 40 poison over 10 s.</item>
@@ -93,11 +93,28 @@ internal static class Snakes
 
     /// <summary>How fast a snake chases now (a third slower below ascent 17).</summary>
     internal static float ChaseSpeed(bool tree) => (tree ? TreeChaseSpeed : GroundChaseSpeed) * NewMobs.SnakeChase;
-    internal const float WanderRange = 20f;
+    /// <summary>Calm, a snake wanders within this distance of its spot.</summary>
+    internal const float WanderRange = 40f;
     internal const float FallbackSight = 8f;
 
-    /// <summary>Snakes when the map's scorpions cannot be counted.</summary>
-    internal const int FallbackCount = 9;
+    /// <summary>The ground snakes, and the tree snakes: a third as many (a tree snake with no tree to live in lives on the ground).</summary>
+    internal const int GroundCount = 21;
+    internal const int TreeCount = GroundCount / 3;
+
+    // Where the ground snakes live: the Tropics' ground (no steeper than 30 degrees, about level round it, not in water,
+    // not up a tree: nothing of a giant tree, at most 2 m above the map's own ground or wall) along the way from their
+    // first campfire to their last, 15 m or more from both, 4 m or more apart.
+    private const int SpotTries = 3000;
+    private const float OffTheGround = 2f;
+    private const float SpotSpread = 70f;
+    private const float SpotSlope = 30f;
+    private const float AwayFromCampfires = 15f;
+    private const float SnakesApart = 4f;
+
+    /// <summary>For the tests: the ground snakes' spots found when they spawned, how many places were looked at, how many were put on the climb itself.</summary>
+    internal static int SpotsFound;
+    internal static int SpotsTried;
+    internal static int OnClimb;
 
     /// <summary>A stone hits a snake when it flies at least this fast (the game's own bonk speed).</summary>
     internal const float StoneHitSpeed = 10f;
@@ -250,7 +267,7 @@ internal static class Snakes
         }
     }
 
-    /// <summary>The host's spawn of the Tropics' snakes (none below ascent 17).</summary>
+    /// <summary>The host's spawn of the Tropics' snakes (when they live in this climb).</summary>
     internal static List<PhotonView> Spawn(Transform segment)
     {
         List<PhotonView> spawned = new List<PhotonView>();
@@ -259,34 +276,94 @@ internal static class Snakes
             return spawned;
         }
         Physics.SyncTransforms();
-        int total = ScorpionCount();
-        int inTrees = total / 3;
+        int inTrees = TreeCount;
         List<TreeHome> branches = TreeHomes(segment, inTrees);
         if (branches.Count < inTrees)
         {
             Plugin.Debug($"Snakes: {branches.Count} of {inTrees} tree snakes found a way up the giant trees; the rest live on the ground.");
         }
-        int grounded = total - branches.Count;
+        int grounded = GroundCount + inTrees - branches.Count;
         foreach (TreeHome tree in branches)
         {
             spawned.Add(Make(Kind.Tree, tree.spot, tree.way, tree.facesOut));
         }
         ClimbingWays = branches.Count(b => b.way != null);
-        List<Vector3> anchors = GroundItems.Anchors(segment);
-        WaterZone[] water = Object.FindObjectsByType<WaterZone>(FindObjectsSortMode.None);
-        List<Vector3> taken = new List<Vector3>();
-        for (int attempt = 0; attempt < grounded * 20 && taken.Count < grounded && anchors.Count > 0; attempt++)
+        List<Vector3> grounds = GroundSpots(segment, grounded);
+        foreach (Vector3 spot in grounds)
         {
-            if (GroundItems.TryFindSpot(anchors, taken, water, out RaycastHit ground) && !Map.IsOtherBiome(ground.collider, Biome.BiomeType.Tropics))
-            {
-                taken.Add(ground.point);
-                spawned.Add(Make(Kind.Ground, ground.point));
-            }
+            spawned.Add(Make(Kind.Ground, spot));
         }
         spawned.RemoveAll(v => v == null);
         Spawned += spawned.Count;
-        Plugin.Log.LogInfo($"New mobs: {spawned.Count} snakes in {segment.name} ({branches.Count} in trees, {taken.Count} on the ground; the map's scorpions: {total}).");
+        Plugin.Log.LogInfo($"New mobs: {spawned.Count} snakes in {segment.name} ({branches.Count} in trees, {grounds.Count} on the ground: {OnClimb} on the climb itself, "
+            + $"{grounds.Count - OnClimb} on the way to it; {SpotsFound} spots found in {SpotsTried} places looked at).");
         return spawned;
+    }
+
+    /// <summary>
+    /// The ground snakes' spots: the Tropics' own ground (no steeper than 30 degrees, about level round it, not in water,
+    /// never on a giant tree, its crown or anything else up off the ground) found along the way from their first campfire
+    /// to their last; seven in ten on the climb itself
+    /// (the Tropics' wall up to their campfire), the rest on the jungle floor before it, each spread along its stretch,
+    /// 4 m or more apart (see <see cref="NewMobs.Place"/>).
+    /// </summary>
+    private static List<Vector3> GroundSpots(Transform segment, int count)
+    {
+        MapHandler map = Singleton<MapHandler>.Instance;
+        GameObject first = map.segments[(int)Segment.Tropics - 1].segmentCampfire;
+        GameObject last = map.segments[(int)Segment.Tropics].segmentCampfire;
+        OnClimb = SpotsFound = SpotsTried = 0;
+        if (first == null || last == null)
+        {
+            Plugin.Log.LogWarning("Snakes: the Tropics' campfires were not found; no ground snakes.");
+            return new List<Vector3>();
+        }
+        Vector3 a = first.transform.position;
+        Vector3 b = last.transform.position;
+        Vector3 along = b - a;
+        along.y = 0f;
+        float length = along.magnitude;
+        if (length < 1f)
+        {
+            return new List<Vector3>();
+        }
+        along /= length;
+        Vector3 across = Vector3.Cross(Vector3.up, along);
+        float top = Mathf.Max(a.y, b.y) + 200f;
+        float depth = top - Mathf.Min(a.y, b.y) + 150f;
+        WaterZone[] water = Object.FindObjectsByType<WaterZone>(FindObjectsSortMode.None);
+        List<(Vector3 spot, float share)> found = new List<(Vector3, float)>();
+        SpotsTried = SpotTries;
+        for (int i = 0; i < SpotTries; i++)
+        {
+            float share = Random.value;
+            Vector3 probe = a + along * (share * length) + across * Random.Range(-SpotSpread, SpotSpread);
+            if (!Physics.Raycast(new Vector3(probe.x, top, probe.z), Vector3.down, out RaycastHit hit, depth, HelperFunctions.terrainMapMask)
+                || Vector3.Angle(hit.normal, Vector3.up) > SpotSlope || InGiantTree(hit.collider) || NewMobs.AboveTerrain(hit.point) > OffTheGround
+                || !Map.TryGetBiome(hit.collider, out Biome.BiomeType biome) || biome != Biome.BiomeType.Tropics
+                || Goats.Flat(hit.point, a) < AwayFromCampfires || Goats.Flat(hit.point, b) < AwayFromCampfires
+                || !LevelAround(hit.point) || GroundItems.InWater(hit.point, water))
+            {
+                continue;
+            }
+            found.Add((hit.point, share));
+        }
+        SpotsFound = found.Count;
+        return NewMobs.Place(found, count, SnakesApart, out OnClimb);
+    }
+
+    /// <summary>Ground about level a little way round a spot (not a ledge's edge or a branch).</summary>
+    private static bool LevelAround(Vector3 at)
+    {
+        for (int angle = 0; angle < 360; angle += 90)
+        {
+            Vector3 round = at + Quaternion.Euler(0f, angle, 0f) * Vector3.forward * 0.6f;
+            if (!Physics.Raycast(round + Vector3.up * 1f, Vector3.down, out RaycastHit floor, 2f, HelperFunctions.terrainMapMask) || Mathf.Abs(floor.point.y - at.y) > 0.4f)
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static PhotonView Make(Kind kind, Vector3 at, Vector3[] way = null, Vector3[] facesOut = null)
@@ -299,22 +376,21 @@ internal static class Snakes
         return made != null ? made.GetComponent<PhotonView>() : null;
     }
 
-    /// <summary>The map's scorpions: every spot of every spawner that makes them (all parts of the map).</summary>
-    internal static int ScorpionCount()
-    {
-        int count = 0;
-        foreach (Spawner spawner in Object.FindObjectsByType<Spawner>(FindObjectsInactive.Include, FindObjectsSortMode.None))
-        {
-            if (spawner != null && spawner.spawnedObjectPrefab != null && spawner.spawnedObjectPrefab.GetComponent<Scorpion>() != null)
-            {
-                count += spawner.spawnSpots != null && spawner.spawnSpots.Count > 0 ? spawner.spawnSpots.Count : 1;
-            }
-        }
-        return count > 0 ? count : FallbackCount;
-    }
-
     /// <summary>The Tropics' giant trees are the game's "Jungle_GiantTree" objects (90-110 m tall, crowns of leaf clumps).</summary>
     private const string GiantTreeName = "GiantTree";
+
+    /// <summary>Part of a giant tree: its trunk, its branches or a clump of its crown (anything under a "...GiantTree..." object).</summary>
+    internal static bool InGiantTree(Collider collider)
+    {
+        for (Transform part = collider != null ? collider.transform : null; part != null; part = part.parent)
+        {
+            if (part.name.IndexOf(GiantTreeName, System.StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
 
     /// <summary>The giant trees of this part of the map, each as its solid parts (trunk, branches, the clumps of its crown).</summary>
     private static List<Collider[]> GiantTrees(Transform segment)
@@ -399,7 +475,8 @@ internal static class Snakes
             foreach ((RaycastHit bark, Vector3 foot) in starts.OrderBy(s => s.Item2.y).Take(10))
             {
                 if (Climb(bark, foot, Random.value < 0.5f ? -1f : 1f, out TreeHome home)
-                    && homes.All(h => (h.spot - home.spot).sqrMagnitude > 64f))
+                    && homes.All(h => (h.spot - home.spot).sqrMagnitude > 64f)
+                    && !NewMobs.UnderTheMap(foot) && !NewMobs.UnderTheMap(home.spot))
                 {
                     homes.Add(home);
                     break;
@@ -446,7 +523,8 @@ internal static class Snakes
                     || !parts.Contains(hit.collider) || hit.normal.y < 0.7f || hit.point.y < bounds.min.y + 6f
                     || Physics.CheckSphere(hit.point + Vector3.up * 0.8f, 0.5f, HelperFunctions.terrainMapMask)
                     || !RoomToCoil(hit.point + Vector3.up * TreeSnakeRadius)
-                    || spots.Concat(taken).Any(s => (s - hit.point).sqrMagnitude < 64f))
+                    || spots.Concat(taken).Any(s => (s - hit.point).sqrMagnitude < 64f)
+                    || NewMobs.UnderTheMap(hit.point))
                 {
                     continue;
                 }
@@ -1625,6 +1703,18 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
             Settle();
             return;
         }
+        if (now >= nextMapCheck)
+        {
+            // Under the map (fallen through a gap between the map's pieces): back at its spot.
+            nextMapCheck = now + 2f;
+            if (NewMobs.UnderTheMap(head) && !NewMobs.UnderTheMap(home))
+            {
+                Plugin.Log.LogWarning($"New mobs: a snake was under the map at {head:F1}; put back at its spot.");
+                NewMobs.PutBack++;
+                PlaceAt(home, home + facing);
+                return;
+            }
+        }
         Character nearest = Nearest(out float distance);
         if (state != State.Lunging && !SomeoneWithin(120f))
         {
@@ -2265,6 +2355,9 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
     }
 
     private float chaseStart;
+
+    /// <summary>When the host next looks whether it has got under the map.</summary>
+    private float nextMapCheck;
 
     /// <summary>A scout it can go for: awake and about (as the game's mobs choose), and not in the middle of a warp (nothing reaches them then).</summary>
     private bool Hunts(Character scout)

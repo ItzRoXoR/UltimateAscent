@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.6.1
+
+* Snakes: 21 ground snakes and 7 tree snakes (a third as many) in the Tropics, whatever the map. Before, their number
+  came from the map's scorpion spawners, which hold none (the Mesa's scorpions are laid out in the map), so every map
+  had 9 (3 in trees). Ground snakes live on the ground only: never on a giant tree, its crown or anything else more
+  than 2 m up off the ground; they wander within 40 m of their spot (was 20 m).
+* The new mobs live mostly on the climb itself: seven in ten of the crabs, the ground snakes and the goats are on the
+  cliffs up to the campfire, the rest on the way to it (the beach's sand, the jungle floor, the Alps' snowfield). The
+  tree snakes still live in the giant trees.
+* Mountain goats roam up to 150 m from their spot (was 25 m) and come down cliffs as well as climb them: where to go
+  next is picked on every ledge along the way down, not only the highest, and so are the footholds they leap to. They
+  leap up to 8 m forward (was 4.5 m), across gaps between ledges. Part way down a face too steep to rest on with no
+  way on, a goat goes back up to firm ground instead of losing its footing and falling.
+* Ascent 15: the Energy Drink's boost lasts 6 s, cooked 8 s, counted from the moment you drink it (the game: 8 s,
+  cooked 12 s, its clock held for the first 3 s unless you climb).
+* The new mobs never live under the map: a spot under its surface (a ray looking for ground can fall through a gap
+  between the map's pieces) is passed over when they spawn, goats never roam or leap to one, and a crab, snake or goat
+  that gets under the map anyway is put back at its spot.
+* Shelter from wind storms covers items too: an item lying on the ground (a backpack, food, anything) is pushed only as
+  hard as a scout would be where it lies; the game blew every one away at full strength, sheltered or not.
+
 ## 1.6.0
 
 * Ascents 14 and 15 swapped: ascent 14 is now **Ailments apply more** (cold and drowsiness ×1.3, heat ×1.5, spores

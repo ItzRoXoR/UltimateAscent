@@ -12,7 +12,8 @@ namespace UltimateAscent.Features;
 
 /// <summary>
 /// Small red crabs on the beach, about a scorpion's size, 25 of them spread along it from where the scouts wake to its
-/// campfire (none come back once taken); on every ascent, their pinch half as strong below 17 (see <see cref="NewMobs"/>).
+/// campfire, seven in ten on the climb itself (none come back once taken); on every ascent, their pinch half as strong
+/// below 17 (see <see cref="NewMobs"/>).
 /// <list type="bullet">
 /// <item>They crawl around the beach (never off it), scuttling sideways. A scout who comes within 2 m is chased (one of
 /// them at random, if more are that near) for at least 6 s, and after that for as long as they stay within 2 m. A
@@ -57,7 +58,7 @@ internal static class Crabs
     internal const float RawHunger = 0.05f;
 
     // Where they live: the beach's own ground (no steeper than 35 degrees, not in water), along the way from where the
-    // scouts wake to the beach's campfire, a crab at each 25th of it, 5 m or more apart.
+    // scouts wake to the beach's campfire, seven in ten on the climb itself, 5 m or more apart.
     private const int SpotTries = 3000;
     private const float SpotSpread = 50f;
     private const float SpotSlope = 35f;
@@ -96,6 +97,8 @@ internal static class Crabs
     internal static int Flashes;
     internal static int SpotsFound;
     internal static int SpotsTried;
+    /// <summary>For the tests: how many of the crabs were put on the climb itself (the beach's wall).</summary>
+    internal static int OnClimb;
 
     private static AudioClip[] pinches;
     private static AudioClip[] clicks;
@@ -326,7 +329,7 @@ internal static class Crabs
         }
     }
 
-    /// <summary>The host's spawn of the beach's crabs (none below ascent 17), spread along the beach.</summary>
+    /// <summary>The host's spawn of the beach's crabs (when they live in this climb), spread along the beach and its climb.</summary>
     internal static List<PhotonView> Spawn(Transform segment)
     {
         List<PhotonView> spawned = new List<PhotonView>();
@@ -345,7 +348,7 @@ internal static class Crabs
             }
         }
         Spawned += spawned.Count;
-        Plugin.Log.LogInfo($"New mobs: {spawned.Count} crabs on the beach ({SpotsFound} spots found in {SpotsTried} places looked at).");
+        Plugin.Log.LogInfo($"New mobs: {spawned.Count} crabs on the beach ({OnClimb} on the climb itself, {spawned.Count - OnClimb} on the way to it; {SpotsFound} spots found in {SpotsTried} places looked at).");
         return spawned;
     }
 
@@ -377,7 +380,9 @@ internal static class Crabs
 
     /// <summary>
     /// The crabs' spots: the beach's own ground (no steeper than 35 degrees, about level round it, not in water) found
-    /// along its way from where the scouts wake to its campfire; a crab at each 25th of that way, 5 m or more apart.
+    /// along its way from where the scouts wake to its campfire; seven in ten of the crabs on the climb itself (the
+    /// beach's wall up to the campfire), the rest on the sand before it, each spread along its stretch, 5 m or more apart
+    /// (see <see cref="NewMobs.Place"/>).
     /// </summary>
     private static List<Vector3> Places()
     {
@@ -415,19 +420,7 @@ internal static class Crabs
             found.Add((hit.point, Share(hit.point, a, b)));
         }
         SpotsFound = found.Count;
-        for (int c = 0; c < MaxCrabs; c++)
-        {
-            float wanted = (c + 0.5f) / MaxCrabs;
-            float band = 0.5f / MaxCrabs;
-            List<(Vector3 spot, float share)> open = found.Where(f => places.All(t => Goats.Flat(t, f.spot) >= CrabsApart)).ToList();
-            List<(Vector3 spot, float share)> inBand = open.Where(f => Mathf.Abs(f.share - wanted) <= band).ToList();
-            List<(Vector3 spot, float share)> pick = inBand.Count > 0 ? inBand : open.OrderBy(f => Mathf.Abs(f.share - wanted)).Take(5).ToList();
-            if (pick.Count > 0)
-            {
-                places.Add(pick[Random.Range(0, pick.Count)].spot);
-            }
-        }
-        return places;
+        return NewMobs.Place(found, MaxCrabs, CrabsApart, out OnClimb);
     }
 
     /// <summary>Ground about level a little way round a spot (not a ledge's edge).</summary>
@@ -586,8 +579,31 @@ internal sealed class BeachCrab : Mob
     /// <summary>Resting at a spot it crawled to (for the tests too).</summary>
     internal bool Resting { get; private set; }
 
+    /// <summary>When the game that runs it next looks whether it has got under the map.</summary>
+    private float nextMapCheck;
+
+    /// <summary>Under the map (fallen through a gap between the map's pieces), on the game that runs it: back at its spot.</summary>
+    private void PutBackIfUnderMap()
+    {
+        if (!photonView.IsMine || (_mobItem != null && _mobItem.itemState != ItemState.Ground)
+            || !NewMobs.UnderTheMap(transform.position) || NewMobs.UnderTheMap(startPos))
+        {
+            return;
+        }
+        Plugin.Log.LogWarning($"New mobs: a crab was under the map at {transform.position:F1}; put back at its spot.");
+        NewMobs.PutBack++;
+        rig.linearVelocity = Vector3.zero;
+        rig.position = startPos + Vector3.up * 0.1f;
+        transform.position = rig.position;
+    }
+
     public override void Update()
     {
+        if (Time.time >= nextMapCheck)
+        {
+            nextMapCheck = Time.time + 2f;
+            PutBackIfUnderMap();
+        }
         // Crawling about, a crab that has got to its spot rests there a moment, then crawls on to another (the scorpion's
         // walk keeps its full speed there and circles the spot until it is time for a new one).
         bool wandering = targetChar == null && !forceNoMovement && !sleeping && mobState == MobState.Walking;

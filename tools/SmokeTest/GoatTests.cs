@@ -87,7 +87,8 @@ internal sealed partial class Runner
             goats.Count > 0 && goats.Count <= Goats.MaxGoats && together && inAlps && shares.First() < 0.35f && shares.Last() > 0.65f,
             $"{goats.Count} goats: {alone} alone, {pairs.Count} pairs (each pair's spots within 4 m: {together}); all on the Alps' ground: {inAlps}; "
             + $"along the way from the Alps' first campfire to their last (0 to 1): {string.Join(", ", shares.Select(s => s.ToString("0.00")))}; spots found {Goats.SpotsFound} of {Goats.SpotsTried} looked at");
-        Info("the goats", string.Join("; ", goats.Select(g => $"{g.Doing} at {g.Feet:F0}, {Share(g.Home):0.00} of the way, {g.Home.y - first.y:0} m above the first campfire{(g.PairKey > 0 ? $", pair {g.PairKey}" : "")}")));
+        Info("the goats", string.Join("; ", goats.Select(g => $"{g.Doing} at {g.Feet:F0}, {Share(g.Home):0.00} of the way, {g.Home.y - first.y:0} m above the first campfire{(g.PairKey > 0 ? $", pair {g.PairKey}" : "")}"
+            + (NewMobs.OnTheClimb(g.Home) ? ", on the climb" : ", on the way to it"))));
         if (goats.Count == 0)
         {
             yield break;
@@ -634,6 +635,306 @@ internal sealed partial class Runner
             calm();
             Protect(false);
         }
+    }
+
+    /// <summary>
+    /// The goats' roaming (17, on a map with the Alps): a goat 100 m from its spot still picks where to go next round
+    /// itself (its range is 150 m), and one 200 m off heads back towards its spot; on top of a real cliff of the Alps it
+    /// picks ground below the cliff to go to as well as ground above it, and sent to the cliff's foot it comes down; and it
+    /// leaps forward across a gap 6.5 m wide between two test pillars.
+    /// </summary>
+    private IEnumerator GoatCliffChecks()
+    {
+        Character local = Local;
+        if (Map.CurrentPlace != Place.Alpine)
+        {
+            MapHandler.JumpToSegment(Segment.Alpine);
+            yield return new WaitForSeconds(8f);
+        }
+        if (Map.CurrentPlace != Place.Alpine)
+        {
+            Info("the goats' roaming checks are skipped", $"no Alps here ({Map.CurrentPlace}); run with -Biome and a map number that has the Alps (80)");
+            yield break;
+        }
+        for (float until = Time.time + 10f; Time.time < until && Goats.All.Count == 0;)
+        {
+            yield return null;
+        }
+        List<Goat> goats = Goats.All.Where(g => g != null).ToList();
+        Goat goat = goats.Where(g => !g.Follower).OrderBy(g => Vector3.Distance(g.Feet, local.Center)).FirstOrDefault();
+        if (goat == null)
+        {
+            Fail("a goat for the roaming checks", $"{goats.Count} goats, none leading its own way");
+            yield break;
+        }
+        Protect(true);
+        Action calm = CalmForMeasuring();
+        try
+        {
+            foreach (Goat other in goats)
+            {
+                other.Unaware = true;
+            }
+            goat.Puppet = true;
+
+            // Its range: picks round itself 100 m from its spot; drawn back within 150 m of it from 200 m off.
+            {
+                Vector3 spot = goat.Feet;
+                goat.PlaceAt(spot, spot + Vector3.forward);
+                Vector3 away = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f) * Vector3.forward;
+                goat.Home = spot + away * 100f;
+                List<float> nearFar = new List<float>();
+                for (int i = 0; i < 60; i++)
+                {
+                    if (goat.TryPickRoam(out Vector3 to))
+                    {
+                        nearFar.Add(Goats.Flat(to, spot));
+                    }
+                }
+                goat.Home = spot + away * 200f;
+                List<float> nearer = new List<float>();
+                for (int i = 0; i < 60; i++)
+                {
+                    if (goat.TryPickRoam(out Vector3 to))
+                    {
+                        nearer.Add(200f - Goats.Flat(to, goat.Home));
+                    }
+                }
+                goat.Home = spot;
+                Check("a goat roams up to 150 m from its spot: 100 m off it still picks where to go round itself, 200 m off it heads back towards its spot (17)",
+                    nearFar.Count >= 20 && nearFar.Max() <= Goats.RoamStepMax + 1f && nearer.Count >= 20 && nearer.Min() > 0f,
+                    $"100 m off: {nearFar.Count} picks, {(nearFar.Count > 0 ? nearFar.Min() : 0f):0}-{(nearFar.Count > 0 ? nearFar.Max() : 0f):0} m from it; "
+                    + $"200 m off: {nearer.Count} picks, each {(nearer.Count > 0 ? nearer.Min() : 0f):0.0}-{(nearer.Count > 0 ? nearer.Max() : 0f):0.0} m nearer its spot");
+            }
+
+            // A gap: two pillars 8 m tall (test blocks), 6.5 m apart, wider than the old 4.5 m leap, the ground between
+            // them too far down to leap to. A goat on one, sent to the other, leaps across.
+            if (GoatStage(local.Center, out Vector3 stage, out Vector3 way))
+            {
+                const float gap = 6.5f;
+                Vector3 nearSpot = stage + way * 2f;
+                Vector3 farSpot = stage + way * (5f + gap);
+                float topY = Mathf.Max(GroundUnder(nearSpot).y, GroundUnder(farSpot).y) + 8f;
+                List<GameObject> pillars = new List<GameObject>();
+                foreach (Vector3 spot in new[] { nearSpot, farSpot })
+                {
+                    GameObject pillar = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    pillar.name = "UltimateAscentTestPillar";
+                    pillar.layer = LayerMask.NameToLayer("Map");
+                    pillar.transform.SetPositionAndRotation(new Vector3(spot.x, topY - 6f, spot.z), Quaternion.LookRotation(way));
+                    pillar.transform.localScale = new Vector3(3f, 12f, 3f);
+                    Grey(pillar);
+                    pillars.Add(pillar);
+                }
+                Physics.SyncTransforms();
+                Vector3 from = new Vector3(nearSpot.x, topY, nearSpot.z);
+                Vector3 to = new Vector3(farSpot.x, topY, farSpot.z);
+                try
+                {
+                    goat.PlaceAt(from, to);
+                    Vector3 middle = (from + to) * 0.5f;
+                    Vector3? see = StandNear(middle - Vector3.up * 6f, 8f, 14f, seeIt: true) ?? StandNear(middle - Vector3.up * 6f, 8f, 18f, seeIt: true, firm: false);
+                    if (see.HasValue)
+                    {
+                        local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, see.Value + Vector3.up * 1.2f, false);
+                    }
+                    yield return new WaitForSeconds(1.5f);
+                    LookAtPoint(local, middle);
+                    yield return new WaitForSeconds(0.4f);
+                    Screenshot("goat-gap-before");
+                    int leapsBefore = goat.Leaps;
+                    float longestBefore = goat.LongestLeap;
+                    goat.RoamTo(to);
+                    bool across = false, shot = false;
+                    List<string> trace = new List<string>();
+                    float nextTrace = 0f;
+                    for (float until = Time.time + 15f; Time.time < until && !across;)
+                    {
+                        yield return null;
+                        if (Time.time >= nextTrace)
+                        {
+                            nextTrace = Time.time + 0.5f;
+                            trace.Add($"{goat.Doing} {goat.Feet:F1} ({goat.LastStop})");
+                        }
+                        if (!shot && goat.Doing == "Leaping" && goat.Feet.y > topY + 0.3f)
+                        {
+                            shot = true;
+                            Screenshot("goat-gap-leap");
+                        }
+                        if (goat.Doing == "Standing" && Time.time > until - 14f && Goats.Flat(goat.Feet, to) > 1f)
+                        {
+                            goat.RoamTo(to);
+                        }
+                        across = Goats.Flat(goat.Feet, to) < 1.6f && Mathf.Abs(goat.Feet.y - topY) < 0.6f && goat.Doing != "Leaping";
+                    }
+                    Check("a goat leaps forward across a gap 6.5 m wide (it leaps up to 8 m forward) (17)",
+                        across && goat.Leaps > leapsBefore && goat.LongestLeap >= gap,
+                        $"across {across} with {goat.Leaps - leapsBefore} leaps, the longest {goat.LongestLeap:0.0} m (before {longestBefore:0.0}); it is {goat.Doing}, last stopped by {goat.LastStop}");
+                    if (!across)
+                    {
+                        Info("the goat at the gap, every half second", string.Join("; ", trace) + "; " + goat.LeapReport);
+                    }
+                    yield return new WaitForSeconds(0.4f);
+                    Screenshot("goat-gap-after");
+                }
+                finally
+                {
+                    foreach (GameObject pillar in pillars)
+                    {
+                        Destroy(pillar);
+                    }
+                    Physics.SyncTransforms();
+                }
+            }
+            else
+            {
+                Info("the gap check is skipped", "no open, flat ground near the scout for the test pillars");
+            }
+
+            // Real cliffs of the Alps near the goats: a goat put on top of one, then sent to its foot. Cliffs differ (some
+            // too sheer, with no ledge on the way down); up to six are tried until one is come down.
+            List<(Vector3 top, Vector3 bottom)> cliffs = Cliffs(goats.Select(g => g.Home).Prepend(goat.Feet).ToList(), 6);
+            Info("cliffs found near the goats", string.Join("; ", cliffs.Select(c => $"{c.top:F0} over {c.bottom:F0} ({c.top.y - c.bottom.y:0.0} m drop, {Goats.Flat(c.top, c.bottom):0.0} m out)")));
+            bool down = false, picked = false;
+            int tried = 0, fellOff = 0, backedUp = 0;
+            List<string> how = new List<string>();
+            foreach ((Vector3 top, Vector3 bottom) in cliffs)
+            {
+                tried++;
+                goat.PlaceAt(top, bottom);
+                Vector3 middle = (top + bottom) * 0.5f;
+                Vector3? see = StandNear(middle, 7f, 14f, seeIt: true) ?? StandNear(middle, 7f, 18f, seeIt: true, firm: false);
+                if (see.HasValue)
+                {
+                    local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, see.Value + Vector3.up * 1.2f, false);
+                }
+                yield return new WaitForSeconds(1.5f);
+                LookAtPoint(local, top + Vector3.up * 0.6f);
+                yield return new WaitForSeconds(0.4f);
+                if (!picked)
+                {
+                    // On top: where it would roam to next, ground below the cliff among it.
+                    picked = true;
+                    Screenshot("goat-cliff-top");
+                    int picks = 0, below = 0, above = 0;
+                    for (int i = 0; i < 100; i++)
+                    {
+                        if (goat.TryPickRoam(out Vector3 to))
+                        {
+                            picks++;
+                            below += to.y < goat.Feet.y - 4f ? 1 : 0;
+                            above += to.y > goat.Feet.y + 4f ? 1 : 0;
+                        }
+                    }
+                    Check("on top of a cliff a goat picks ground below it to roam to, as well as ground above (17)", picks >= 30 && below >= picks / 10,
+                        $"{picks} picks of 100: {below} more than 4 m lower, {above} more than 4 m higher, the rest about level");
+                }
+
+                int leapsBefore = goat.Leaps;
+                int fallsBefore = goat.Falls;
+                int backsBefore = goat.BackedUp;
+                bool fell = false;
+                down = false;
+                goat.RoamTo(bottom);
+                List<string> downTrace = new List<string>();
+                int downShots = 0;
+                float nextTrace = 0f;
+                for (float until = Time.time + 30f; Time.time < until && !down;)
+                {
+                    yield return null;
+                    if (Time.time >= nextTrace)
+                    {
+                        nextTrace = Time.time + 0.5f;
+                        downTrace.Add($"{goat.Doing} {goat.Feet:F1} ({goat.LastStop})");
+                        LookAtPoint(local, goat.Feet + Vector3.up * 0.6f);
+                    }
+                    if (downShots < 2 && goat.Feet.y < top.y - (downShots + 1) * (top.y - bottom.y) / 3f)
+                    {
+                        Screenshot($"goat-cliff-down-{++downShots}");
+                    }
+                    if (goat.Doing == "Standing" && Time.time > until - 29f && Goats.Flat(goat.Feet, bottom) > 1f)
+                    {
+                        goat.RoamTo(bottom);
+                    }
+                    fell |= goat.Doing == "Falling" || goat.Falls > fallsBefore;
+                    down = Goats.Flat(goat.Feet, bottom) < 1f && Mathf.Abs(goat.Feet.y - bottom.y) < 1f && goat.Doing != "Leaping";
+                }
+                fellOff += fell ? 1 : 0;
+                backedUp += goat.BackedUp - backsBefore;
+                how.Add($"cliff {tried} ({top.y - bottom.y:0.0} m drop): down {down} with {goat.Leaps - leapsBefore} leaps{(fell ? ", slipping and falling part of the way" : "")}, "
+                    + $"back up to firm ground {goat.BackedUp - backsBefore} times, the steepest it walked {goat.SteepestWalked:0} degrees, {goat.Doing}, last stopped by {goat.LastStop}");
+                if (down && !fell)
+                {
+                    Info($"the goat on its way down cliff {tried}, every half second", string.Join("; ", downTrace));
+                    yield return new WaitForSeconds(0.5f);
+                    Screenshot("goat-cliff-bottom");
+                    break;
+                }
+                Info($"cliff {tried}: the goat did not come down it", string.Join("; ", downTrace.TakeLast(12)) + "; " + goat.LeapReport);
+            }
+            Check("a goat never slips off a cliff by itself: part way down a face it cannot get down, it goes back up to firm ground (17)", tried > 0 && fellOff == 0,
+                $"{tried} cliffs tried, falls on {fellOff} of them, back up to firm ground {backedUp} times");
+            Check("a goat on top of a cliff of the Alps comes down it, walking and leaping, without falling (17)", down && fellOff == 0,
+                $"{tried} of {cliffs.Count} cliffs tried: " + string.Join("; ", how));
+        }
+        finally
+        {
+            foreach (Goat other in Goats.All.Where(g => g != null))
+            {
+                other.Unaware = false;
+                other.Puppet = false;
+            }
+            calm();
+            Protect(false);
+        }
+    }
+
+    /// <summary>
+    /// Real cliffs of the Alps near some points: a top it can rest on with ground it can rest on 6-20 m below it, 2-5 m
+    /// out (as steep as two in one at least), both the Alps', room for a goat on both, neither under the map; at most so
+    /// many, apart.
+    /// </summary>
+    private static List<(Vector3 top, Vector3 bottom)> Cliffs(List<Vector3> near, int most)
+    {
+        List<(Vector3 top, Vector3 bottom)> cliffs = new List<(Vector3, Vector3)>();
+        float rest = Mathf.Cos(Goats.RestSlope * Mathf.Deg2Rad);
+        bool Alps(Collider ground) => Map.TryGetBiome(ground, out Biome.BiomeType biome) && biome == Biome.BiomeType.Alpine;
+        for (int attempt = 0; attempt < 3000 && cliffs.Count < most; attempt++)
+        {
+            Vector3 centre = near[attempt % near.Count];
+            Vector2 r = UnityEngine.Random.insideUnitCircle * 60f;
+            Vector3 probe = new Vector3(centre.x + r.x, centre.y + 60f, centre.z + r.y);
+            if (!Physics.Raycast(probe, Vector3.down, out RaycastHit top, 120f, HelperFunctions.terrainMapMask) || top.normal.y < rest || !Alps(top.collider) || !Goat.RoomAt(top.point)
+                || cliffs.Any(c => Goats.Flat(c.top, top.point) < 15f) || NewMobs.UnderTheMap(top.point))
+            {
+                continue;
+            }
+            Vector3 out0 = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f) * Vector3.forward;
+            for (int turn = 0; turn < 8; turn++)
+            {
+                Vector3 outward = Quaternion.Euler(0f, turn * 45f, 0f) * out0;
+                bool found = false;
+                for (float d = 2f; d <= 5f; d += 1f)
+                {
+                    if (!Physics.Raycast(top.point + Vector3.up + outward * d, Vector3.down, out RaycastHit foot, 25f, HelperFunctions.terrainMapMask))
+                    {
+                        continue;
+                    }
+                    float drop = top.point.y - foot.point.y;
+                    if (drop >= 6f && drop <= 20f && drop >= d * 2f && foot.normal.y >= rest && Alps(foot.collider) && Goat.RoomAt(foot.point) && !NewMobs.UnderTheMap(foot.point))
+                    {
+                        cliffs.Add((top.point, foot.point));
+                        found = true;
+                        break;
+                    }
+                }
+                if (found)
+                {
+                    break;
+                }
+            }
+        }
+        return cliffs;
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using HarmonyLib;
 using UltimateAscent.Core;
@@ -12,7 +13,8 @@ namespace UltimateAscent.Features;
 /// every ascent; custom runs have a switch for each among the Custom Run screen's threats, in its biome's group. Below
 /// ascent 17 (with its rule off, and in custom runs, where the ascents' rules are off) all they do to a scout is half
 /// as strong: half the injury, poison and knockback, knocked down or paralysed half as long; and snakes chase a third
-/// slower.
+/// slower. Seven in ten of the crabs, the ground snakes and the goats live on the climb itself, the rest on the way to
+/// it (see <see cref="Place"/>).
 /// </summary>
 internal static class NewMobs
 {
@@ -53,6 +55,204 @@ internal static class NewMobs
 
     /// <summary>How fast snakes chase: in full from ascent 17, two thirds below it.</summary>
     internal static float SnakeChase => Full ? 1f : 2f / 3f;
+
+    /// <summary>
+    /// Of the crabs, the ground snakes and the goats this share lives on the climb itself (the segment's wall, up to its
+    /// campfire), the rest on the way to it (the segment's ground); the tree snakes live in their trees.
+    /// </summary>
+    internal const float ClimbShare = 0.7f;
+
+    /// <summary>How many of so many live on the climb itself.</summary>
+    internal static int OnClimb(int count) => Mathf.RoundToInt(count * ClimbShare);
+
+    /// <summary>
+    /// Whether a spot is on the climb itself: the map's terrain under it is a wall (the game's "Wall..." meshes: the
+    /// segment's wall, its top at the campfire, the Alps' two walls, the props laid on them), not the ground the way to
+    /// it runs over ("Ground"). Anything else counts as what lies under it; false where neither is found below.
+    /// </summary>
+    internal static bool OnTheClimb(Vector3 spot)
+    {
+        RaycastHit[] hits = Physics.RaycastAll(spot + Vector3.up * 0.5f, Vector3.down, 80f, HelperFunctions.terrainMapMask);
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+        foreach (RaycastHit hit in hits)
+        {
+            int kind = TerrainKind(hit.collider);
+            if (kind >= 0)
+            {
+                return kind == 1;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Whether a spot is under the map: on ground buried under the map's surface, inside the mountain, or below a gap
+    /// between the map's pieces (a ray from above can fall through one). Looked at from the spot up into the sky,
+    /// straight up and slanting up all round, the map's surface seen from below: its upper side, facing away. Ground
+    /// under an overhang or in a cave is not under the map (its roof faces down at it, or the sky shows).
+    /// </summary>
+    internal static bool UnderTheMap(Vector3 spot)
+    {
+        bool backfaces = Physics.queriesHitBackfaces;
+        Physics.queriesHitBackfaces = true;
+        try
+        {
+            int under = 0;
+            Vector3 from = spot + Vector3.up * 0.3f;
+            foreach (Vector3 look in SkyLooks)
+            {
+                if (Physics.Raycast(from, look, out RaycastHit hit, 400f, HelperFunctions.terrainMapMask, QueryTriggerInteraction.Ignore)
+                    && Vector3.Dot(hit.normal, look) > 0f)
+                {
+                    under++;
+                }
+            }
+            return under >= UnderLooks;
+        }
+        finally
+        {
+            Physics.queriesHitBackfaces = backfaces;
+        }
+    }
+
+    /// <summary>The looks up from a spot: straight up, and all round 30 and 60 degrees from it; this many seeing the map from below is under it.</summary>
+    private static readonly Vector3[] SkyLooks = MakeSkyLooks();
+    private const int UnderLooks = 5;
+
+    private static Vector3[] MakeSkyLooks()
+    {
+        List<Vector3> looks = new List<Vector3> { Vector3.up };
+        foreach (float tilt in new[] { 30f, 60f })
+        {
+            for (int turn = 0; turn < 6; turn++)
+            {
+                looks.Add(Quaternion.Euler(0f, turn * 60f + tilt, 0f) * Quaternion.Euler(tilt, 0f, 0f) * Vector3.up);
+            }
+        }
+        return looks.ToArray();
+    }
+
+    /// <summary>For the tests and the log: the new mobs found under the map (fallen through a gap) and put back at their spot.</summary>
+    internal static int PutBack;
+
+    /// <summary>
+    /// How high a spot is above the map's own terrain right under it (its ground or its wall, see <see cref="OnTheClimb"/>):
+    /// about 0 on the ground, a rock's height on a rock, far up on a tree's crown; infinity where none is found below.
+    /// </summary>
+    internal static float AboveTerrain(Vector3 spot)
+    {
+        RaycastHit[] hits = Physics.RaycastAll(spot + Vector3.up * 0.5f, Vector3.down, 200f, HelperFunctions.terrainMapMask);
+        float above = float.PositiveInfinity;
+        foreach (RaycastHit hit in hits)
+        {
+            if (TerrainKind(hit.collider) >= 0)
+            {
+                above = Mathf.Min(above, Mathf.Max(0f, spot.y - hit.point.y));
+            }
+        }
+        return above;
+    }
+
+    private static readonly Dictionary<int, int> terrainKinds = new Dictionary<int, int>();
+
+    /// <summary>The terrain a collider is part of: 1 a wall, 0 the ground, -1 neither (a prop, a tree, a test block). Remembered per collider.</summary>
+    private static int TerrainKind(Collider collider)
+    {
+        int id = collider.GetInstanceID();
+        if (terrainKinds.TryGetValue(id, out int kind))
+        {
+            return kind;
+        }
+        kind = -1;
+        for (Transform part = collider.transform; part != null && part.GetComponent<Biome>() == null; part = part.parent)
+        {
+            if (part.name.StartsWith("Wall", System.StringComparison.Ordinal))
+            {
+                kind = 1;
+                break;
+            }
+            if (part.name == "Ground" || part.name == "GroundMesh")
+            {
+                kind = 0;
+                break;
+            }
+        }
+        if (terrainKinds.Count > 8192)
+        {
+            terrainKinds.Clear();
+        }
+        terrainKinds[id] = kind;
+        return kind;
+    }
+
+    /// <summary>
+    /// So many spots out of those found along a part of the map's way (each with how far along it lies): the climb's
+    /// share of them on the climb itself, the rest on the way to it, each part spread along its own stretch, all this far
+    /// apart; where one part has too little room, the other takes the rest.
+    /// </summary>
+    internal static List<Vector3> Place(List<(Vector3 spot, float share)> found, int count, float apart, out int onClimb)
+    {
+        List<(Vector3 spot, float share)> climb = new List<(Vector3, float)>();
+        List<(Vector3 spot, float share)> way = new List<(Vector3, float)>();
+        foreach ((Vector3 spot, float share) f in found)
+        {
+            (OnTheClimb(f.spot) ? climb : way).Add(f);
+        }
+        List<Vector3> taken = new List<Vector3>();
+        List<Vector3> high = Spread(climb, OnClimb(count), apart, taken);
+        List<Vector3> low = Spread(way, count - high.Count, apart, taken);
+        high.AddRange(Spread(climb, count - high.Count - low.Count, apart, taken));
+        onClimb = high.Count;
+        high.AddRange(low);
+        return high;
+    }
+
+    /// <summary>
+    /// Spots out of those found along a stretch of the way (each with how far along it lies): this many, one at each such
+    /// share of the stretch they cover (the first near its start, the last near its end), each at least this far from
+    /// those already taken (and added to them), never under the map (see <see cref="UnderTheMap"/>; such a spot is
+    /// dropped and another taken). Fewer where there is no more room.
+    /// </summary>
+    internal static List<Vector3> Spread(List<(Vector3 spot, float share)> found, int count, float apart, List<Vector3> taken)
+    {
+        List<Vector3> picked = new List<Vector3>();
+        if (found.Count == 0 || count <= 0)
+        {
+            return picked;
+        }
+        found = new List<(Vector3 spot, float share)>(found);
+        float from = found.Min(f => f.share);
+        float length = Mathf.Max(found.Max(f => f.share) - from, 1e-3f);
+        for (int c = 0; c < count; c++)
+        {
+            float wanted = from + (c + 0.5f) / count * length;
+            float band = 0.5f / count * length;
+            while (true)
+            {
+                List<(Vector3 spot, float share)> open = found.Where(f => taken.All(t => Goats.Flat(t, f.spot) >= apart)).ToList();
+                List<(Vector3 spot, float share)> inBand = open.Where(f => Mathf.Abs(f.share - wanted) <= band).ToList();
+                List<(Vector3 spot, float share)> pick = inBand.Count > 0 ? inBand : open.OrderBy(f => Mathf.Abs(f.share - wanted)).Take(5).ToList();
+                if (pick.Count == 0)
+                {
+                    return picked;
+                }
+                (Vector3 spot, float share) chosen = pick[Random.Range(0, pick.Count)];
+                if (UnderTheMap(chosen.spot))
+                {
+                    UnderMapSpots++;
+                    found.Remove(chosen);
+                    continue;
+                }
+                picked.Add(chosen.spot);
+                taken.Add(chosen.spot);
+                break;
+            }
+        }
+        return picked;
+    }
+
+    /// <summary>For the tests and the log: spots found for the new mobs that lay under the map, and were passed over.</summary>
+    internal static int UnderMapSpots;
 
     /// <summary>Their run settings, set up with the game's own (before it orders, loads and syncs them).</summary>
     [HarmonyPatch(typeof(RunSettings), nameof(RunSettings.InitializeDefaultValues))]

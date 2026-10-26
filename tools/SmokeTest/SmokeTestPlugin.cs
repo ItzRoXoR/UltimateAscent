@@ -807,6 +807,8 @@ internal sealed partial class Runner : MonoBehaviour
             ("how fast a scout walks and runs, against the snakes (speeds, only when asked)", () => OnlyWhenAsked("speeds", SpeedProbe)),
             ("a slow look at the snakes' attack (snakeview, only when asked)", () => OnlyWhenAsked("snakeview", SnakeAttackPreview)),
             ("mountain goats in the Alps (17)", GoatChecks),
+            ("the new mobs' placement: seven in ten on the climb itself (17)", NewMobPlacement),
+            ("goats roam far, come down cliffs and leap across gaps (17)", GoatCliffChecks),
             ("the borders: goats keep to the Alps, snakes to the Tropics (17)", BorderChecks),
             ("a close look at the mountain goats (goatview, only when asked)", () => OnlyWhenAsked("goatview", GoatPreview)),
             ("the sounds of the Roots' beetles (beetleprobe, only when asked)", () => OnlyWhenAsked("beetleprobe", BeetleSoundProbe)),
@@ -6740,7 +6742,7 @@ internal sealed partial class Runner : MonoBehaviour
     /// the game says; a wall on the storm's side shelters fully, the same wall downwind does not; a low bank and
     /// a long gentle slope rising toward the storm give no shelter; a hill 30 m away on the storm's side shelters
     /// partly, and not once the wind turns around. Then, for the record, how the real ground around the
-    /// scout's start would shelter from either wind.
+    /// scout's start would shelter from either wind; and items lying in a wind storm (see <see cref="WindBackpacks"/>).
     /// </summary>
     private IEnumerator SnowstormShelterCheck()
     {
@@ -6829,6 +6831,7 @@ internal sealed partial class Runner : MonoBehaviour
                 Block("Wall", feet + new Vector3(4f, 4f, 0f), new Vector3(1f, 8f, 20f), Quaternion.identity), windGame, windGame);
             yield return Case("a low bank on the wind's side gives no shelter from a wind storm (every ascent)",
                 Block("Bank", feet + new Vector3(-6f, 0.75f, 0f), new Vector3(1f, 1.5f, 20f), Quaternion.identity), windGame, windGame);
+
         }
         finally
         {
@@ -6842,6 +6845,122 @@ internal sealed partial class Runner : MonoBehaviour
             undo();
         }
         yield return new WaitForSeconds(3f);
+        yield return WindBackpacks(local);
+    }
+
+    /// <summary>
+    /// Items in a wind storm (every ascent), on the real ground where the scout stands (the game's own measure of the open
+    /// sky works there, not high above the map): a test wind storm blowing along +X, hard enough to move items (as the
+    /// game's own wind storm does). A backpack lying in the open (on a flat test slab, so it does not roll) gets the storm's
+    /// push at full strength; behind a wall on the wind's side none, as a scout there. The scout watches from behind a wall
+    /// of its own.
+    /// </summary>
+    private IEnumerator WindBackpacks(Character local)
+    {
+        Item bagPrefab = ItemByName("Backpack");
+        if (bagPrefab == null)
+        {
+            Fail("the Backpack is in the item database");
+            yield break;
+        }
+        Action undo = CalmForMeasuring();
+        List<GameObject> made = new List<GameObject>();
+        GameObject Block(string name, Vector3 centre, Vector3 size)
+        {
+            GameObject block = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            block.name = "UltimateAscentTest" + name;
+            block.layer = LayerMask.NameToLayer("Map");
+            block.transform.SetPositionAndRotation(centre, Quaternion.identity);
+            block.transform.localScale = size;
+            made.Add(block);
+            return block;
+        }
+        Vector3 feet = GroundUnder(local.Center);
+        Block("Wall", feet + new Vector3(-3f, 2.5f, 0f), new Vector3(0.6f, 5f, 4f));
+        Vector3 bagGround = GroundUnder(feet + new Vector3(0f, 0f, 10f));
+        float slabTop = bagGround.y + 0.3f;
+        Block("Slab", new Vector3(bagGround.x + 4f, slabTop - 0.5f, bagGround.z), new Vector3(14f, 1f, 4f));
+        Vector3 at = new Vector3(bagGround.x, slabTop, bagGround.z);
+        Physics.SyncTransforms();
+        WindChillZone wind = TestSnowstorm(local.Center);
+        wind.name = "WindStorm";
+        wind.windForce = 20f;
+        wind.windItemFactor = 1f;
+        wind.useIntensityCurve = false;
+        try
+        {
+            float[] moved = new float[2];
+            float[] exposure = new float[2];
+            bool[] loose = new bool[2];
+            int[] pushes = new int[2];
+            float[] pushedAt = new float[2];
+            int sheltered = SnowstormShelter.ItemsSheltered;
+            for (int i = 0; i < 2; i++)
+            {
+                GameObject cover = i == 1 ? Block("Wall", at + new Vector3(-3f, 2.5f, 0f), new Vector3(0.6f, 5f, 6f)) : null;
+                Physics.SyncTransforms();
+                Item bag = PhotonNetwork.InstantiateItemRoom(bagPrefab.gameObject.name, at + Vector3.up * 0.5f, Quaternion.identity).GetComponent<Item>();
+                // Loose, as a backpack put down is (one spawned lies still until something moves it, and the game's wind
+                // only moves items that have been about lately).
+                bag.SetKinematicNetworked(false);
+                yield return new WaitForSeconds(1.5f);
+                Vector3 from = bag.transform.position;
+                exposure[i] = SnowstormShelter.ItemExposure(wind, bag);
+                loose[i] = !bag.rig.isKinematic && Item.ALL_ACTIVE_ITEMS.Contains(bag);
+                LookAtPoint(local, from + new Vector3(3f, 0f, 0f));
+                SnowstormShelter.Watched = bag;
+                SnowstormShelter.WatchedPushes = 0;
+                float fastest = 0f;
+                wind.windMovesItems = true;
+                bool shot = false;
+                for (float since = 0f; since < 3f; since += Time.deltaTime)
+                {
+                    yield return null;
+                    fastest = Mathf.Max(fastest, bag.rig.linearVelocity.magnitude);
+                    if (!shot && since >= 1.5f)
+                    {
+                        shot = true;
+                        Screenshot(i == 0 ? "wind-backpack-open" : "wind-backpack-sheltered");
+                    }
+                }
+                wind.windMovesItems = false;
+                pushes[i] = SnowstormShelter.WatchedPushes;
+                pushedAt[i] = SnowstormShelter.WatchedOpen;
+                Collider part = bag.GetComponentInChildren<Collider>();
+                Info($"the backpack {(i == 0 ? "in the open" : "behind the wall")} in the wind",
+                    $"pushed {SnowstormShelter.WatchedPushes} times (exposed {SnowstormShelter.WatchedOpen:0.00} at the last), fastest {fastest:0.00} m/s; state {bag.itemState}, "
+                    + $"kinematic {bag.rig.isKinematic}, mass {bag.rig.mass:0.##}, damping {bag.rig.linearDamping:0.##}, constraints {bag.rig.constraints}, sleeping {bag.rig.IsSleeping()}, "
+                    + $"collider {(part != null ? part.GetType().Name + " " + (part.sharedMaterial != null ? $"friction {part.sharedMaterial.staticFriction:0.##}/{part.sharedMaterial.dynamicFriction:0.##} {part.sharedMaterial.frictionCombine}" : "no material") : "none")}; "
+                    + $"the storm: force {wind.windForce}, items x{wind.windItemFactor}, wind {wind.currentWindDirection}, moves items {wind.windMovesItems}");
+                SnowstormShelter.Watched = null;
+                moved[i] = bag != null ? Vector3.Distance(bag.transform.position, from) : -1f;
+                if (bag != null)
+                {
+                    PhotonNetwork.Destroy(bag.gameObject);
+                }
+                if (cover != null)
+                {
+                    made.Remove(cover);
+                    Destroy(cover);
+                }
+                yield return new WaitForSeconds(0.5f);
+            }
+            Check("a wind storm pushes a backpack lying in the open at full strength, but behind a wall on the wind's side not at all, as a scout there (every ascent)",
+                loose[0] && loose[1] && pushes[0] > 50 && pushes[1] > 50 && pushedAt[0] >= 0.99f && pushedAt[1] >= 0f && pushedAt[1] <= 0.01f && moved[1] >= 0f && moved[1] <= 0.3f,
+                $"in 3 s of wind the backpack in the open was pushed {pushes[0]} times at {pushedAt[0]:0.00} of the storm's strength and went {moved[0]:0.00} m (loose {loose[0]}); "
+                + $"the one behind the wall {pushes[1]} times at {pushedAt[1]:0.00} and went {moved[1]:0.00} m (loose {loose[1]}) (a backpack is heavy: the game's push barely slides it on flat ground); "
+                + $"pushes taken off or weakened by shelter {SnowstormShelter.ItemsSheltered - sheltered}");
+        }
+        finally
+        {
+            Destroy(wind.gameObject);
+            foreach (GameObject block in made)
+            {
+                Destroy(block);
+            }
+            undo();
+        }
+        yield return new WaitForSeconds(1f);
     }
 
     /// <summary>
