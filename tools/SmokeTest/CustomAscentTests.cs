@@ -36,6 +36,90 @@ internal sealed partial class Runner
 
     private static bool CustomClimbAsked(IEnumerable<string> words) => words != null && words.Any(w => w.Equals("customascent", StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>With "-Only minirun" the climb is a custom Mini Run in the Tropics on the tested ascent (in memory).</summary>
+    private bool miniRunClimb;
+
+    private static bool MiniRunAsked(IEnumerable<string> words) => words != null && words.Any(w => w.Equals("minirun", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsBingBong(Item item) => item != null && (item.itemTags & Item.ItemTags.BingBong) != 0;
+
+    /// <summary>
+    /// "-Only minirun": the boarding pass on a custom run that picks the tested ascent, a Mini Run in the Tropics (past the
+    /// beach, where the game's Bing Bong lies); set in memory, put back afterwards.
+    /// </summary>
+    private IEnumerator MiniRunSetup()
+    {
+        BoardingPass pass = GUIManager.instance.boardingPass;
+        bool wasCustom = RunSettings.IsCustomRun;
+        int savedPick = RunSettings.GetValue(CustomRunAscent.Setting, forceGetCustomValue: true);
+        int savedMiniRun = RunSettings.GetValue(RunSettings.SETTINGTYPE.MiniRun, forceGetCustomValue: true);
+        int savedBiome = RunSettings.GetValue(RunSettings.SETTINGTYPE.MiniRunBiome, forceGetCustomValue: true);
+        Action earlier = customAscentRestore;
+        customAscentRestore = () =>
+        {
+            earlier?.Invoke();
+            RunSettings.SetValue(CustomRunAscent.Setting, savedPick);
+            RunSettings.SetValue(RunSettings.SETTINGTYPE.MiniRun, savedMiniRun);
+            RunSettings.SetValue(RunSettings.SETTINGTYPE.MiniRunBiome, savedBiome);
+        };
+        Step($"a custom Mini Run in the Tropics on ascent {target} (in memory)", () =>
+        {
+            if (!pass.isOpen)
+            {
+                pass.Open();
+            }
+            if (!RunSettings.IsCustomRun)
+            {
+                pass.customRunButton.onClick.Invoke();
+            }
+            RunSettings.SetValue(CustomRunAscent.Setting, CustomRunAscent.ValueOf(target));
+            RunSettings.SetValue(RunSettings.SETTINGTYPE.MiniRun, 1);
+            RunSettings.SetValue(RunSettings.SETTINGTYPE.MiniRunBiome, 1);
+            pass.UpdateAscent();
+        });
+        yield return new WaitForSecondsRealtime(1f);
+        miniRunClimb = RunSettings.IsCustomRun;
+        Info("the custom run for the climb", $"custom {RunSettings.IsCustomRun} (was {wasCustom}), ascent {CustomRunAscent.Chosen}, mini run {RunSettings.GetValue(RunSettings.SETTINGTYPE.MiniRun, forceGetCustomValue: true)}, "
+            + $"biome {RunSettings.GetValue(RunSettings.SETTINGTYPE.MiniRunBiome, forceGetCustomValue: true)}; before: ascent {savedPick}, mini run {savedMiniRun}, biome {savedBiome}");
+    }
+
+    /// <summary>
+    /// The custom Mini Run in the Tropics on the tested ascent (20 or higher): the host is handed a Bing Bong once they are
+    /// up, holds it, only one is about, and holding it keeps his timer at zero.
+    /// </summary>
+    private IEnumerator MiniRunBingBongCheck()
+    {
+        if (!miniRunClimb)
+        {
+            Info("the Mini Run's Bing Bong check is skipped", "run with -Only minirun");
+            yield break;
+        }
+        Character local = Local;
+        float from = Time.time;
+        for (float until = Time.time + 20f; Time.time < until && !IsBingBong(local.data.currentItem);)
+        {
+            yield return null;
+        }
+        Item held = local.data.currentItem;
+        float after = Time.time - from;
+        List<Item> all = FindObjectsByType<Item>(FindObjectsSortMode.None).Where(IsBingBong).ToList();
+        int near = all.Count(i => Vector3.Distance(i.transform.position, local.Center) < 100f);
+        Segment segment = Singleton<MapHandler>.Instance.GetCurrentSegment();
+        Check($"in a custom Mini Run past the beach on ascent {target}, the host is handed a Bing Bong to hold (20)",
+            RunSettings.IsCustomRun && RunSettings.isMiniRun && segment == Segment.Tropics && Rules.Enabled(Lvl.BingBong) && A20_BingBong.HandedOver && IsBingBong(held) && near == 1,
+            $"custom {RunSettings.IsCustomRun}, mini run {RunSettings.isMiniRun}, in {segment}; Bing Bong's rule {Rules.Enabled(Lvl.BingBong)}; handed over {A20_BingBong.HandedOver}; "
+            + $"holding '{(held != null ? held.GetItemName() : "nothing")}' {after:0.0} s into the check; Bing Bongs about: {string.Join(", ", all.Select(i => $"{Vector3.Distance(i.transform.position, local.Center):0} m away"))}");
+        float longest = 0f;
+        for (float until = Time.time + 5f; Time.time < until;)
+        {
+            longest = Mathf.Max(longest, A20_BingBong.neglectedFor);
+            yield return null;
+        }
+        Check("held, Bing Bong's timer stays at zero (20)", IsBingBong(local.data.currentItem) && longest == 0f, $"still holding him {IsBingBong(local.data.currentItem)}; the timer's highest in 5 s: {longest:0.0} s");
+        Screenshot("minirun-bingbong");
+        yield return new WaitForSeconds(1f);
+    }
+
     /// <summary>
     /// The Custom Run screen, opened as a player does (the pass's custom-run button, then its Custom Options button): the
     /// Ascent setting right under the climbing stamina's, in the gameplay panel, named, off by default. Clicked with the

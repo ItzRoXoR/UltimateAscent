@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.3
+
+* Ascent 20 in a custom run's **Mini Run**: one that starts past the beach (in the Tropics, the Alpine or the Caldera,
+  far from the game's Bing Bong at the crash site) hands the host a Bing Bong to hold, 3 s after they are up on the
+  ground (as the game hands out Grapple Mode's claw). A Mini Run on the beach keeps the game's Bing Bong at the crash
+  site; a resumed campfire save keeps the one it saved.
+
 ## 1.6.2
 
 * Snakes: 30 ground snakes (was 21) and 10 tree snakes (a third as many, was 7). A ground snake lives only where a

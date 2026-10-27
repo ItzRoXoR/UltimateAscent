@@ -1,4 +1,6 @@
 using System.Linq;
+using HarmonyLib;
+using Photon.Pun;
 using UltimateAscent.Core;
 using UnityEngine;
 using Zorro.Core;
@@ -16,6 +18,8 @@ namespace UltimateAscent.Features;
 /// even add to it. A burned Bing Bong (cooked three times or more; at ascent 16 one campfire cooking
 /// does it) never counts, and while freshly burned it burns the hand that holds it
 /// (<see cref="BurnedItems"/>). The timer is paused while the scouts are still waking up on the beach.
+/// A custom run's Mini Run that starts past the beach (where the game's Bing Bong lies) hands the host a Bing Bong to
+/// hold, as the game hands out Grapple Mode's claw: once they are awake and on the ground for 3 s.
 /// </summary>
 internal static class A20_BingBong
 {
@@ -47,16 +51,93 @@ internal static class A20_BingBong
 
     internal static float VoiceVolume => burnedVolume;
 
+    /// <summary>The game's Bing Bong (the item, by its prefab's name).</summary>
+    private const string BingBongPrefab = "BingBong";
+
+    /// <summary>How long the host is on the ground, awake, before Bing Bong is in their hands (the game's own wait for a challenge item).</summary>
+    private const float HandOverAfter = 3f;
+
+    /// <summary>A Mini Run past the beach has just started: the host is owed a Bing Bong.</summary>
+    private static bool owed;
+    private static float groundedSince = -1f;
+
+    /// <summary>For the in-game test: Bing Bong has been handed to the host in this climb.</summary>
+    internal static bool HandedOver { get; private set; }
+
     internal static void Reset()
     {
         neglectedFor = 0f;
         LinesSpoken = 0;
+        owed = false;
+        groundedSince = -1f;
+        HandedOver = false;
         Silence();
     }
+
+    /// <summary>
+    /// The host starts a fresh Mini Run (a campfire save's run is not started again, so it owes nothing: its Bing Bong is
+    /// where it was saved) past the beach.
+    /// </summary>
+    [HarmonyPatch(typeof(RunManager), nameof(RunManager.JumpToMiniRunBiomeWhenReady))]
+    private static class MiniRunStarts
+    {
+        private static void Prefix()
+        {
+            owed = RunSettings.GetValue(RunSettings.SETTINGTYPE.MiniRunBiome) > 0;
+            groundedSince = -1f;
+        }
+    }
+
+    /// <summary>Host: once in the Mini Run's part, awake and on the ground for 3 s, Bing Bong into their hands.</summary>
+    private static void HandOver(Character local)
+    {
+        if (!owed || local == null || local.data == null)
+        {
+            return;
+        }
+        if (!Rules.Enabled(Lvl.BingBong) || !RunSettings.isMiniRun || !PhotonNetwork.IsMasterClient)
+        {
+            owed = false;
+            return;
+        }
+        MapHandler map = Singleton<MapHandler>.Instance;
+        if (map == null || map.GetCurrentSegment() != MiniRunStart() || local.data.dead || local.data.passedOutOnTheBeach > 0f || local.warping || !local.data.isGrounded)
+        {
+            groundedSince = -1f;
+            return;
+        }
+        if (groundedSince < 0f)
+        {
+            groundedSince = Time.time;
+        }
+        if (Time.time - groundedSince < HandOverAfter)
+        {
+            return;
+        }
+        owed = false;
+        if (!ItemDatabase.TryGetItem(BingBongPrefab, out Item prefab) || prefab == null)
+        {
+            Plugin.Log.LogWarning("Ascent 20: the game has no Bing Bong to hand to the host in this Mini Run.");
+            return;
+        }
+        local.refs.items.SpawnItemInHand(prefab.gameObject.name);
+        HandedOver = true;
+        Plugin.Log.LogInfo("Ascent 20: a Mini Run past the beach; Bing Bong is in the host's hands.");
+    }
+
+    /// <summary>The part a Mini Run starts in, as the game jumps there.</summary>
+    private static Segment MiniRunStart() => RunSettings.GetValue(RunSettings.SETTINGTYPE.MiniRunBiome) switch
+    {
+        1 => Segment.Tropics,
+        2 => Segment.Alpine,
+        3 => Segment.Caldera,
+        _ => Segment.Beach,
+    };
 
     internal static void Tick()
     {
         Character local = Character.localCharacter;
+        HandOver(local);
         if (!Rules.Enabled(Lvl.BingBong) || local == null || local.data == null || local.data.dead)
         {
             neglectedFor = 0f;

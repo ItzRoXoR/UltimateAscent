@@ -1,7 +1,7 @@
 # Threats at ascent 24
 
 Every value below is from PEAK 3.0.0 (read from the game code and the game data) and from
-Ultimate Ascent 1.6.2's rules. Status amounts use the stamina bar's scale: **100 = the whole bar**. A rule
+Ultimate Ascent 1.6.3's rules. Status amounts use the stamina bar's scale: **100 = the whole bar**. A rule
 marked *(17)* comes from that ascent; ascent 24 contains every ascent up to 24. Ultimate Ascent's
 numbers are what lands on the bar, ascent 14's boost included; below ascent 14 the same rules land
 them without that boost, so they are always lower there. Distances are the game's own units,
@@ -375,6 +375,7 @@ amount of extra stamina; most effects start 3 s after eating.
 |---|---|---|
 | Warning | — | 10 s without anyone holding Bing Bong: he talks, line after line, in the voice he has once burned, heard by every scout; silent as soon as someone holds him, or when the crab comes *(20)* |
 | Neglect | — | 15 s without anyone holding Bing Bong: 5 crab a second *(20)*, which only the **Cursed Skull** cures *(15)*; it leaves 10%, like everything else it clears. Cure-alls don't touch crab, and Pandora's Lunchbox can even add some *(15)* |
+| Mini Run | — | A custom run's Mini Run that starts past the beach (where the game's Bing Bong lies) hands the host a Bing Bong to hold, 3 s after they are up on the ground *(20)* |
 
 ### Banana peels
 | | Game | Ultimate Ascent at 24 |

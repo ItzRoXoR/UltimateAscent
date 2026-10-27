@@ -684,6 +684,10 @@ internal sealed partial class Runner : MonoBehaviour
         {
             yield return Guard("the custom run's Ascent setting in the airport (customascent)", CustomRunAscentScreen());
         }
+        if (MiniRunAsked(only))
+        {
+            yield return Guard("a custom Mini Run on the tested ascent (minirun)", MiniRunSetup());
+        }
         Step("departure", Depart);
 
         yield return Until("the island", 300f, () => Rules.InRun && !LoadingScreenHandler.loading && MapHandler.ExistsAndInitialized && Local != null && Local.data != null);
@@ -700,8 +704,12 @@ internal sealed partial class Runner : MonoBehaviour
         float wake = Time.time;
         Protect(true);
         // Bing Bong's evil force (20) brings every scout crab while nobody holds him: at 24 a check that lets statuses
-        // through could end in death. Off for the whole climb (in memory), on again for Bing Bong's own check.
-        HoldBingBongRule(true);
+        // through could end in death. Off for the whole climb (in memory), on again for Bing Bong's own check; on in the
+        // Mini Run, whose Bing Bong the host is handed.
+        if (!miniRunClimb)
+        {
+            HoldBingBongRule(true);
+        }
         yield return new WaitForSeconds(2f);
 
         (string name, Func<IEnumerator> run)[] steps =
@@ -736,6 +744,7 @@ internal sealed partial class Runner : MonoBehaviour
             ("the Hot Campfires switch (hotcampfires, config)", HotCampfiresSwitch),
             ("the modifiers line under the ascent (modifiers, config)", ModifiersLineCheck),
             ("a custom run on a picked ascent (customascent)", CustomAscentClimb),
+            ("Bing Bong in the host's hands in a custom Mini Run (minirun, 20)", MiniRunBingBongCheck),
             ("new items switch (config)", NewItemsSwitch),
             ("Magic Bean vine length (15)", BeanVineLength),
             ("Magic Bean thorns (15)", BeanThorns),
@@ -3005,7 +3014,7 @@ internal sealed partial class Runner : MonoBehaviour
     private void Depart()
     {
         BoardingPass pass = GUIManager.instance.boardingPass;
-        if (RunSettings.IsCustomRun && !customClimb)
+        if (RunSettings.IsCustomRun && !customClimb && !miniRunClimb)
         {
             Fail("the boarding pass is back on a normal run before departure");
             RunSettings.IsCustomRun = false;
