@@ -502,7 +502,7 @@ internal static class A17_Traps
 
         private static void Postfix(Luggage __instance, bool spawnItems, bool __state)
         {
-            if (!On || !__state || !spawnItems || !IsCitadelChest(__instance) || !IsMimicChest(__instance))
+            if (!On || !__state || !spawnItems || !Rules.Hazard(RunSettings.SETTINGTYPE.Hazard_TrapChest) || !IsCitadelChest(__instance) || !IsMimicChest(__instance))
             {
                 return;
             }

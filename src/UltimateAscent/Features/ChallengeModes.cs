@@ -45,14 +45,17 @@ internal static class ChallengeModes
         set => ModSave.SetBool(HotKey, value);
     }
 
-    /// <summary>On this ascent the sun already incinerates held shields (23 and above, regular runs), so Hot Mode has nothing to add.</summary>
-    internal static bool SunByAscent(int ascent) => !RunSettings.IsCustomRun && ascent >= Lvl.HotSun && ascent != BoardingPassUi.FinalAscentIndex;
+    /// <summary>
+    /// On this ascent the sun already incinerates held shields (23 and above: a regular run's, or the one a custom run
+    /// picks), so Hot Mode has nothing to add.
+    /// </summary>
+    internal static bool SunByAscent(int ascent) => ascent >= Lvl.HotSun && ascent != BoardingPassUi.FinalAscentIndex;
 
     /// <summary>Hot Mode's sun heats at this share of ascent 23's.</summary>
     internal const float HotModeHeat = 0.5f * 1.3f;
 
-    /// <summary>Hot Mode's sun shines in this climb: it is ticked, and the climb is below ascent 23 (or a custom run).</summary>
-    internal static bool HotRoasts => Hot && Rules.InRun && (RunSettings.IsCustomRun || Ascents._currentAscent < Lvl.HotSun);
+    /// <summary>Hot Mode's sun shines in this climb: it is ticked, and the climb is below ascent 23 (or a custom run without a picked ascent).</summary>
+    internal static bool HotRoasts => Hot && Rules.InRun && (!Rules.ByAscent || Ascents._currentAscent < Lvl.HotSun);
 
     /// <summary>
     /// Blind Mode darkens the screen right now: it is ticked and a climb is on, its map loaded (the scenes before the

@@ -33,7 +33,7 @@ internal static class ExtraTornadoes
     /// <summary>Host only; called every frame.</summary>
     internal static void Tick()
     {
-        if (!Rules.Enabled(Lvl.AllWeather) || !PhotonNetwork.InRoom || !PhotonNetwork.IsMasterClient || A25_AllWeather.Excluded || LoadingScreenHandler.loading || !MapHandler.ExistsAndInitialized)
+        if (!Rules.Enabled(Lvl.AllWeather) || !Rules.Hazard(RunSettings.SETTINGTYPE.Hazard_Tornado) || !PhotonNetwork.InRoom || !PhotonNetwork.IsMasterClient || A25_AllWeather.Excluded || LoadingScreenHandler.loading || !MapHandler.ExistsAndInitialized)
         {
             return;
         }

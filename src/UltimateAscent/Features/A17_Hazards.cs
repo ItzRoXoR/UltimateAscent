@@ -1255,12 +1255,18 @@ internal static class A17_Hazards
     /// lowest level, where its heat cannot reach the ground around it nor anyone at high tide), never within 20 m of the
     /// campfire that opens the Kiln or of the Caldera's statue, its last stretch is ablaze (see <see cref="CalderaPathEruptions"/>), and from the Kiln's start on the
     /// Kiln erupts as well (the host chooses where and sends the game's own eruption message, as for the Caldera's).
+    /// In a custom run with the Custom Run screen's Eruptions switched off the volcano never erupts, the game's own
+    /// eruptions included, on any ascent.
     /// </summary>
     [HarmonyPatch(typeof(EruptionSpawner), nameof(EruptionSpawner.Update))]
     private static class Eruptions
     {
         private static bool Prefix(EruptionSpawner __instance)
         {
+            if (!Rules.Hazard(CustomRunThreats.Eruptions))
+            {
+                return false;
+            }
             if (!On)
             {
                 return true;

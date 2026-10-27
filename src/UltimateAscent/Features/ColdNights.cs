@@ -8,14 +8,14 @@ namespace UltimateAscent.Features;
 /// on every ascent. The game asks <see cref="Ascents.isNightCold"/> before adding its night cold, and
 /// so do ascent 18's longer Alpine nights (<see cref="A18_ExtremeWeather"/>), whose harsher rate only
 /// scales that cold; cold from anything else is untouched. Custom runs keep their own Cold Night
-/// setting.
+/// setting, unless they play by a picked ascent (<see cref="CustomRunAscent"/>).
 /// </summary>
 [HarmonyPatch(typeof(Ascents), "get_" + nameof(Ascents.isNightCold))]
 internal static class ColdNights
 {
     private static void Postfix(ref bool __result)
     {
-        if (__result && !RunSettings.IsCustomRun && !HostOptions.ColdNightsOn)
+        if (__result && Rules.ByAscent && !HostOptions.ColdNightsOn)
         {
             __result = false;
         }

@@ -38,7 +38,7 @@ internal static class GloomCrows
     private const string SeenMessage = "worm-seen";
     private const string CrowMessage = "crow";
 
-    private static bool On => Rules.Enabled(Lvl.Hazards) && Map.InGloom;
+    private static bool On => Rules.Enabled(Lvl.Hazards) && Rules.Hazard(RunSettings.SETTINGTYPE.Hazard_Ravens) && Map.InGloom;
 
     /// <summary>For the tests: a raven comes for every worm seen (instead of three in four).</summary>
     internal static bool AlwaysForTests;

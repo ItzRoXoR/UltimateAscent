@@ -5,8 +5,8 @@ using UnityEngine;
 namespace UltimateAscent.Core;
 
 /// <summary>
-/// Options that must be identical for everyone: the switches of ascents 8-25 and of the cold nights
-/// (config section "Ascents"), the new items (section "Items") and the new mobs (section "Mobs"). The host's config wins and is
+/// Options that must be identical for everyone: the switches of ascents 8-25, of the hot campfires and of the cold
+/// nights (config section "Ascents"), the new items (section "Items") and the new mobs (section "Mobs"). The host's config wins and is
 /// published as a room property; clients read it.
 /// </summary>
 internal static class HostOptions
@@ -27,6 +27,9 @@ internal static class HostOptions
 
     /// <summary>Set when the mod's new creatures are switched off (missing: they live).</summary>
     private const int NewMobsOff = Ascent8Off << 1;
+
+    /// <summary>Set when the hot campfires (ascent 17's charring) are switched off (missing: they char).</summary>
+    private const int HotCampfiresOff = NewMobsOff << 1;
 
     private static int cachedMask;
     private static int cachedFrame = -1;
@@ -52,6 +55,9 @@ internal static class HostOptions
 
     /// <summary>The mod's new creatures live in regular runs, unless the host switched them off.</summary>
     internal static bool NewMobsOn => (Mask & NewMobsOff) == 0;
+
+    /// <summary>Campfires are extremely hot from ascent 17 (cooking chars), unless the host switched it off.</summary>
+    internal static bool HotCampfiresOn => (Mask & HotCampfiresOff) == 0;
 
     /// <summary>A switch changed: read them again.</summary>
     internal static void Invalidate()
@@ -109,6 +115,10 @@ internal static class HostOptions
             if (Plugin.NewMobs != null && !Plugin.NewMobs.Value)
             {
                 mask |= NewMobsOff;
+            }
+            if (Plugin.HotCampfires != null && !Plugin.HotCampfires.Value)
+            {
+                mask |= HotCampfiresOff;
             }
             return mask;
         }

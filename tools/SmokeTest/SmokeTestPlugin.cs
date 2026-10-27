@@ -555,6 +555,11 @@ internal sealed partial class Runner : MonoBehaviour
         }
         RestoreMasterVolume();
         HoldBingBongRule(false);
+        if (customAscentRestore != null)
+        {
+            customAscentRestore();
+            customAscentRestore = null;
+        }
         if (configChanged)
         {
             // The test settings were never written to the config file; put the old values back.
@@ -675,6 +680,10 @@ internal sealed partial class Runner : MonoBehaviour
         {
             yield return Guard("custom run threats in the airport", CustomRunThreats());
         }
+        if (Selected("the custom run's Ascent setting in the airport (customascent)"))
+        {
+            yield return Guard("the custom run's Ascent setting in the airport (customascent)", CustomRunAscentScreen());
+        }
         Step("departure", Depart);
 
         yield return Until("the island", 300f, () => Rules.InRun && !LoadingScreenHandler.loading && MapHandler.ExistsAndInitialized && Local != null && Local.data != null);
@@ -724,6 +733,9 @@ internal sealed partial class Runner : MonoBehaviour
             ("lanterns (15)", Lanterns),
             ("ascent switches (config)", AscentSwitches),
             ("cold nights switch (config)", ColdNightsSwitch),
+            ("the Hot Campfires switch (hotcampfires, config)", HotCampfiresSwitch),
+            ("the modifiers line under the ascent (modifiers, config)", ModifiersLineCheck),
+            ("a custom run on a picked ascent (customascent)", CustomAscentClimb),
             ("new items switch (config)", NewItemsSwitch),
             ("Magic Bean vine length (15)", BeanVineLength),
             ("Magic Bean thorns (15)", BeanThorns),
@@ -808,6 +820,7 @@ internal sealed partial class Runner : MonoBehaviour
             ("a slow look at the snakes' attack (snakeview, only when asked)", () => OnlyWhenAsked("snakeview", SnakeAttackPreview)),
             ("mountain goats in the Alps (17)", GoatChecks),
             ("the new mobs' placement: seven in ten on the climb itself (17)", NewMobPlacement),
+            ("snakes crawl up and down the Tropics' cliffs (snakeclimb, 17)", SnakeClimbChecks),
             ("goats roam far, come down cliffs and leap across gaps (17)", GoatCliffChecks),
             ("the borders: goats keep to the Alps, snakes to the Tropics (17)", BorderChecks),
             ("a close look at the mountain goats (goatview, only when asked)", () => OnlyWhenAsked("goatview", GoatPreview)),
@@ -954,12 +967,12 @@ internal sealed partial class Runner : MonoBehaviour
     /// <summary>A step whose name holds one of the -Only words (every step without -Only).</summary>
     private bool Selected(string name) => only == null || only.Any(word => name.IndexOf(word, StringComparison.OrdinalIgnoreCase) >= 0);
 
-    /// <summary>A click on a UI element's middle, the way the mouse would.</summary>
-    private static void ClickOn(RectTransform rect)
+    /// <summary>A click on a UI element's middle, the way the mouse would (the left button unless told).</summary>
+    private static void ClickOn(RectTransform rect, UnityEngine.EventSystems.PointerEventData.InputButton button = UnityEngine.EventSystems.PointerEventData.InputButton.Left)
     {
         Vector3[] corners = Corners(rect);
         Canvas canvas = rect.GetComponentInParent<Canvas>().rootCanvas;
-        ClickAt(RectTransformUtility.WorldToScreenPoint(canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : canvas.worldCamera, (corners[0] + corners[2]) * 0.5f));
+        ClickAt(RectTransformUtility.WorldToScreenPoint(canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : canvas.worldCamera, (corners[0] + corners[2]) * 0.5f), button);
     }
 
     private static PersistentPlayerData MyData => GameHandler.GetService<PersistentPlayerDataService>().GetPlayerData(PhotonNetwork.LocalPlayer);
@@ -1077,6 +1090,43 @@ internal sealed partial class Runner : MonoBehaviour
                 Check("holding a map picker arrow runs through the maps after a short wait; letting go adds no step, a click after it is one map",
                     beforeDelay == start && ran >= 15 && released == held && clickedOnce == 1,
                     $"{order.Count} maps; {beforeDelay - start} step(s) before the wait ended, {ran} in 2 s held ({MapPicker.Name(order[held])}), {released - held} on letting go, {clickedOnce} on the click after");
+                MapPicker.Picked = MapPicker.Today;
+                pass.UpdateAscent();
+                yield return new WaitForSecondsRealtime(0.5f);
+            }
+            // The die after the arrows: each click a map at random, another than the one shown, with the click sound.
+            Transform dice = MapPicker.Line.transform.Find("UltimateAscent Map Dice");
+            if (dice == null)
+            {
+                Fail("the map picker has its die after the arrows");
+            }
+            else
+            {
+                Vector3[] arrowCorners = new Vector3[4], diceCorners = new Vector3[4];
+                ((RectTransform)next).GetWorldCorners(arrowCorners);
+                ((RectTransform)dice).GetWorldCorners(diceCorners);
+                List<string> rolls = new List<string>();
+                bool allOthers = true;
+                SoundsPlayed.Heard.Clear();
+                SoundsPlayed.Listening = true;
+                for (int roll = 0; roll < 6; roll++)
+                {
+                    int was = MapPicker.Picked;
+                    ClickOn((RectTransform)dice);
+                    yield return new WaitForSecondsRealtime(0.35f);
+                    allOthers &= MapPicker.Picked != was && Plain(MapPicker.Label.text) == Plain(MapPicker.Name(MapPicker.Picked));
+                    rolls.Add(Plain(MapPicker.Label.text));
+                    if (roll == 0)
+                    {
+                        Screenshot("map-picker-dice");
+                    }
+                }
+                SoundsPlayed.Listening = false;
+                (SFX_Instance diceClick, _) = MapPicker.ButtonSounds(pass);
+                bool sounded = diceClick != null && SoundsPlayed.Heard.Contains(diceClick);
+                Check("the die after the map picker's arrows picks a map at random, another than the one shown, with the game's click sound",
+                    allOthers && rolls.Distinct().Count() >= 3 && sounded && diceCorners[0].x >= arrowCorners[2].x - 1f,
+                    $"six rolls: {string.Join(", ", rolls)}; click sound {sounded}; the die right of the arrow {diceCorners[0].x >= arrowCorners[2].x - 1f}");
                 MapPicker.Picked = MapPicker.Today;
                 pass.UpdateAscent();
                 yield return new WaitForSecondsRealtime(0.5f);
@@ -2790,8 +2840,8 @@ internal sealed partial class Runner : MonoBehaviour
         return hits.Count > 0 ? hits[0].gameObject : null;
     }
 
-    /// <summary>A left click at this point of the screen, sent the way the event system sends a mouse click.</summary>
-    private static void ClickAt(Vector2 screen)
+    /// <summary>A click at this point of the screen (the left button unless told), sent the way the event system sends a mouse click.</summary>
+    private static void ClickAt(Vector2 screen, UnityEngine.EventSystems.PointerEventData.InputButton button = UnityEngine.EventSystems.PointerEventData.InputButton.Left)
     {
         UnityEngine.EventSystems.EventSystem events = UnityEngine.EventSystems.EventSystem.current;
         GameObject hit = TopHitAt(screen);
@@ -2802,7 +2852,7 @@ internal sealed partial class Runner : MonoBehaviour
         UnityEngine.EventSystems.PointerEventData click = new UnityEngine.EventSystems.PointerEventData(events)
         {
             position = screen,
-            button = UnityEngine.EventSystems.PointerEventData.InputButton.Left,
+            button = button,
             clickCount = 1,
         };
         GameObject pressed = UnityEngine.EventSystems.ExecuteEvents.ExecuteHierarchy(hit, click, UnityEngine.EventSystems.ExecuteEvents.pointerDownHandler);
@@ -2955,7 +3005,7 @@ internal sealed partial class Runner : MonoBehaviour
     private void Depart()
     {
         BoardingPass pass = GUIManager.instance.boardingPass;
-        if (RunSettings.IsCustomRun)
+        if (RunSettings.IsCustomRun && !customClimb)
         {
             Fail("the boarding pass is back on a normal run before departure");
             RunSettings.IsCustomRun = false;
@@ -2991,7 +3041,7 @@ internal sealed partial class Runner : MonoBehaviour
             Step("switch TFA's Apocalypse on", () => SetApocalypse(true));
         }
         pass.StartGame();
-        Info("departure", $"ascent {target} started from the boarding pass");
+        Info("departure", $"ascent {target} started from the boarding pass" + (RunSettings.IsCustomRun ? $" as a custom run (its Ascent setting: {CustomRunAscent.Chosen})" : ""));
     }
 
     /// <summary>
@@ -9459,15 +9509,6 @@ internal sealed partial class Runner : MonoBehaviour
         yield return new WaitForSeconds(0.5f);
         List<BeeSwarm> swarms = FindObjectsByType<BeeSwarm>(FindObjectsSortMode.None).Where(b => A17_BeeAmbush.IsAmbush(b) && !ScatteredBees.IsWaiting(b)).ToList();
         Check("a bee ambush swarm appears (17)", swarms.Count == 1, $"{swarms.Count} ambush swarm(s) from prefab '{A17_BeeAmbush.prefabName}'");
-        DayNightManager clock = DayNightManager.instance;
-        if (clock != null)
-        {
-            A17_BeeAmbush.Moments(clock, out float midday, out float midnight);
-            float dayMiddle = (clock.dayStart + clock.dayEnd) / 2f;
-            float nightMiddle = Mathf.Repeat(clock.dayEnd + (24f - (clock.dayEnd - clock.dayStart)) / 2f, 24f);
-            Check("bee ambushes come at the middle of the day and of the night (17)", Mathf.Abs(midday - dayMiddle) < 0.01f && Mathf.Abs(midnight - nightMiddle) < 0.01f,
-                $"day {clock.dayStart:0.#}-{clock.dayEnd:0.#}: ambush moments at {clock.FloatToTimeString(midday)} and {clock.FloatToTimeString(midnight)}");
-        }
         if (swarms.Count == 0)
         {
             yield break;
@@ -9534,55 +9575,6 @@ internal sealed partial class Runner : MonoBehaviour
         {
             PhotonNetwork.Destroy(swarm.gameObject);
         }
-    }
-
-    /// <summary>
-    /// The clock brings the bee moments: it is put just before the middle of the day and of the night
-    /// and runs past it on its own (outside the Tropics a moment brings no swarm). Setting the clock
-    /// back must not count as midnight going by.
-    /// </summary>
-    private IEnumerator BeeMoments()
-    {
-        DayNightManager clock = DayNightManager.instance;
-        if (clock == null || Map.CurrentPlace == Place.Tropics)
-        {
-            Info("the bee moment checks are skipped", clock == null ? "no day-night clock" : "the scout is in the Tropics");
-            yield break;
-        }
-        float original = clock.timeOfDay;
-        A17_BeeAmbush.Moments(clock, out float midday, out float midnight);
-        foreach ((string name, float moment) in new[] { ("day", midday), ("night", midnight) })
-        {
-            float before = Mathf.Repeat(moment - 0.5f, 24f);
-            float back = Mathf.Repeat(moment - 0.6f, 24f);
-            float start = Mathf.Repeat(moment - 0.02f, 24f);
-            clock.timeOfDay = before;
-            yield return null;
-            yield return null;
-            A17_BeeAmbush.lastMomentAt = -1000f;
-            clock.timeOfDay = back;
-            yield return null;
-            yield return null;
-            Check($"a clock set back before the middle of the {name} brings no bees (17)", A17_BeeAmbush.lastMomentAt < 0f,
-                $"{clock.FloatToTimeString(before)} -> {clock.FloatToTimeString(back)}: {(A17_BeeAmbush.lastMomentAt < 0f ? "no moment" : "a moment")}");
-            A17_BeeAmbush.lastMomentAt = -1000f;
-            clock.timeOfDay = start;
-            float deadline = Time.time + 5f;
-            while (A17_BeeAmbush.lastMomentAt < 0f && Time.time < deadline)
-            {
-                yield return null;
-            }
-            float now = clock.timeOfDay;
-            if (A17_BeeAmbush.lastMomentAt < 0f && Mathf.Abs(Mathf.DeltaAngle(now * 15f, start * 15f)) < 0.01f)
-            {
-                Info($"the bee moment of the {name} is not checked", $"the clock stands at {clock.FloatToTimeString(now)} (True Final Ascent's weather holds it)");
-                continue;
-            }
-            float off = Mathf.Abs(Mathf.DeltaAngle(now * 15f, moment * 15f)) / 15f;
-            Check($"the bee moment comes at the middle of the {name} (17)", A17_BeeAmbush.lastMomentAt >= 0f && off < 0.05f,
-                A17_BeeAmbush.lastMomentAt >= 0f ? $"at {clock.FloatToTimeString(now)} (expected {clock.FloatToTimeString(moment)})" : $"none by {clock.FloatToTimeString(now)}");
-        }
-        clock.timeOfDay = original;
     }
 
     private IEnumerator Alpine()

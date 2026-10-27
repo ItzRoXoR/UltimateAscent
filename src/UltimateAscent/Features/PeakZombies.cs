@@ -104,6 +104,10 @@ internal static class PeakZombies
             looks++;
             OnTheHill();
         }
+        if (!Rules.Hazard(RunSettings.SETTINGTYPE.Hazard_Zombies))
+        {
+            return;
+        }
         Transform summit = PeakHill.Summit();
         float range = SpawnRange();
         for (int i = 0; i < Places.Count; i++)

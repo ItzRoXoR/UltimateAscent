@@ -10,11 +10,15 @@ using Zorro.Core;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// Snakes in the Tropics: 21 on the ground, seven in ten of them on the climb itself, and a third as many (7) in the
-/// giant trees; on every ascent, below 17 half as strong and a third slower to chase (see <see cref="NewMobs"/>).
+/// Snakes in the Tropics: 30 on the ground, seven in ten of them on the climb itself (spread all the way up it), and a
+/// third as many (10) in the giant trees; on every ascent, below 17 half as strong and a third slower to chase (see
+/// <see cref="NewMobs"/>).
 /// <list type="bullet">
 /// <item>Ground snakes (about 1.4 m long, 11 cm thick) never sleep: they slither around, and once they see a scout (as near as a
-/// scorpion notices one) they chase them. A bite: 10 injury, then 40 poison over 10 s.</item>
+/// scorpion notices one) they chase them. A bite: 10 injury, then 40 poison over 10 s. Each lives where a scout can stand,
+/// on the map's ground or one of its rocks (never a tree, its crown or a vine) with plants or the game's grass near; they crawl up and down the cliffs too, winding
+/// along the rock (at most 1.5 m/s there), to wherever they wander within 10 m above or below their spot, and after a
+/// scout above or below them (they strike only once off the cliff).</item>
 /// <item>Snakes never leave the Tropics: they stop where the Tropics' ground ends, and give up a scout who goes beyond it.</item>
 /// <item>Tree snakes (about 3.6 m long, 28 cm thick) sleep curled up in a ball on a branch of the giant trees (the Tropics' 90-110 m tall ones; where there are none, they live on the ground); when a scout comes within 5 m they uncoil, raising the head towards them, jump at them and
 /// chase; once the scout is 20 m away they crawl back to the foot of their tree and climb it as snakes do, winding up the
@@ -98,23 +102,157 @@ internal static class Snakes
     internal const float FallbackSight = 8f;
 
     /// <summary>The ground snakes, and the tree snakes: a third as many (a tree snake with no tree to live in lives on the ground).</summary>
-    internal const int GroundCount = 21;
+    internal const int GroundCount = 30;
     internal const int TreeCount = GroundCount / 3;
 
-    // Where the ground snakes live: the Tropics' ground (no steeper than 30 degrees, about level round it, not in water,
-    // not up a tree: nothing of a giant tree, at most 2 m above the map's own ground or wall) along the way from their
-    // first campfire to their last, 15 m or more from both, 4 m or more apart.
+    // Where the ground snakes live: the Tropics' ground (no steeper than 30 degrees, about level round it, not in water)
+    // along the way from their first campfire to their last, 15 m or more from both, 4 m or more apart; where a scout
+    // can stand (room for one standing there), on the map's own ground or one of its rocks (halfway up the Tropics'
+    // cliff its ledges are rocks), never a giant tree, its crown, a vine or a log; with plants growing near (a bush, weed,
+    // monstera, ivy, palm or small tree within 6 m), or among the game's grass blades (this many within about a metre),
+    // which grow almost only on the jungle floor.
     private const int SpotTries = 3000;
-    private const float OffTheGround = 2f;
     private const float SpotSpread = 70f;
     private const float SpotSlope = 30f;
     private const float AwayFromCampfires = 15f;
     private const float SnakesApart = 4f;
+    private const float ScoutRadius = 0.3f;
+    private const float ScoutHeight = 1.7f;
+    internal const int GrassBlades = 6;
+    internal const float PlantsNear = 6f;
+
+    /// <summary>The map's groups of plants the snakes keep near: its bushes (and berry bushes), weeds, monsteras, ivy, berry vines, palms and small trees.</summary>
+    private static readonly string[] PlantGroups = { "Bushes", "Weed", "Monsteras", "Ivy", "ClusterBerries", "Palms", "Trees", "Trees_Tall", "Trees_RockOnly" };
 
     /// <summary>For the tests: the ground snakes' spots found when they spawned, how many places were looked at, how many were put on the climb itself.</summary>
     internal static int SpotsFound;
     internal static int SpotsTried;
     internal static int OnClimb;
+
+    /// <summary>For the tests: the heights of the lowest and the highest spot found on the climb when they spawned.</summary>
+    internal static (float low, float high) ClimbHeights;
+    internal static string ClimbSpots = "";
+    internal static List<float> ClimbPlaced = new List<float>();
+
+    /// <summary>For the tests: of the places looked at, those passed over for want of room for a scout, of the map's ground or rock, of plants near; the spots among the game's grass blades.</summary>
+    internal static int NoRoom;
+    internal static int NoGround;
+    internal static int NoPlants;
+    internal static int WithBlades;
+
+    /// <summary>For the log: of the places otherwise fit, those on the climb itself, and those of them with plants or grass.</summary>
+    internal static int ClimbLooked;
+    internal static int ClimbGreen;
+
+    /// <summary>For the tests: the places on the climb otherwise fit: their height, the nearest plant (level distance, within 16 m), grass blades there.</summary>
+    internal static readonly List<(float height, float plant, bool blades)> ClimbCandidates = new List<(float, float, bool)>();
+
+    /// <summary>The Tropics' grass and plants, gathered when the ground snakes spawn (for the tests too).</summary>
+    internal static Greenery Green;
+
+    /// <summary>
+    /// Where grass and plants grow: the game's grass blades (laid out when the map was made, in its grass chunks) counted
+    /// per metre cube, and the plants of its groups of them (see <see cref="PlantGroups"/>) per 4 m cube.
+    /// </summary>
+    internal sealed class Greenery
+    {
+        private readonly Dictionary<long, int> grass = new Dictionary<long, int>();
+        private readonly Dictionary<long, List<Vector3>> plants = new Dictionary<long, List<Vector3>>();
+        internal int Blades;
+        internal int Plants;
+        private const float PlantCell = 4f;
+
+        internal Greenery(Transform segment)
+        {
+            foreach (GrassChunk chunk in Object.FindObjectsByType<GrassChunk>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (chunk == null || chunk.GrassPoints == null)
+                {
+                    continue;
+                }
+                foreach (GrassPoint blade in chunk.GrassPoints)
+                {
+                    long key = Key(blade.worldPos.x, blade.worldPos.y, blade.worldPos.z, 1f);
+                    grass[key] = grass.TryGetValue(key, out int n) ? n + 1 : 1;
+                    Blades++;
+                }
+            }
+            foreach (Transform part in segment.GetComponentsInChildren<Transform>(false))
+            {
+                Transform group = part.parent;
+                if (group == null || System.Array.IndexOf(PlantGroups, group.name) < 0)
+                {
+                    continue;
+                }
+                long key = Key(part.position.x, part.position.y, part.position.z, PlantCell);
+                if (!plants.TryGetValue(key, out List<Vector3> here))
+                {
+                    plants[key] = here = new List<Vector3>();
+                }
+                here.Add(part.position);
+                Plants++;
+            }
+        }
+
+        private static long Key(float x, float y, float z, float cell) => Key(Mathf.FloorToInt(x / cell), Mathf.FloorToInt(y / cell), Mathf.FloorToInt(z / cell));
+
+        private static long Key(int x, int y, int z) => ((long)(x & 0x1FFFFF) << 42) | ((long)(y & 0x1FFFFF) << 21) | (long)(z & 0x1FFFFF);
+
+        /// <summary>The grass blades within about a metre (the metre cubes round the spot's).</summary>
+        internal int GrassAt(Vector3 at)
+        {
+            int x = Mathf.FloorToInt(at.x), y = Mathf.FloorToInt(at.y), z = Mathf.FloorToInt(at.z);
+            int count = 0;
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    for (int dz = -1; dz <= 1; dz++)
+                    {
+                        count += grass.TryGetValue(Key(x + dx, y + dy, z + dz), out int n) ? n : 0;
+                    }
+                }
+            }
+            return count;
+        }
+
+        /// <summary>The nearest plant within this far (level distance; up to half as far up or down), or infinity.</summary>
+        internal float PlantNear(Vector3 at, float within)
+        {
+            int x = Mathf.FloorToInt(at.x / PlantCell), y = Mathf.FloorToInt(at.y / PlantCell), z = Mathf.FloorToInt(at.z / PlantCell);
+            int across = Mathf.CeilToInt(within / PlantCell), upDown = Mathf.CeilToInt(within * 0.5f / PlantCell);
+            float nearest = float.PositiveInfinity;
+            for (int dx = -across; dx <= across; dx++)
+            {
+                for (int dy = -upDown; dy <= upDown; dy++)
+                {
+                    for (int dz = -across; dz <= across; dz++)
+                    {
+                        if (!plants.TryGetValue(Key(x + dx, y + dy, z + dz), out List<Vector3> here))
+                        {
+                            continue;
+                        }
+                        foreach (Vector3 plant in here)
+                        {
+                            float flat = Goats.Flat(plant, at);
+                            if (flat <= within && Mathf.Abs(plant.y - at.y) <= within * 0.5f)
+                            {
+                                nearest = Mathf.Min(nearest, flat);
+                            }
+                        }
+                    }
+                }
+            }
+            return nearest;
+        }
+    }
+
+    /// <summary>Room for a scout standing here: nothing of the map where their body goes.</summary>
+    internal static bool RoomForScout(Vector3 ground)
+    {
+        return !Physics.CheckCapsule(ground + Vector3.up * (ScoutRadius + 0.15f), ground + Vector3.up * (ScoutHeight - ScoutRadius), ScoutRadius,
+            HelperFunctions.terrainMapMask, QueryTriggerInteraction.Ignore);
+    }
 
     /// <summary>A stone hits a snake when it flies at least this fast (the game's own bonk speed).</summary>
     internal const float StoneHitSpeed = 10f;
@@ -296,16 +434,18 @@ internal static class Snakes
         spawned.RemoveAll(v => v == null);
         Spawned += spawned.Count;
         Plugin.Log.LogInfo($"New mobs: {spawned.Count} snakes in {segment.name} ({branches.Count} in trees, {grounds.Count} on the ground: {OnClimb} on the climb itself, "
-            + $"{grounds.Count - OnClimb} on the way to it; {SpotsFound} spots found in {SpotsTried} places looked at).");
+            + $"{grounds.Count - OnClimb} on the way to it; {SpotsFound} spots found in {SpotsTried} places looked at ({WithBlades} among the game's grass blades), passed over for want of room "
+            + $"for a scout {NoRoom}, of the map's ground or rock {NoGround}, of plants near {NoPlants} (on the climb {ClimbGreen} of {ClimbLooked} green); "
+            + $"{Green?.Blades ?? 0} grass blades and {Green?.Plants ?? 0} plants in the map).");
         return spawned;
     }
 
     /// <summary>
     /// The ground snakes' spots: the Tropics' own ground (no steeper than 30 degrees, about level round it, not in water,
-    /// never on a giant tree, its crown or anything else up off the ground) found along the way from their first campfire
-    /// to their last; seven in ten on the climb itself
-    /// (the Tropics' wall up to their campfire), the rest on the jungle floor before it, each spread along its stretch,
-    /// 4 m or more apart (see <see cref="NewMobs.Place"/>).
+    /// never on a giant tree or its crown), where a scout can stand, on the map's ground or a rock of it with a plant
+    /// near, found along the way from their first campfire to their last; seven in ten on the climb itself
+    /// (the Tropics' wall up to their campfire, spread all the way up it), the rest on the jungle floor before it, spread
+    /// along it, 4 m or more apart (see <see cref="NewMobs.Place"/>).
     /// </summary>
     private static List<Vector3> GroundSpots(Transform segment, int count)
     {
@@ -332,25 +472,79 @@ internal static class Snakes
         float top = Mathf.Max(a.y, b.y) + 200f;
         float depth = top - Mathf.Min(a.y, b.y) + 150f;
         WaterZone[] water = Object.FindObjectsByType<WaterZone>(FindObjectsSortMode.None);
+        Green = new Greenery(segment);
+        NoRoom = NoGround = NoPlants = WithBlades = ClimbLooked = ClimbGreen = 0;
+        ClimbCandidates.Clear();
         List<(Vector3 spot, float share)> found = new List<(Vector3, float)>();
         SpotsTried = SpotTries;
         for (int i = 0; i < SpotTries; i++)
         {
             float share = Random.value;
             Vector3 probe = a + along * (share * length) + across * Random.Range(-SpotSpread, SpotSpread);
-            if (!Physics.Raycast(new Vector3(probe.x, top, probe.z), Vector3.down, out RaycastHit hit, depth, HelperFunctions.terrainMapMask)
-                || Vector3.Angle(hit.normal, Vector3.up) > SpotSlope || InGiantTree(hit.collider) || NewMobs.AboveTerrain(hit.point) > OffTheGround
+            // Every surface down the line, not only the first from above: the ledges of the climb under the rock above
+            // them, the ground under a tree's crown (those buried in the map's rock passed over).
+            List<RaycastHit> surfaces = Goat.Surfaces(new Vector3(probe.x, top, probe.z), depth, SurfacesDown);
+            for (int s = 0; s < surfaces.Count; s++)
+            {
+                RaycastHit hit = surfaces[s];
+                if (!Fit(hit, s == 0))
+                {
+                    continue;
+                }
+                found.Add((hit.point, share));
+            }
+        }
+        SpotsFound = found.Count;
+        List<Vector3> placed = NewMobs.Place(found, count, SnakesApart, out OnClimb);
+        ClimbHeights = NewMobs.LastClimb;
+        ClimbSpots = NewMobs.LastClimbSpots;
+        ClimbPlaced = NewMobs.LastClimbPlaced;
+        return placed;
+
+        bool Fit(RaycastHit hit, bool first)
+        {
+            if (Vector3.Angle(hit.normal, Vector3.up) > SpotSlope || InGiantTree(hit.collider)
                 || !Map.TryGetBiome(hit.collider, out Biome.BiomeType biome) || biome != Biome.BiomeType.Tropics
                 || Goats.Flat(hit.point, a) < AwayFromCampfires || Goats.Flat(hit.point, b) < AwayFromCampfires
                 || !LevelAround(hit.point) || GroundItems.InWater(hit.point, water))
             {
-                continue;
+                return false;
             }
-            found.Add((hit.point, share));
+            if (!RoomForScout(hit.point))
+            {
+                NoRoom++;
+                return false;
+            }
+            if (!Snake.Climbable(hit.collider))
+            {
+                // Not the map's ground or a rock of it (the cliff's ledges halfway up are rocks): a tree's crown, a vine, a log.
+                NoGround++;
+                return false;
+            }
+            if (!first && NewMobs.UnderTheMap(hit.point))
+            {
+                return false;
+            }
+            bool climb = NewMobs.OnTheClimb(hit.point);
+            ClimbLooked += climb ? 1 : 0;
+            bool blades = Green.GrassAt(hit.point) >= GrassBlades;
+            if (climb)
+            {
+                ClimbCandidates.Add((hit.point.y, Green.PlantNear(hit.point, 16f), blades));
+            }
+            if (!blades && float.IsInfinity(Green.PlantNear(hit.point, PlantsNear)))
+            {
+                NoPlants++;
+                return false;
+            }
+            WithBlades += blades ? 1 : 0;
+            ClimbGreen += climb ? 1 : 0;
+            return true;
         }
-        SpotsFound = found.Count;
-        return NewMobs.Place(found, count, SnakesApart, out OnClimb);
     }
+
+    /// <summary>How many surfaces down each look for the ground snakes' spots are tried.</summary>
+    private const int SurfacesDown = 6;
 
     /// <summary>Ground about level a little way round a spot (not a ledge's edge or a branch).</summary>
     private static bool LevelAround(Vector3 at)
@@ -601,12 +795,17 @@ internal static class Snakes
     /// branch leaves the trunk), along the surface, or round an outside edge (over a branch's top); false if it would
     /// lose its hold.
     /// </summary>
-    internal static bool StepOnSurface(ref Vector3 at, ref Vector3 normal, Vector3 dir, float step, float radius)
+    internal static bool StepOnSurface(ref Vector3 at, ref Vector3 normal, Vector3 dir, float step, float radius) => StepOnSurface(ref at, ref normal, dir, step, radius, out _);
+
+    /// <summary>The same, telling what it holds on to after the step.</summary>
+    internal static bool StepOnSurface(ref Vector3 at, ref Vector3 normal, Vector3 dir, float step, float radius, out Collider on)
     {
+        on = null;
         if (Physics.Raycast(at, dir, out RaycastHit inWay, step + radius, HelperFunctions.terrainMapMask))
         {
             normal = inWay.normal;
             at = inWay.point + inWay.normal * radius;
+            on = inWay.collider;
             return true;
         }
         Vector3 next = at + dir * step;
@@ -614,12 +813,14 @@ internal static class Snakes
         {
             normal = hold.normal;
             at = hold.point + hold.normal * radius;
+            on = hold.collider;
             return true;
         }
         if (Physics.Raycast(next - normal * (radius * 2f + 0.05f), -dir, out RaycastHit edge, step + radius * 3f + 0.25f, HelperFunctions.terrainMapMask))
         {
             normal = edge.normal;
             at = edge.point + edge.normal * radius;
+            on = edge.collider;
             return true;
         }
         return false;
@@ -979,6 +1180,10 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
     private bool onWay;
     private float alongWay;
     private bool clinging;
+    /// <summary>A ground snake on a cliff (clinging to it), the face it clings to there, and how long it has been held up on it.</summary>
+    private bool onWall;
+    private Vector3 wallNormal = Vector3.up;
+    private float wallStuck;
     private float returningSince;
     private State lastState;
     /// <summary>Which way it slithers round the scout after a hit: 1 or -1.</summary>
@@ -1707,7 +1912,8 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
         {
             // Under the map (fallen through a gap between the map's pieces): back at its spot.
             nextMapCheck = now + 2f;
-            if (NewMobs.UnderTheMap(head) && !NewMobs.UnderTheMap(home))
+            // On a cliff, looked at from out from its face (straight up from there could start in the rock above).
+            if (NewMobs.UnderTheMap(head, clinging && way == null ? wallNormal : Vector3.up, terrainOnly: true) && !NewMobs.UnderTheMap(home))
             {
                 Plugin.Log.LogWarning($"New mobs: a snake was under the map at {head:F1}; put back at its spot.");
                 NewMobs.PutBack++;
@@ -1788,10 +1994,18 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
                     state = State.Chasing;
                     break;
                 }
-                if (now >= nextWander || Flat(head, wanderTo) < 0.5f)
+                // There: close by it (on the ground about level with it; on the rock, right by it).
+                bool there = onWall ? Vector3.Distance(head, wanderTo) < 0.6f : Flat(head, wanderTo) < 0.5f && Mathf.Abs(head.y - wanderTo.y) < ClimbFor;
+                if (toldWhere)
+                {
+                    // Told where to go (the tests): it keeps going there, whatever is in its way, until it is there.
+                    toldWhere = !there;
+                }
+                else if (now >= nextWander || there)
                 {
                     wanderTo = WanderSpot();
-                    nextWander = now + Random.Range(3f, 6f);
+                    // Somewhere up or down a cliff, it has the time to get there.
+                    nextWander = now + Random.Range(3f, 6f) + (Mathf.Abs(wanderTo.y - head.y) >= ClimbFor ? Vector3.Distance(head, wanderTo) / Snakes.WanderSpeed : 0f);
                 }
                 Crawl(wanderTo, Snakes.WanderSpeed);
                 break;
@@ -1810,8 +2024,9 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
                     state = IsTree ? State.Returning : State.Wandering;
                     break;
                 }
-                if (away <= Snakes.LungeFrom && !target.warping)
+                if (away <= Snakes.LungeFrom && !target.warping && !onWall)
                 {
+                    // On a cliff it does not strike: it crawls on after the scout until it is off it.
                     state = State.Rearing;
                     stateUntil = now + Snakes.RearSeconds;
                     break;
@@ -1920,7 +2135,7 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
         {
             onWay = false;
         }
-        if (state != State.Returning)
+        if (state != State.Returning && !onWall)
         {
             clinging = false;
         }
@@ -2033,7 +2248,11 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
         state = State.Wandering;
         wanderTo = point;
         nextWander = Time.time + 60f;
+        toldWhere = true;
     }
+
+    /// <summary>For the tests: told where to wander (see <see cref="WanderTowards"/>), it goes nowhere else until it is there.</summary>
+    private bool toldWhere;
 
     /// <summary>For the tests (another snake under test): it notices no scout from now on and leaves the one it is after.</summary>
     internal void Ignore()
@@ -2054,6 +2273,7 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
         target = null;
         state = State.Wandering;
         nextWander = 0f;
+        toldWhere = false;
     }
 
     /// <summary>For the tests (a slow look at its moves, on the host): it does nothing by itself, only what it is told below.</summary>
@@ -2064,6 +2284,7 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
     internal void PlaceAt(Vector3 at, Vector3 towards)
     {
         target = null;
+        LetGo();
         head = at;
         Vector3 flat = Vector3.ProjectOnPlane(towards - at, Vector3.up);
         facing = flat.sqrMagnitude > 1e-4f ? flat.normalized : facing;
@@ -2222,24 +2443,90 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
         }
     }
 
-    /// <summary>A step of crawling towards a point (in S-curves); false if a wall or the void is in the way.</summary>
+    /// <summary>
+    /// A step of crawling towards a point (in S-curves); false if a wall or the void is in the way. A ground snake going
+    /// somewhere higher up gets onto a cliff in its way and climbs it, and going somewhere lower down crawls over a high
+    /// edge and down the cliff below it (see <see cref="CrawlOnWall"/>).
+    /// </summary>
     private bool Crawl(Vector3 towards, float speed)
     {
+        if (onWall)
+        {
+            return CrawlOnWall(towards, speed);
+        }
         Vector3 dir = towards - head;
         dir.y = 0f;
         if (dir.sqrMagnitude < 0.01f)
         {
+            if (!IsTree && Mathf.Abs(towards.y - head.y) >= ClimbFor)
+            {
+                // Right under where it is going: up the face beside it, if there is one; else (an overhang above it, or
+                // right over where it is going) no way there from here.
+                for (int turn = 0; turn < 8; turn++)
+                {
+                    if (OntoWall(towards, Quaternion.Euler(0f, turn * 45f, 0f) * facing, 0.5f))
+                    {
+                        return true;
+                    }
+                }
+                CrawlStop = "right under or over where it is going";
+                nextWander = 0f;
+                return false;
+            }
             return true;
         }
         dir.Normalize();
         facing = Vector3.Slerp(facing, dir, Time.deltaTime * 6f).normalized;
         wave += Time.deltaTime * speed * SerpentPace * WavesPerLength / length * Mathf.PI * 2f;
         Vector3 heading = Quaternion.AngleAxis(Mathf.Sin(wave) * SerpentDegrees, Vector3.up) * facing;
-        Vector3 next = head + heading * speed * SerpentPace * Time.deltaTime;
-        if (!GroundAt(next, out Vector3 ground, out bool drop, out Collider under) || (drop && !Airborne()) || LeavesTropics(under, next))
+        if (!IsTree && OntoWall(towards, heading))
+        {
+            return true;
+        }
+        float run = speed * SerpentPace * Time.deltaTime;
+        Vector3 next = head + heading * run;
+        bool below = GroundAt(next, out Vector3 ground, out bool drop, out Collider under);
+        if (!IsTree && below && !drop && groundNormal.y < Snakes.SteepNormal && Mathf.Abs(towards.y - head.y) >= ClimbFor && Climbable(under) && !LeavesTropics(under, next))
+        {
+            // Ground ahead too steep to crawl on as ground, and where it is going is up or down there: rock, held on to
+            // and crawled up or down (going about level, it slithers over a steep bit as over any other).
+            Hold(ground - Vector3.up * radius, groundNormal);
+            return true;
+        }
+        if (!IsTree && below && !drop)
+        {
+            Vector3 clear = Vector3.up * radius;
+            // Rock between it and that ground (ground buried behind a face, under a ledge), or a ledge or a face rising
+            // ahead, not a bump: it climbs the face if where it is going is up there, else it does not go there.
+            bool between = Physics.Linecast(head + clear, ground + clear, out RaycastHit rock, HelperFunctions.terrainMapMask, QueryTriggerInteraction.Ignore);
+            if (between || ground.y - head.y > Mathf.Max(StepUp, run * 1.2f))
+            {
+                if (OntoWall(towards, heading, 0.5f))
+                {
+                    return true;
+                }
+                if (between && towards.y - head.y >= ClimbFor && rock.normal.y < 0.85f && rock.normal.y > -0.3f && Climbable(rock.collider))
+                {
+                    // A rock in the way, and somewhere higher up to go: up the rock.
+                    Hold(rock.point, rock.normal);
+                    return true;
+                }
+                CrawlStop = between ? $"rock in the way: {rock.collider.name}" : $"a rise of {ground.y - head.y:0.00} m";
+                nextWander = 0f;
+                return false;
+            }
+        }
+        if (!IsTree && below && (drop || head.y - ground.y > Mathf.Max(StepUp, run * 1.2f)) && !Airborne() && !LeavesTropics(under, next) && OverEdge(towards))
+        {
+            // An edge (a step down, not a dip), and somewhere lower down to go: it crawls down the rock below the edge,
+            // holding on, rather than dropping off it.
+            return true;
+        }
+        if (!below || (drop && !Airborne()) || LeavesTropics(under, next))
         {
             // A wall, nothing at all below, a high edge (it does not crawl off one) or another biome's ground (it keeps to
             // the Tropics): it does not go there (wandering, it picks somewhere else to go).
+            CrawlStop = !below ? "no ground ahead" : drop && !Airborne() ? "a high edge" : "the end of the Tropics";
             nextWander = 0f;
             return false;
         }
@@ -2247,6 +2534,212 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
         head = drop || head.y - ground.y > AirborneHeight ? new Vector3(next.x, head.y, next.z) : ground;
         return true;
     }
+
+    /// <summary>Where it is going is this much higher (or lower) than it is: a ground snake climbs (or crawls down) a cliff to it.</summary>
+    private const float ClimbFor = 1.5f;
+
+    /// <summary>A ground snake slithers over a rise this high in one step (a bump, a root); a higher one is a ledge or a face, to climb.</summary>
+    private const float StepUp = 0.3f;
+
+    /// <summary>On a cliff a ground snake crawls at most this fast (m/s), and lets go after this long held up there.</summary>
+    internal const float WallSpeed = 1.5f;
+    private const float WallHoldOn = 2f;
+
+    /// <summary>On the rock, ground facing up this much is walkable again: it lets go and crawls on as on the ground.</summary>
+    private const float LetGoNormal = 0.7f;
+
+    /// <summary>On the rock: when it last looked whether it got anywhere, and from where.</summary>
+    private float wallCheckAt;
+    private Vector3 wallCheckFrom;
+
+    /// <summary>
+    /// On the rock, round a bulge or a gap: the turns off the way on that are tried (degrees about the face's way out),
+    /// and for how long it keeps slanting off the way that worked (and how far it turned, until when).
+    /// </summary>
+    private static readonly float[] SideTurns = { 60f, -60f, 100f, -100f };
+    private const float SideSeconds = 1f;
+    private float sideAngle;
+    private float sideUntil;
+
+    /// <summary>
+    /// A face a ground snake may crawl on: the Tropics' (or no biome's) cliffs and rocks, that is the map's own ground and
+    /// walls and its rocks; not a giant tree (the tree snakes'), a vine or anything else laid on the map.
+    /// </summary>
+    internal static bool Climbable(Collider surface)
+    {
+        if (surface == null || Foreign(surface))
+        {
+            return false;
+        }
+        int id = surface.GetInstanceID();
+        if (climbable.TryGetValue(id, out bool known))
+        {
+            return known;
+        }
+        bool rock = NewMobs.IsTerrain(surface);
+        for (Transform part = surface.transform; !rock && part != null && part.GetComponent<Biome>() == null; part = part.parent)
+        {
+            rock = part.name.IndexOf("Rock", System.StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+        rock &= !Snakes.InGiantTree(surface);
+        if (climbable.Count > 8192)
+        {
+            climbable.Clear();
+        }
+        climbable[id] = rock;
+        return rock;
+    }
+
+    private static readonly Dictionary<int, bool> climbable = new Dictionary<int, bool>();
+
+    /// <summary>A cliff right ahead (a face too steep to crawl up as ground, not overhanging, within this much more than its body's thickness), and somewhere higher up to go: it holds on to it.</summary>
+    private bool OntoWall(Vector3 towards, Vector3 heading, float reach = 0.25f)
+    {
+        if (towards.y - head.y < ClimbFor
+            || !Physics.Raycast(head, heading, out RaycastHit face, radius + reach, HelperFunctions.terrainMapMask, QueryTriggerInteraction.Ignore)
+            || face.normal.y >= Snakes.SteepNormal || face.normal.y < -0.3f || !Climbable(face.collider))
+        {
+            return false;
+        }
+        Hold(face.point, face.normal);
+        return true;
+    }
+
+    /// <summary>A high edge ahead, and somewhere lower down to go: it holds on to the ground it is on, and crawls on over the edge and down.</summary>
+    private bool OverEdge(Vector3 towards)
+    {
+        if (head.y - towards.y < ClimbFor
+            || !Physics.Raycast(head + Vector3.up * 0.3f, Vector3.down, out RaycastHit ground, 0.3f + radius + 0.5f, HelperFunctions.terrainMapMask, QueryTriggerInteraction.Ignore)
+            || !Climbable(ground.collider))
+        {
+            return false;
+        }
+        Hold(ground.point, ground.normal);
+        return CrawlOnWall(towards, Snakes.WanderSpeed);
+    }
+
+    private void Hold(Vector3 point, Vector3 normal)
+    {
+        if (!onWall)
+        {
+            wallCheckAt = Time.time + WallHoldOn;
+            wallCheckFrom = point;
+        }
+        onWall = true;
+        clinging = true;
+        wallNormal = normal;
+        wallStuck = 0f;
+        fallSpeed = 0f;
+        head = point + normal * radius;
+    }
+
+    /// <summary>Off the cliff (over its top, at its foot, hit, or losing its hold): on the ground again, or falling to it.</summary>
+    private void LetGo()
+    {
+        if (!onWall)
+        {
+            return;
+        }
+        onWall = false;
+        clinging = false;
+        wallStuck = 0f;
+    }
+
+    /// <summary>
+    /// A step on a cliff: along its face towards the point (up, down, across), winding as it goes, round its edges; over
+    /// the top or down at its foot, on walkable ground again it crawls on as on the ground. Where it cannot go on (an
+    /// overhang, another biome's rock, a giant tree, nothing to hold on to) it does not; held up so for 2 s it lets go and drops.
+    /// </summary>
+    private bool CrawlOnWall(Vector3 towards, float speed)
+    {
+        Vector3 dir = Vector3.ProjectOnPlane(towards - head, wallNormal);
+        if (dir.sqrMagnitude < 1e-4f)
+        {
+            dir = Snakes.UpSlope(wallNormal) * (towards.y >= head.y ? 1f : -1f);
+        }
+        dir.Normalize();
+        if (Time.time < sideUntil)
+        {
+            // Going round a bulge or a gap in the rock: slanting off to that side for a moment.
+            dir = Quaternion.AngleAxis(sideAngle, wallNormal) * dir;
+        }
+        float pace = Mathf.Min(speed, WallSpeed);
+        float step = pace * SerpentPace * Time.deltaTime;
+        wave += Time.deltaTime * pace * SerpentPace * WavesPerLength / length * Mathf.PI * 2f;
+        Vector3 heading = Quaternion.AngleAxis(Mathf.Sin(wave) * SerpentDegrees * 0.5f, wallNormal) * dir;
+        Vector3 at = head;
+        Vector3 normal = wallNormal;
+        bool held = Snakes.StepOnSurface(ref at, ref normal, heading, step, radius, out Collider on);
+        if (!held || normal.y < -0.3f || !Climbable(on))
+        {
+            // The way on is an overhang or a gap: slanting off to one side or the other, round it.
+            foreach (float turn in SideTurns)
+            {
+                Vector3 tryAt = head;
+                Vector3 tryNormal = wallNormal;
+                Vector3 side = Quaternion.AngleAxis(turn, wallNormal) * dir;
+                if (Snakes.StepOnSurface(ref tryAt, ref tryNormal, side, step, radius, out Collider sideOn) && tryNormal.y >= -0.3f && Climbable(sideOn))
+                {
+                    sideAngle = Time.time < sideUntil ? sideAngle + turn : turn;
+                    sideAngle = Mathf.Clamp(sideAngle, -100f, 100f);
+                    sideUntil = Time.time + SideSeconds;
+                    held = true;
+                    at = tryAt;
+                    normal = tryNormal;
+                    on = sideOn;
+                    heading = side;
+                    break;
+                }
+            }
+        }
+        if (!held || normal.y < -0.3f || !Climbable(on))
+        {
+            WallStop = !held ? "nothing to hold on to" : normal.y < -0.3f ? "an overhang" : $"not rock: {on.name}";
+            nextWander = 0f;
+            wallStuck += Time.deltaTime;
+            if (wallStuck > WallHoldOn)
+            {
+                LetGo();
+                WallFalls++;
+            }
+            return false;
+        }
+        wallStuck = 0f;
+        WallSteps++;
+        head = at;
+        wallNormal = normal;
+        Vector3 flat = Vector3.ProjectOnPlane(heading, Vector3.up);
+        if (flat.sqrMagnitude > 0.01f)
+        {
+            facing = flat.normalized;
+        }
+        if (Time.time >= wallCheckAt)
+        {
+            // Held up on the rock (going round and round a ridge or a hollow, getting nowhere): somewhere else to go.
+            if (Vector3.Distance(head, wallCheckFrom) < 0.2f)
+            {
+                WallStop = "getting nowhere";
+                nextWander = 0f;
+            }
+            wallCheckAt = Time.time + WallHoldOn;
+            wallCheckFrom = head;
+        }
+        if (normal.y >= LetGoNormal)
+        {
+            // Plainly walkable ground (a little more than it takes to get onto the rock, so that it does not keep getting
+            // on and off where the slope is about that).
+            LetGo();
+        }
+        return true;
+    }
+
+    /// <summary>For the tests: steps taken on cliffs, holds lost there, whether it is on a cliff now (and the face's way), what last held it up there.</summary>
+    internal int WallSteps;
+    internal int WallFalls;
+    internal bool OnWall => onWall;
+    internal Vector3 WallNormal => wallNormal;
+    internal string WallStop = "";
+    internal string CrawlStop = "";
 
     /// <summary>In the air now (falling, or thrown off something): more than a little above the ground under it.</summary>
     private bool Airborne()
@@ -2261,16 +2754,21 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
     private bool GroundAt(Vector3 at, out Vector3 ground, out bool drop, out Collider under)
     {
         drop = false;
-        if (Physics.Raycast(at + Vector3.up * 1.5f, Vector3.down, out RaycastHit near, 6f, HelperFunctions.terrainMapMask))
+        // A ground snake looks from just above first (under a low overhang the look from higher up starts in its rock), then
+        // from higher up; a tree snake from higher up only (it slithers up onto a ledge on its way to its tree).
+        if ((!IsTree && Physics.Raycast(at + Vector3.up * 0.6f, Vector3.down, out RaycastHit near, 5.1f, HelperFunctions.terrainMapMask))
+            || Physics.Raycast(at + Vector3.up * 1.5f, Vector3.down, out near, 6f, HelperFunctions.terrainMapMask))
         {
             ground = near.point + Vector3.up * radius;
             under = near.collider;
+            groundNormal = near.normal;
             return true;
         }
         if (Physics.Raycast(at + Vector3.up * 0.3f, Vector3.down, out RaycastHit far, 200f, HelperFunctions.terrainMapMask))
         {
             ground = far.point + Vector3.up * radius;
             under = far.collider;
+            groundNormal = far.normal;
             drop = true;
             return true;
         }
@@ -2278,6 +2776,9 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
         under = null;
         return false;
     }
+
+    /// <summary>Which way the ground found last faces (see <see cref="GroundAt"/>).</summary>
+    private Vector3 groundNormal = Vector3.up;
 
     /// <summary>Another biome's ground, where a snake does not go (the Tropics' own, or ground of no biome, is its to crawl).</summary>
     private static bool Foreign(Collider ground) => Map.IsOtherBiome(ground, Biome.BiomeType.Tropics);
@@ -2312,14 +2813,26 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
             {
                 Vector2 r = Random.insideUnitCircle * Snakes.WanderRange;
                 Vector3 spot = home + new Vector3(r.x, 0f, r.y);
-                if (GroundAt(spot, out _, out _, out Collider under) && !Foreign(under))
+                // Any ground there within 10 m above or below its spot (up on a cliff, or down below one), never under the map.
+                List<RaycastHit> grounds = Goat.Surfaces(spot + Vector3.up * WanderUp, WanderUp + WanderDown)
+                    .Where(g => g.normal.y >= Snakes.SteepNormal && Climbable(g.collider)).ToList();
+                if (grounds.Count == 0)
                 {
-                    return spot;
+                    continue;
+                }
+                RaycastHit pick = grounds[Random.Range(0, grounds.Count)];
+                if (!NewMobs.UnderTheMap(pick.point))
+                {
+                    return pick.point + Vector3.up * radius;
                 }
             }
         }
         return home;
     }
+
+    /// <summary>How far above and below its spot a ground snake goes when it wanders.</summary>
+    private const float WanderUp = 10f;
+    private const float WanderDown = 10f;
 
     private bool Sees(Character scout)
     {
@@ -2704,7 +3217,7 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
         Vector3 up = Vector3.up;
         if (clinging)
         {
-            up = BarkFacing(at);
+            up = way != null ? BarkFacing(at) : wallNormal;
         }
         else if (Physics.Raycast(at + Vector3.up * 0.6f, Vector3.down, out RaycastHit ground, 30f, HelperFunctions.terrainMapMask))
         {
@@ -3097,6 +3610,8 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
     private void Stun(float seconds, Vector3 push, Character by)
     {
         photonView.RPC(nameof(RPC_Struck), RpcTarget.All);
+        // Hit on a cliff, it loses its hold and drops.
+        LetGo();
         push.y = 0f;
         if (push.sqrMagnitude > 0.01f)
         {
@@ -3206,6 +3721,7 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
             stream.SendNext((byte)state);
             stream.SendNext(wave);
             stream.SendNext(clinging);
+            stream.SendNext(wallNormal);
         }
         else
         {
@@ -3214,6 +3730,7 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
             state = (State)(byte)stream.ReceiveNext();
             wave = (float)stream.ReceiveNext();
             clinging = (bool)stream.ReceiveNext();
+            wallNormal = (Vector3)stream.ReceiveNext();
         }
     }
 }

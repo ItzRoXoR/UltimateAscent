@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using HarmonyLib;
 using Photon.Pun;
 using UltimateAscent.Core;
@@ -8,10 +9,11 @@ using Zorro.Core;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// Ascent 17: bee ambushes in the Tropics. Twice per in-game day, at the middle of the day and at the
-/// middle of the night, every scout in the Tropics has a 50% chance to be attacked by an angry swarm
-/// (no beehive needed), so several scouts can be hit at the same time. The swarm appears right next
-/// to its scout.
+/// Ascent 17: bee ambushes in the Tropics. Twice per in-game day, as the day begins and as the night
+/// begins, every scout has a 50% chance to be ambushed by an angry swarm (no beehive needed) at a moment
+/// of their own picked at random within that day or night (at least 30 s from anyone else's, so two
+/// scouts are not set upon at once); a scout who is not in the Tropics when their moment comes is left
+/// alone. The swarm appears right next to its scout.
 /// Escaping works like with a stolen beehive: the swarm is tied to the spot it appeared at (it
 /// follows you up to 120 m from there), so you have to outrun it or run far away from it; once it
 /// loses you, it disperses. It stays angry for 50 s. Bees only ambush in the Tropics:
@@ -43,27 +45,55 @@ internal static class A17_BeeAmbush
     /// <summary>For the tests: an ambush swarm still in its sure chase.</summary>
     internal static bool StillChasing(BeeSwarm swarm) => swarm != null && chases.TryGetValue(swarm, out Chase chase) && Time.time < chase.until;
 
+    /// <summary>Two scouts' ambush moments are at least this far apart (real seconds of the clock's run).</summary>
+    internal const float ApartSeconds = 30f;
+
     /// <summary>The time of day (hours) seen last frame; -1 before the first look.</summary>
     private static float lastTime = -1f;
-    private static float lastMomentAt = -1000f;
+    private static float lastCheckAt = -1000f;
     private static string prefabName;
     private static BeeSwarm template;
+
+    /// <summary>The day or the night now running (from the last check): whether it is the day, when it began and when it ends (hours).</summary>
+    private static bool stretchIsDay;
+    private static float stretchFrom;
+    private static float stretchTo;
+
+    /// <summary>
+    /// Each scout's ambush moment (the hour) in the day or night now running, by their view: NaN when their roll brought
+    /// no ambush, infinity once it came. A scout without one gets their roll (one who joins later, for what is left).
+    /// </summary>
+    private static readonly Dictionary<int, float> moments = new Dictionary<int, float>();
 
     /// <summary>For the tests: no ambushes while a check needs the scout's statuses to itself.</summary>
     internal static bool HeldOff;
 
+    /// <summary>For the tests: the chance of a scout's ambush at each check.</summary>
+    internal static float Chance = ChancePerMoment;
+
+    /// <summary>For the tests: the checks made, and the moments that came (an ambush or a scout not in the Tropics left alone).</summary>
+    internal static int ChecksMade;
+    internal static int MomentsCome;
+
     internal static void Reset()
     {
         lastTime = -1f;
-        lastMomentAt = -1000f;
+        lastCheckAt = -1000f;
+        moments.Clear();
     }
 
-    /// <summary>The middle of the day and the middle of the night, in hours.</summary>
-    internal static void Moments(DayNightManager clock, out float midday, out float midnight)
+    /// <summary>The checks: as the day begins and as the night begins, in hours.</summary>
+    internal static void Checks(DayNightManager clock, out float dayBegins, out float nightBegins)
     {
-        midday = (clock.dayStart + clock.dayEnd) / 2f;
-        midnight = Mathf.Repeat(clock.dayEnd + (24f - clock.dayEnd + clock.dayStart) / 2f, 24f);
+        dayBegins = clock.dayStart;
+        nightBegins = clock.dayEnd;
     }
+
+    /// <summary>For the tests: a scout's ambush moment in the day or night now running (NaN: none; infinity: it came).</summary>
+    internal static bool MomentOf(Character scout, out float moment) => moments.TryGetValue(scout.photonView.ViewID, out moment);
+
+    /// <summary>For the tests: the day or night now running.</summary>
+    internal static (bool day, float from, float to) Stretch => (stretchIsDay, stretchFrom, stretchTo);
 
     /// <summary>The clock went past <paramref name="moment"/> between the two times (it wraps at 24).</summary>
     private static bool Passed(float from, float to, float moment)
@@ -90,7 +120,7 @@ internal static class A17_BeeAmbush
     /// <summary>Host only; called every frame.</summary>
     internal static void Tick()
     {
-        if (HeldOff || !Rules.Enabled(Lvl.Hazards) || !Rules.IsHost || !PhotonNetwork.InRoom || DayNightManager.instance == null || LoadingScreenHandler.loading || !MapHandler.ExistsAndInitialized)
+        if (!Rules.Enabled(Lvl.Hazards) || !Rules.Hazard(RunSettings.SETTINGTYPE.Hazard_Bees) || !Rules.IsHost || !PhotonNetwork.InRoom || DayNightManager.instance == null || LoadingScreenHandler.loading || !MapHandler.ExistsAndInitialized)
         {
             return;
         }
@@ -98,46 +128,148 @@ internal static class A17_BeeAmbush
         float now = clock.timeOfDay % 24f;
         float before = lastTime;
         lastTime = now;
+        if (HeldOff)
+        {
+            // Held off for a test: moments going by meanwhile are passed over, not all brought at once afterwards.
+            return;
+        }
         if (before < 0f)
         {
+            // The first look of the climb: the rolls are for what is left of this day or night.
+            Check(clock, now, false);
             return;
         }
-        Moments(clock, out float midday, out float midnight);
-        bool day = Passed(before, now, midday);
-        // The host corrects the clock now and then; one moment never counts twice.
-        if ((!day && !Passed(before, now, midnight)) || Time.time - lastMomentAt < 30f)
+        Checks(clock, out float dayBegins, out float nightBegins);
+        // The host corrects the clock now and then; one check never counts twice.
+        if ((Passed(before, now, dayBegins) || Passed(before, now, nightBegins)) && Time.time - lastCheckAt >= 30f)
         {
-            return;
+            lastCheckAt = Time.time;
+            Check(clock, now, true);
         }
-        lastMomentAt = Time.time;
-        if (Map.CurrentPlace != Place.Tropics)
+        foreach (Character scout in Scouts())
         {
-            return;
-        }
-        int swarms = 0;
-        foreach (Character character in Targets())
-        {
-            if (Random.value < ChancePerMoment)
+            if (!moments.ContainsKey(scout.photonView.ViewID))
             {
-                Spawn(character);
-                swarms++;
+                Roll(clock, scout, now);
             }
         }
-        Plugin.Debug($"Ascent 17: the bee moment of the {(day ? "day" : "night")}: {swarms} swarm(s).");
+        foreach (Character scout in Scouts())
+        {
+            if (moments.TryGetValue(scout.photonView.ViewID, out float moment) && !float.IsNaN(moment) && !float.IsInfinity(moment) && Passed(before, now, moment))
+            {
+                moments[scout.photonView.ViewID] = float.PositiveInfinity;
+                MomentsCome++;
+                if (scout.data.fullyConscious && InTropics(scout))
+                {
+                    Spawn(scout);
+                }
+                else
+                {
+                    Plugin.Debug($"Ascent 17: {scout.characterName}'s bee moment came; not in the Tropics (or not up), left alone.");
+                }
+            }
+        }
     }
 
-    private static List<Character> Targets()
+    /// <summary>A check: the day or the night now begun (or running, at the first look), with a fresh roll for every scout.</summary>
+    private static void Check(DayNightManager clock, float now, bool begun)
     {
-        List<Character> targets = new List<Character>();
+        stretchIsDay = now >= clock.dayStart && now < clock.dayEnd;
+        stretchFrom = stretchIsDay ? clock.dayStart : clock.dayEnd;
+        stretchTo = stretchIsDay ? clock.dayEnd : clock.dayStart;
+        moments.Clear();
+        ChecksMade++;
+        foreach (Character scout in Scouts())
+        {
+            Roll(clock, scout, now);
+        }
+        int coming = moments.Values.Count(m => !float.IsNaN(m));
+        Plugin.Debug($"Ascent 17: the bees' check {(begun ? "as the" : "in the")} {(stretchIsDay ? "day" : "night")} {(begun ? "begins" : "running")}: {coming} of {moments.Count} scout(s) to be ambushed, at "
+            + string.Join(", ", moments.Values.Where(m => !float.IsNaN(m)).OrderBy(Since).Select(clock.FloatToTimeString)) + ".");
+    }
+
+    /// <summary>A scout's roll: an ambush at a moment of their own in what is left of the day or night, apart from everyone else's.</summary>
+    private static void Roll(DayNightManager clock, Character scout, float now)
+    {
+        if (Random.value >= Chance)
+        {
+            moments[scout.photonView.ViewID] = float.NaN;
+            return;
+        }
+        float apart = ApartSeconds / (Mathf.Max(clock.dayLengthInMinutes, 0.01f) * 60f) * 24f;
+        List<float> others = moments.Values.Where(m => !float.IsNaN(m) && !float.IsInfinity(m)).Select(Since).ToList();
+        float at = PickMoment(Since(now) + 0.01f, Mathf.Repeat(stretchTo - stretchFrom, 24f), others, apart);
+        moments[scout.photonView.ViewID] = Mathf.Repeat(stretchFrom + at, 24f);
+    }
+
+    /// <summary>How long after the day or night now running began an hour is.</summary>
+    private static float Since(float hour) => Mathf.Repeat(hour - stretchFrom, 24f);
+
+    /// <summary>
+    /// A moment between two times (hours into the day or night) at random among those at least this far from the others;
+    /// where none is left that far from them all (more scouts than the day or night has room for), the one furthest from
+    /// the nearest of them.
+    /// </summary>
+    internal static float PickMoment(float from, float to, List<float> others, float apart)
+    {
+        if (to <= from)
+        {
+            return from;
+        }
+        // The times still free: the whole stretch, less a span round each other moment.
+        List<(float a, float b)> free = new List<(float, float)> { (from, to) };
+        foreach (float other in others)
+        {
+            List<(float a, float b)> left = new List<(float, float)>();
+            foreach ((float a, float b) in free)
+            {
+                if (other - apart > a)
+                {
+                    left.Add((a, Mathf.Min(b, other - apart)));
+                }
+                if (other + apart < b)
+                {
+                    left.Add((Mathf.Max(a, other + apart), b));
+                }
+            }
+            free = left.Where(f => f.b > f.a).ToList();
+        }
+        float room = free.Sum(f => f.b - f.a);
+        if (room > 1e-5f)
+        {
+            float pick = Random.Range(0f, room);
+            foreach ((float a, float b) in free)
+            {
+                if (pick <= b - a)
+                {
+                    return a + pick;
+                }
+                pick -= b - a;
+            }
+            return free[free.Count - 1].b;
+        }
+        // No room: the furthest from the nearest other, among the ends and the middles between them.
+        List<float> marks = others.Where(o => o > from && o < to).OrderBy(o => o).Prepend(from).Append(to).ToList();
+        List<float> candidates = new List<float> { from, to };
+        for (int i = 0; i + 1 < marks.Count; i++)
+        {
+            candidates.Add((marks[i] + marks[i + 1]) / 2f);
+        }
+        return candidates.OrderByDescending(c => others.Count == 0 ? float.PositiveInfinity : others.Min(o => Mathf.Abs(o - c))).First();
+    }
+
+    /// <summary>The scouts the bees may come for (anywhere: whether they are in the Tropics counts when their moment comes).</summary>
+    private static List<Character> Scouts()
+    {
+        List<Character> scouts = new List<Character>();
         foreach (Character character in Character.AllCharacters)
         {
-            if (character != null && !character.isBot && !character.isScoutmaster && character.data != null && character.data.fullyConscious && !character.data.dead &&
-                InTropics(character))
+            if (character != null && !character.isBot && !character.isScoutmaster && character.data != null && !character.data.dead && character.photonView != null)
             {
-                targets.Add(character);
+                scouts.Add(character);
             }
         }
-        return targets;
+        return scouts;
     }
 
     /// <summary>The ground below the scout belongs to the Tropics (where it belongs to no biome, the climb's segment decides).</summary>

@@ -329,7 +329,7 @@ internal static class A18_ExtremeWeather
     {
         private static bool Prefix(HotSun __instance)
         {
-            if (!On || !Application.isPlaying || Compat.Tfa.WeatherRunning)
+            if (!On || !Application.isPlaying || Compat.Tfa.WeatherRunning || !Rules.Hazard(RunSettings.SETTINGTYPE.Hazard_Heat))
             {
                 return true;
             }

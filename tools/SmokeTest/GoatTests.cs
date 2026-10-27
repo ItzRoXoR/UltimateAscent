@@ -16,7 +16,7 @@ namespace UltimateAscent.SmokeTest;
 internal sealed partial class Runner
 {
     /// <summary>
-    /// The mountain goats (17, on a map with the Alps): where they live (up to 12, alone or in pairs, along the whole way
+    /// The mountain goats (17, on a map with the Alps): where they live (up to 15, alone or in pairs, along the whole way
     /// up the Alps); left alone for 45 s they graze and roam the mountainside, on the ground, their hooves heard; one goes up
     /// a ledge too steep for a beetle by leaping onto it, and back down; with a scout 12 m off one decides every 20 s
     /// (told not to charge, it grazes on); told to charge, it lowers its head and paws the ground for 1 s, charges and
@@ -83,7 +83,7 @@ internal sealed partial class Runner
         bool together = pairs.All(p => p.Count() == 2 && Goats.Flat(p.First().Home, p.Last().Home) <= 4f);
         bool inAlps = goats.All(g => Map.TryGetGroundBiome(g.Home + Vector3.up * 0.5f, out Biome.BiomeType biome) && biome == Biome.BiomeType.Alpine);
         float[] shares = goats.Select(g => Share(g.Home)).OrderBy(s => s).ToArray();
-        Check("mountain goats live in the Alps, at most 12, alone or in pairs, from where the Alps begin up their climb (17)",
+        Check("mountain goats live in the Alps, at most 15, alone or in pairs, from where the Alps begin up their climb (17)",
             goats.Count > 0 && goats.Count <= Goats.MaxGoats && together && inAlps && shares.First() < 0.35f && shares.Last() > 0.65f,
             $"{goats.Count} goats: {alone} alone, {pairs.Count} pairs (each pair's spots within 4 m: {together}); all on the Alps' ground: {inAlps}; "
             + $"along the way from the Alps' first campfire to their last (0 to 1): {string.Join(", ", shares.Select(s => s.ToString("0.00")))}; spots found {Goats.SpotsFound} of {Goats.SpotsTried} looked at");

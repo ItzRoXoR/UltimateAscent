@@ -10,16 +10,20 @@ namespace UltimateAscent.Features;
 /// charred to ruin; so is anything cooked over lava or by an explosion (see
 /// <see cref="A17_LavaAndBlastCooking"/>).
 /// Every client runs the cooking RPC, so the check uses only shared state: the item is held by a
-/// scout standing at a lit campfire.
+/// scout standing at a lit campfire. The config's "Hot Campfires" (the host's) switches the charring off on every
+/// ascent, the rest of ascent 17 staying.
 /// </summary>
 [HarmonyPatch(typeof(ItemCooking), nameof(ItemCooking.FinishCookingImpl))]
 internal static class A17_HotCampfires
 {
     private const float CampfireReach = 6f;
 
+    /// <summary>Cooking chars on the first cycle: from ascent 17, unless the host switched the hot campfires off.</summary>
+    internal static bool On => Rules.Enabled(Lvl.HotCampfires) && HostOptions.HotCampfiresOn;
+
     private static void Prefix(ItemCooking __instance)
     {
-        if (!Rules.Enabled(Lvl.HotCampfires) || __instance.wreckWhenCooked)
+        if (!On || __instance.wreckWhenCooked)
         {
             return;
         }
@@ -90,7 +94,7 @@ internal static class A17_LavaAndBlastCooking
     {
         private static void Prefix(ItemCooking __instance)
         {
-            if (scorching <= 0 || !Rules.Enabled(Lvl.HotCampfires) || __instance.wreckWhenCooked || __instance.photonView == null || !__instance.photonView.AmController)
+            if (scorching <= 0 || !A17_HotCampfires.On || __instance.wreckWhenCooked || __instance.photonView == null || !__instance.photonView.AmController)
             {
                 return;
             }

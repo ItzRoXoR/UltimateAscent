@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.6.2
+
+* Snakes: 30 ground snakes (was 21) and 10 tree snakes (a third as many, was 7). A ground snake lives only where a
+  scout can stand (room to stand there, no steeper than before), on the map's ground or one of its rocks (halfway up
+  the Tropics' climb the ledges are rocks; never a tree, its crown or a vine), with plants near (a bush, weed,
+  monstera, ivy, palm or small tree within 6 m) or among the game's grass blades; every surface down each look
+  counts, so ledges under the rock above them are found too. Ground snakes crawl up and down cliffs and rocks (not
+  vines or trees): going somewhere higher (they wander within 10 m above or below their spot) or after a scout up on
+  the rock, one gets onto the face and winds up it at most 1.5 m/s, and going somewhere lower it crawls over the edge
+  and down, holding on; it strikes only once off the rock, and a hit knocks it off. Before, a cliff or a high edge
+  stopped them.
+* On the climb itself the new mobs are spread all the way up it, by height (from its foot through halfway up to its
+  top), not along the way, which bunched them near the top by the campfire. A ledge or rock on a cliff counts as the
+  climb (the cliff's face is beside it, the ground far below), so the ledges halfway up are found too. A new mob found
+  under the map is put back at its spot only when it is under the map's own ground or walls, not in the open under a
+  rock or a tree's crown.
+* Mountain goats: up to 15 (was 12).
+* Ascent 17's bee ambushes: the check comes as the day begins and as the night begins (was the middle of each); every
+  scout's 50% ambush comes at a moment of their own picked at random within that day or night, at least 30 s from
+  anyone else's, so two scouts are never set upon at once. A scout not in the Tropics when their moment comes is left
+  alone.
+* Config: **Hot Campfires** (first in the [Ascents] list, the host's): off, campfires, lava and explosions no longer
+  char what they cook, whatever the ascent; the rest of ascent 17 stays.
+* During a climb a line under the ascent at the top right says whether all modifiers this ascent takes in are on in
+  the config (**ALL MODIFIERS ON**) or which are off (**MODIFIERS OFF: 14, COLD NIGHTS**).
+* Map picker: a die after the arrows picks a map at random.
+* Custom runs: an **Ascent** setting, last of the Custom Run screen's gameplay settings (off by default; a click goes
+  to the next ascent, a right click back, up to the highest unlocked). With an ascent picked, the gameplay settings
+  above it are ignored and the run plays by that ascent's modifiers, the game's and this mod's, with the host's
+  config switches; the screen's threats and items still decide what is there (a threat switched off stays away,
+  ascent 17's and 25's own bees, zombies, crows, mimics and tornadoes included). It still counts for nothing. The
+  boarding pass and the ascent at the top right during the climb name the picked ascent.
+* Custom Run screen: an **Eruptions** threat switch (after The Lava Rises, on by default). Off, the volcano never
+  erupts in that custom run: neither the game's eruptions in the Caldera nor ascent 17's on its last stretch and in
+  the Kiln. The Kiln's hot ash (18) keeps following The Lava Rises.
+
 ## 1.6.1
 
 * Snakes: 21 ground snakes and 7 tree snakes (a third as many) in the Tropics, whatever the map. Before, their number

@@ -2536,7 +2536,7 @@ internal sealed partial class Runner
         }
         List<Snake> snakes = Snakes.All.Where(s => s != null).ToList();
         int trees = snakes.Count(s => s.IsTree);
-        Check("snakes live in the Tropics, 21 on the ground and a third as many (7) in trees, whatever the map (17)",
+        Check("snakes live in the Tropics, 30 on the ground and a third as many (10) in trees, whatever the map (17)",
             snakes.Count == Snakes.GroundCount + Snakes.TreeCount && trees <= Snakes.TreeCount,
             $"{snakes.Count} snakes ({trees} in trees, {snakes.Count - trees} on the ground); this map's third part: {Singleton<MapHandler>.Instance.segments[(int)Segment.Alpine].biome}; "
             + $"tree snakes {string.Join(", ", snakes.Where(s => s.IsTree).Select(s => s.Doing))}");
@@ -3726,11 +3726,12 @@ internal sealed partial class Runner
             {
                 Vector3 there = local.Center + Quaternion.Euler(0f, angle, 0f) * Vector3.forward * reach;
                 // The lowest open, flat ground there with room all round, down to 90 m below (never a perch up a tree, where a
-                // collapse rolls the scout off; not further down, or the snakes near are left with nobody within their 120 m).
+                // collapse rolls the scout off; not further down, or the snakes near are left with nobody within their 120 m),
+                // in the Tropics (out of them the snakes give a scout up at once; from their start the beach lies below).
                 Vector3? ground = null;
                 foreach (RaycastHit hit in Physics.RaycastAll(there + Vector3.up * 30f, Vector3.down, 120f, HelperFunctions.terrainMapMask).OrderByDescending(h => h.distance))
                 {
-                    if (hit.normal.y >= 0.8f && FlatOpen(hit.point).HasValue && RoomAround(hit.point) && !Hazard(hit.point + Vector3.up, 2f))
+                    if (hit.normal.y >= 0.8f && !Map.IsOtherBiome(hit.collider, Biome.BiomeType.Tropics) && FlatOpen(hit.point).HasValue && RoomAround(hit.point) && !Hazard(hit.point + Vector3.up, 2f))
                     {
                         ground = hit.point;
                         break;
@@ -3770,6 +3771,7 @@ internal sealed partial class Runner
             yield break;
         }
         CharacterAfflictions afflictions = local.refs.afflictions;
+        int bitesAtStart = Snakes.BitesTaken;
         if (!fromBite)
         {
             // Paralysed as by a tree snake's bite.
@@ -3853,7 +3855,8 @@ internal sealed partial class Runner
         local.statusesLocked = locked;
         Check($"a {Plain(prefab.GetItemName())} ({how}) ends a tree snake's paralysis, and the drop goes (17)",
             before && cured && dropGone && SnakeParalysis.CuresSeen > curesBefore,
-            $"paralysed before {before}; after: over {cured}, the drop gone {dropGone}, ended by '{SnakeParalysis.LastCure}'");
+            $"paralysed before {before}; after: over {cured}, the drop gone {dropGone}, ended by '{SnakeParalysis.LastCure}'; snake bites meanwhile {Snakes.BitesTaken - bitesAtStart}; "
+            + $"{SnakeParalysis.Left(local):0} s of paralysis left; the nearest snake {Snakes.All.Where(s => s != null).OrderBy(s => Vector3.Distance(s.Head, local.Center)).Select(s => $"{(s.IsTree ? "tree" : "ground")} {s.Doing} {Vector3.Distance(s.Head, local.Center):0.0} m off").FirstOrDefault()}");
         SnakeParalysis.Stop();
         if (how != "thrown at the feet")
         {

@@ -15,7 +15,7 @@ namespace UltimateAscent.Features;
 /// <summary>
 /// The boarding pass picks the map: any map of the game's current rotation (the maps it goes through one a day),
 /// at the bottom right of the ascent card: the map's name in a rounded blue outline, "<" and ">" beside it (with the
-/// game's button hover and click sounds). The arrows go by number (from today's 9, left is 8 and right is 10), round
+/// game's button hover and click sounds), and a die after them that picks a map at random. The arrows go by number (from today's 9, left is 8 and right is 10), round
 /// at the ends; today's map keeps its own name among them. An arrow held down runs through the maps, faster and faster. It opens on
 /// today's map, "TODAY'S MAP (12)" (the game's lettering has no number sign); the others are "MAP 5". The pick is kept
 /// in the mod's save with the day it was made, so it stays for the day's later climbs and goes back to today's map
@@ -251,7 +251,108 @@ internal static class MapPicker
         width.preferredWidth = Enumerable.Range(0, Mathf.Max(Count, 1)).Select(m => name.GetPreferredValues(Name(m)).x).DefaultIfEmpty(120f).Max() + 4f;
 
         Chevron(pass, holder.transform, "Next", ">", blue, 1);
+        Dice(pass, holder.transform, blue);
         return holder;
+    }
+
+    /// <summary>A map at random from the list, another than the one picked now.</summary>
+    internal static void PickAtRandom()
+    {
+        List<int> others = Order().Where(m => m != Picked).ToList();
+        if (others.Count == 0)
+        {
+            return;
+        }
+        Picked = others[Random.Range(0, others.Count)];
+        Refresh();
+    }
+
+    private const float DiceSize = 30f;
+
+    /// <summary>The die after the arrows: in the pass's blue like them, a click on it picks a map at random (with the game's button sounds).</summary>
+    private static void Dice(BoardingPass pass, Transform parent, Color blue)
+    {
+        GameObject end = new GameObject("UltimateAscent Map Dice", typeof(RectTransform));
+        end.transform.SetParent(parent, false);
+        LayoutElement size = end.AddComponent<LayoutElement>();
+        size.preferredWidth = size.minWidth = DiceSize + 12f;
+        size.preferredHeight = size.minHeight = PillHeight + 8f;
+        Image hit = end.AddComponent<Image>();
+        hit.color = Color.clear;
+        GameObject face = new GameObject("Die", typeof(RectTransform));
+        face.transform.SetParent(end.transform, false);
+        Image die = face.AddComponent<Image>();
+        die.sprite = DieFace();
+        die.raycastTarget = false;
+        RectTransform faceRect = (RectTransform)face.transform;
+        faceRect.anchorMin = faceRect.anchorMax = new Vector2(0.5f, 0.5f);
+        faceRect.sizeDelta = new Vector2(DiceSize, DiceSize);
+        faceRect.anchoredPosition = new Vector2(2f, 0f);
+        Button button = end.AddComponent<Button>();
+        button.targetGraphic = die;
+        ColorBlock colours = button.colors;
+        colours.normalColor = blue;
+        colours.highlightedColor = Color.Lerp(blue, Color.black, 0.35f);
+        colours.pressedColor = Color.Lerp(blue, Color.black, 0.55f);
+        colours.selectedColor = blue;
+        colours.colorMultiplier = 1f;
+        button.colors = colours;
+        Navigation none = button.navigation;
+        none.mode = Navigation.Mode.None;
+        button.navigation = none;
+        button.onClick.AddListener(PickAtRandom);
+        (SFX_Instance clickSound, SFX_Instance hoverSound) = ButtonSounds(pass);
+        if (clickSound != null || hoverSound != null)
+        {
+            NicksButtonSFX sounds = end.AddComponent<NicksButtonSFX>();
+            sounds.button = button;
+            sounds.sfxClick = clickSound;
+            sounds.sfxHover = hoverSound;
+        }
+    }
+
+    private static Sprite dieFace;
+
+    /// <summary>A die's face, five pips in a rounded square outline (white, tinted by the button), drawn once.</summary>
+    private static Sprite DieFace()
+    {
+        if (dieFace != null)
+        {
+            return dieFace;
+        }
+        const int Size = 96;
+        const float Corner = 22f;
+        const float Stroke = 9f;
+        const float Pip = 8.5f;
+        float half = Size / 2f;
+        Vector2 centre = new Vector2(half, half);
+        Vector2[] pips =
+        {
+            new Vector2(0.29f, 0.29f), new Vector2(0.71f, 0.29f), new Vector2(0.5f, 0.5f), new Vector2(0.29f, 0.71f), new Vector2(0.71f, 0.71f),
+        };
+        Texture2D texture = new Texture2D(Size, Size, TextureFormat.RGBA32, false) { name = "UltimateAscent Die", wrapMode = TextureWrapMode.Clamp };
+        Color32[] pixels = new Color32[Size * Size];
+        for (int y = 0; y < Size; y++)
+        {
+            for (int x = 0; x < Size; x++)
+            {
+                Vector2 p = new Vector2(x + 0.5f, y + 0.5f);
+                // The rounded square's edge: distance from it, below 0 inside.
+                Vector2 q = new Vector2(Mathf.Abs(p.x - centre.x), Mathf.Abs(p.y - centre.y)) - Vector2.one * (half - 1f - Corner);
+                float edge = new Vector2(Mathf.Max(q.x, 0f), Mathf.Max(q.y, 0f)).magnitude + Mathf.Min(Mathf.Max(q.x, q.y), 0f) - Corner;
+                float alpha = Mathf.Clamp01(0.5f - edge) * Mathf.Clamp01(edge + Stroke + 0.5f);
+                foreach (Vector2 pip in pips)
+                {
+                    alpha = Mathf.Max(alpha, Mathf.Clamp01(Pip - Vector2.Distance(p, pip * Size) + 0.5f));
+                }
+                pixels[y * Size + x] = new Color32(255, 255, 255, (byte)Mathf.RoundToInt(255f * alpha));
+            }
+        }
+        texture.SetPixels32(pixels);
+        texture.Apply(false, true);
+        dieFace = Sprite.Create(texture, new Rect(0, 0, Size, Size), new Vector2(0.5f, 0.5f), 100f);
+        dieFace.name = "UltimateAscent Die";
+        return dieFace;
     }
 
     /// <summary>

@@ -10,7 +10,7 @@ using Zorro.Core;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// Mountain goats in the Alps, at most 12, alone or in pairs, spread from where the Alps begin to the top of their climb,
+/// Mountain goats in the Alps, at most 15, alone or in pairs, spread from where the Alps begin to the top of their climb,
 /// seven in ten on the climb itself; on every ascent, their ram half as strong below 17 (see <see cref="NewMobs"/>).
 /// <list type="bullet">
 /// <item>They graze, look about and roam the mountainside up to 150 m from their spot, surer on it than the Roots'
@@ -36,7 +36,7 @@ internal static class Goats
     private const string SpawnerName = "UltimateAscent Goat Spawner";
 
     /// <summary>At most this many goats in the Alps, alone or in pairs.</summary>
-    internal const int MaxGoats = 12;
+    internal const int MaxGoats = 15;
 
     // The charge.
     /// <summary>A goat notices a scout within this distance (and in sight), and then decides whether to charge them, at most once in this long.</summary>
@@ -147,6 +147,11 @@ internal static class Goats
     /// <summary>For the tests: how many of the goats were put on the climb itself.</summary>
     internal static int OnClimb;
 
+    /// <summary>For the tests: the heights of the lowest and the highest spot found on the climb when they spawned.</summary>
+    internal static (float low, float high) ClimbHeights;
+    internal static string ClimbSpots = "";
+    internal static List<float> ClimbPlaced = new List<float>();
+
     private static GameObject template;
     private static AudioClip[] bleats;
     private static AudioClip hooves;
@@ -178,7 +183,7 @@ internal static class Goats
         }
     }
 
-    /// <summary>The host's spawn of the Alps' goats (when they live in this climb): groups of one or two up to 12, spread along the Alps.</summary>
+    /// <summary>The host's spawn of the Alps' goats (when they live in this climb): groups of one or two up to 15, spread along the Alps.</summary>
     internal static List<PhotonView> Spawn(Transform segment)
     {
         List<PhotonView> spawned = new List<PhotonView>();
@@ -265,12 +270,9 @@ internal static class Goats
             found.Add((hit.point, share));
         }
         SpotsFound = found.Count;
-        List<(Vector3 spot, float share)> climb = new List<(Vector3, float)>();
-        List<(Vector3 spot, float share)> way = new List<(Vector3, float)>();
-        foreach ((Vector3 spot, float share) f in found)
-        {
-            (NewMobs.OnTheClimb(f.spot) ? climb : way).Add(f);
-        }
+        NewMobs.Split(found, out List<(Vector3 spot, float share)> climb, out List<(Vector3 spot, float share)> way);
+        ClimbHeights = NewMobs.LastClimb;
+        ClimbSpots = NewMobs.LastClimbSpots;
         // The climb's share of the goats on the climb itself, as whole groups (as many as fit), the others on the way to it;
         // where one part has too little room, its groups go to the other.
         int onClimb = NewMobs.OnClimb(groups.Sum());
@@ -285,6 +287,7 @@ internal static class Goats
         left = Settle(way, low.Concat(left).ToList(), taken, places);
         Settle(climb, left, taken, places);
         OnClimb = places.SelectMany(p => p).Count(NewMobs.OnTheClimb);
+        ClimbPlaced = places.SelectMany(p => p).Where(NewMobs.OnTheClimb).Select(p => p.y).ToList();
         return places;
     }
 
@@ -316,12 +319,14 @@ internal static class Goats
     /// <summary>A spot for the second of a pair, 1.5-3 m from the first, about as level, not under the map.</summary>
     private static bool Beside(Vector3 at, out Vector3 second)
     {
-        for (int attempt = 0; attempt < 16; attempt++)
+        // Where the first lives (the climb itself or the way to it), the second too, if there is room for it there.
+        bool climb = NewMobs.OnTheClimb(at);
+        for (int attempt = 0; attempt < 32; attempt++)
         {
             Vector3 probe = at + Quaternion.Euler(0f, Random.Range(0f, 360f), 0f) * Vector3.forward * Random.Range(1.5f, 3f);
             if (Physics.Raycast(probe + Vector3.up * 2f, Vector3.down, out RaycastHit hit, 4f, HelperFunctions.terrainMapMask)
                 && Vector3.Angle(hit.normal, Vector3.up) <= SpotSlope + 10f && Mathf.Abs(hit.point.y - at.y) <= 1f && Goat.RoomAt(hit.point)
-                && !NewMobs.UnderTheMap(hit.point))
+                && (attempt >= 16 || NewMobs.OnTheClimb(hit.point) == climb) && !NewMobs.UnderTheMap(hit.point))
             {
                 second = hit.point;
                 return true;
@@ -1561,7 +1566,7 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
         if (now >= nextMapCheck)
         {
             nextMapCheck = now + MapCheckEvery;
-            if (NewMobs.UnderTheMap(feet) && !NewMobs.UnderTheMap(home))
+            if (NewMobs.UnderTheMap(feet, Vector3.up, terrainOnly: true) && !NewMobs.UnderTheMap(home))
             {
                 Plugin.Log.LogWarning($"New mobs: a mountain goat was under the map at {feet:F1}; put back at its spot.");
                 NewMobs.PutBack++;
@@ -1831,7 +1836,7 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
     /// The ground a line straight down meets, from the top: each surface's upper side, on through the rock to whatever
     /// lies under it (a ledge, then the ledge below, then the foot of the cliff), at most this many.
     /// </summary>
-    private static List<RaycastHit> Surfaces(Vector3 from, float length, int most = 8)
+    internal static List<RaycastHit> Surfaces(Vector3 from, float length, int most = 8)
     {
         List<RaycastHit> hits = new List<RaycastHit>();
         Vector3 at = from;

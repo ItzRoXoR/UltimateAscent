@@ -18,7 +18,7 @@ namespace UltimateAscent.Features;
 /// end of the list goes back to Tenderfoot.</item>
 /// <item>The boarding pass opens on the ascent chosen in the config ("Default Ascent").</item>
 /// <item>Ascents 9-25 give no reward, so their reward line stays hidden.</item>
-/// <item>Ascents 9-25 can only be started when every player has this mod in the same version.</item>
+/// <item>Ascents 9-25 (a custom run's picked ascent too) can only be started when every player has this mod in the same version.</item>
 /// </list>
 /// </summary>
 internal static class BoardingPassUi
@@ -214,8 +214,8 @@ internal static class BoardingPassUi
 
     private static string MissingPlayers(BoardingPass pass)
     {
-        int index = pass.ascentIndex;
-        if (RunSettings.IsCustomRun || index < Lvl.First || index > Lvl.Last || !PhotonNetwork.InRoom || PhotonNetwork.OfflineMode)
+        int index = CustomRunAscent.OnPass(pass);
+        if (index < Lvl.First || index > Lvl.Last || !PhotonNetwork.InRoom || PhotonNetwork.OfflineMode)
         {
             return null;
         }

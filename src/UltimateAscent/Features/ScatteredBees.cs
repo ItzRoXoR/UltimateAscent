@@ -43,7 +43,7 @@ internal static class ScatteredBees
     /// <summary>The host puts the hill's swarms out (the hill's ground, without the zombies' places).</summary>
     internal static void SpawnOnHill(List<Vector3> ground, IList<Vector3> zombies)
     {
-        if (!PhotonNetwork.IsMasterClient || Placed.Count > 0)
+        if (!PhotonNetwork.IsMasterClient || Placed.Count > 0 || !Rules.Hazard(RunSettings.SETTINGTYPE.Hazard_Bees))
         {
             return;
         }

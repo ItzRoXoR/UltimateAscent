@@ -100,6 +100,11 @@ internal static class Crabs
     /// <summary>For the tests: how many of the crabs were put on the climb itself (the beach's wall).</summary>
     internal static int OnClimb;
 
+    /// <summary>For the tests: the heights of the lowest and the highest spot found on the climb when they spawned.</summary>
+    internal static (float low, float high) ClimbHeights;
+    internal static string ClimbSpots = "";
+    internal static List<float> ClimbPlaced = new List<float>();
+
     private static AudioClip[] pinches;
     private static AudioClip[] clicks;
     private static AudioClip scuttle;
@@ -420,7 +425,11 @@ internal static class Crabs
             found.Add((hit.point, Share(hit.point, a, b)));
         }
         SpotsFound = found.Count;
-        return NewMobs.Place(found, MaxCrabs, CrabsApart, out OnClimb);
+        List<Vector3> placed = NewMobs.Place(found, MaxCrabs, CrabsApart, out OnClimb);
+        ClimbHeights = NewMobs.LastClimb;
+        ClimbSpots = NewMobs.LastClimbSpots;
+        ClimbPlaced = NewMobs.LastClimbPlaced;
+        return placed;
     }
 
     /// <summary>Ground about level a little way round a spot (not a ledge's edge).</summary>
@@ -586,7 +595,7 @@ internal sealed class BeachCrab : Mob
     private void PutBackIfUnderMap()
     {
         if (!photonView.IsMine || (_mobItem != null && _mobItem.itemState != ItemState.Ground)
-            || !NewMobs.UnderTheMap(transform.position) || NewMobs.UnderTheMap(startPos))
+            || !NewMobs.UnderTheMap(transform.position, Vector3.up, terrainOnly: true) || NewMobs.UnderTheMap(startPos))
         {
             return;
         }

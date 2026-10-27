@@ -229,7 +229,7 @@ internal static class AscentCatalog
                 Put(table, prompt.Key, prompt.Value, Russian.TryGetValue(prompt.Key, out string russian) ? russian : null);
             }
         }
-        // The new mobs' threats on the Custom Run screen, in capitals if the game writes its own "Scorpions" so.
+        // The mod's threats on the Custom Run screen, in capitals if the game writes its own "Scorpions" so.
         bool capitals = false;
         foreach (List<string> texts in table.Values)
         {
@@ -239,10 +239,12 @@ internal static class AscentCatalog
                 break;
             }
         }
-        foreach ((_, string key, string english, string russian, _) in Features.NewMobs.Threats)
+        foreach ((_, string key, string english, string russian, _) in Features.CustomRunThreats.Threats)
         {
             Put(table, key, capitals ? english.ToUpperInvariant() : english, capitals ? russian.ToUpperInvariant() : russian);
         }
+        // The Custom Run screen's Ascent setting, its name written like the threats'.
+        Put(table, Features.CustomRunAscent.LabelKey, capitals ? "ASCENT" : "Ascent", capitals ? "ВОСХОЖДЕНИЕ" : "Восхождение");
         textsAdded = true;
     }
 

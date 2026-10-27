@@ -62,7 +62,7 @@ internal static class ChallengeModesUi
         }
         boxes.SetActive(ChallengeModes.Offered);
         blind.SetIsOnWithoutNotify(ChallengeModes.Blind);
-        bool byAscent = ChallengeModes.SunByAscent(pass.ascentIndex);
+        bool byAscent = ChallengeModes.SunByAscent(CustomRunAscent.OnPass(pass));
         hot.interactable = !byAscent;
         hot.SetIsOnWithoutNotify(byAscent || ChallengeModes.Hot);
         hotLabel.alpha = byAscent ? 0.55f : 1f;

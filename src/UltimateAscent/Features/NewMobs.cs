@@ -3,36 +3,25 @@ using System.Linq;
 using HarmonyLib;
 using UltimateAscent.Core;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace UltimateAscent.Features;
 
 /// <summary>
 /// The mod's new creatures: the beach's crabs (<see cref="Crabs"/>), the Tropics' snakes (<see cref="Snakes"/>) and the
 /// Alps' mountain goats (<see cref="Goats"/>). With the config's "New Mobs" on (the host's) they live in regular runs on
-/// every ascent; custom runs have a switch for each among the Custom Run screen's threats, in its biome's group. Below
-/// ascent 17 (with its rule off, and in custom runs, where the ascents' rules are off) all they do to a scout is half
+/// every ascent; custom runs have a switch for each among the Custom Run screen's threats, in its biome's group (on
+/// any ascent the screen picks). Below ascent 17 (with its rule off, and in custom runs without a picked ascent, where
+/// the ascents' rules are off) all they do to a scout is half
 /// as strong: half the injury, poison and knockback, knocked down or paralysed half as long; and snakes chase a third
 /// slower. Seven in ten of the crabs, the ground snakes and the goats live on the climb itself, the rest on the way to
 /// it (see <see cref="Place"/>).
 /// </summary>
 internal static class NewMobs
 {
-    /// <summary>
-    /// Their switches among the Custom Run screen's threats: run settings of the game's own kind (saved, synced and reset
-    /// as its own, on by default), under numbers its setting type does not use; each after the last threat of its biome's
-    /// group there (the beach's urchins, the Tropics' rain, the Alps' blizzards).
-    /// </summary>
-    internal static readonly (RunSettings.SETTINGTYPE setting, string key, string english, string russian, RunSettings.SETTINGTYPE after)[] Threats =
-    {
-        ((RunSettings.SETTINGTYPE)91000, "UA_THREAT_CRABS", "Crabs", "Крабы", RunSettings.SETTINGTYPE.Hazard_Urchins),
-        ((RunSettings.SETTINGTYPE)91010, "UA_THREAT_SNAKES", "Snakes", "Змеи", RunSettings.SETTINGTYPE.Hazard_Rain),
-        ((RunSettings.SETTINGTYPE)91020, "UA_THREAT_GOATS", "Mountain Goats", "Горные козлы", RunSettings.SETTINGTYPE.Hazard_Storm),
-    };
-
-    internal static RunSettings.SETTINGTYPE CrabsThreat => Threats[0].setting;
-    internal static RunSettings.SETTINGTYPE SnakesThreat => Threats[1].setting;
-    internal static RunSettings.SETTINGTYPE GoatsThreat => Threats[2].setting;
+    /// <summary>Their switches among the Custom Run screen's threats (see <see cref="CustomRunThreats"/>).</summary>
+    internal static RunSettings.SETTINGTYPE CrabsThreat => CustomRunThreats.Threats[0].setting;
+    internal static RunSettings.SETTINGTYPE SnakesThreat => CustomRunThreats.Threats[1].setting;
+    internal static RunSettings.SETTINGTYPE GoatsThreat => CustomRunThreats.Threats[2].setting;
 
     /// <summary>The config's switch lets them live in this climb: a regular run on any ascent, unless the host switched them off.</summary>
     internal static bool On => NewItems.RegularRun && HostOptions.NewMobsOn;
@@ -66,12 +55,17 @@ internal static class NewMobs
     internal static int OnClimb(int count) => Mathf.RoundToInt(count * ClimbShare);
 
     /// <summary>
-    /// Whether a spot is on the climb itself: the map's terrain under it is a wall (the game's "Wall..." meshes: the
-    /// segment's wall, its top at the campfire, the Alps' two walls, the props laid on them), not the ground the way to
-    /// it runs over ("Ground"). Anything else counts as what lies under it; false where neither is found below.
+    /// Whether a spot is on the climb itself: the map's terrain nearest to it (under it, or beside it within 10 m, as the
+    /// cliff's face beside a rock on it) is a wall (the game's "Wall..." meshes: the segment's wall, its top at the
+    /// campfire, the Alps' two walls, the props laid on them), not the ground the way to it runs over ("Ground").
+    /// Anything else counts as what lies under it; false where neither is found.
     /// </summary>
     internal static bool OnTheClimb(Vector3 spot)
     {
+        // The nearest of the map's terrain: below the spot, or beside it (a rock on a cliff has the cliff's face beside
+        // it, the ground far below).
+        float nearest = float.PositiveInfinity;
+        int nearestKind = -1;
         RaycastHit[] hits = Physics.RaycastAll(spot + Vector3.up * 0.5f, Vector3.down, 80f, HelperFunctions.terrainMapMask);
         System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
         foreach (RaycastHit hit in hits)
@@ -79,11 +73,29 @@ internal static class NewMobs
             int kind = TerrainKind(hit.collider);
             if (kind >= 0)
             {
-                return kind == 1;
+                nearest = Mathf.Max(0f, hit.distance - 0.5f);
+                nearestKind = kind;
+                break;
             }
         }
-        return false;
+        for (int turn = 0; turn < 8; turn++)
+        {
+            Vector3 side = Quaternion.Euler(0f, turn * 45f, 0f) * Vector3.forward;
+            foreach (RaycastHit hit in Physics.RaycastAll(spot + Vector3.up * 0.5f, side, Mathf.Min(nearest, BesideReach), HelperFunctions.terrainMapMask))
+            {
+                int kind = TerrainKind(hit.collider);
+                if (kind >= 0 && hit.distance < nearest)
+                {
+                    nearest = hit.distance;
+                    nearestKind = kind;
+                }
+            }
+        }
+        return nearestKind == 1;
     }
+
+    /// <summary>How far beside a spot the map's terrain is looked for (see <see cref="OnTheClimb"/>).</summary>
+    private const float BesideReach = 10f;
 
     /// <summary>
     /// Whether a spot is under the map: on ground buried under the map's surface, inside the mountain, or below a gap
@@ -91,18 +103,25 @@ internal static class NewMobs
     /// straight up and slanting up all round, the map's surface seen from below: its upper side, facing away. Ground
     /// under an overhang or in a cave is not under the map (its roof faces down at it, or the sky shows).
     /// </summary>
-    internal static bool UnderTheMap(Vector3 spot)
+    internal static bool UnderTheMap(Vector3 spot) => UnderTheMap(spot, Vector3.up);
+
+    /// <summary>
+    /// The same, looked at from a little way out from the surface the spot is on (this way out: up from ground, out from a
+    /// cliff's face); with only the map's own ground and walls seen (not its rocks and trees, whose open undersides an
+    /// open-air spot under them sees from below too), for a mob found there to have fallen through the map.
+    /// </summary>
+    internal static bool UnderTheMap(Vector3 spot, Vector3 outward, bool terrainOnly = false)
     {
         bool backfaces = Physics.queriesHitBackfaces;
         Physics.queriesHitBackfaces = true;
         try
         {
             int under = 0;
-            Vector3 from = spot + Vector3.up * 0.3f;
+            Vector3 from = spot + outward.normalized * 0.3f;
             foreach (Vector3 look in SkyLooks)
             {
                 if (Physics.Raycast(from, look, out RaycastHit hit, 400f, HelperFunctions.terrainMapMask, QueryTriggerInteraction.Ignore)
-                    && Vector3.Dot(hit.normal, look) > 0f)
+                    && Vector3.Dot(hit.normal, look) > 0f && (!terrainOnly || IsTerrain(hit.collider)))
                 {
                     under++;
                 }
@@ -135,23 +154,8 @@ internal static class NewMobs
     /// <summary>For the tests and the log: the new mobs found under the map (fallen through a gap) and put back at their spot.</summary>
     internal static int PutBack;
 
-    /// <summary>
-    /// How high a spot is above the map's own terrain right under it (its ground or its wall, see <see cref="OnTheClimb"/>):
-    /// about 0 on the ground, a rock's height on a rock, far up on a tree's crown; infinity where none is found below.
-    /// </summary>
-    internal static float AboveTerrain(Vector3 spot)
-    {
-        RaycastHit[] hits = Physics.RaycastAll(spot + Vector3.up * 0.5f, Vector3.down, 200f, HelperFunctions.terrainMapMask);
-        float above = float.PositiveInfinity;
-        foreach (RaycastHit hit in hits)
-        {
-            if (TerrainKind(hit.collider) >= 0)
-            {
-                above = Mathf.Min(above, Mathf.Max(0f, spot.y - hit.point.y));
-            }
-        }
-        return above;
-    }
+    /// <summary>The map's own ground or wall (its terrain), not a rock, a log, a tree or anything else laid on it.</summary>
+    internal static bool IsTerrain(Collider collider) => collider != null && TerrainKind(collider) >= 0;
 
     private static readonly Dictionary<int, int> terrainKinds = new Dictionary<int, int>();
 
@@ -187,25 +191,58 @@ internal static class NewMobs
 
     /// <summary>
     /// So many spots out of those found along a part of the map's way (each with how far along it lies): the climb's
-    /// share of them on the climb itself, the rest on the way to it, each part spread along its own stretch, all this far
-    /// apart; where one part has too little room, the other takes the rest.
+    /// share of them on the climb itself, spread all the way up it (see <see cref="Split"/>), the rest on the way to it,
+    /// spread along it, all this far apart; where one part has too little room, the other takes the rest.
     /// </summary>
     internal static List<Vector3> Place(List<(Vector3 spot, float share)> found, int count, float apart, out int onClimb)
     {
-        List<(Vector3 spot, float share)> climb = new List<(Vector3, float)>();
-        List<(Vector3 spot, float share)> way = new List<(Vector3, float)>();
-        foreach ((Vector3 spot, float share) f in found)
-        {
-            (OnTheClimb(f.spot) ? climb : way).Add(f);
-        }
+        Split(found, out List<(Vector3 spot, float share)> climb, out List<(Vector3 spot, float share)> way);
         List<Vector3> taken = new List<Vector3>();
         List<Vector3> high = Spread(climb, OnClimb(count), apart, taken);
         List<Vector3> low = Spread(way, count - high.Count, apart, taken);
         high.AddRange(Spread(climb, count - high.Count - low.Count, apart, taken));
         onClimb = high.Count;
+        LastClimbPlaced = high.Select(h => h.y).ToList();
         high.AddRange(low);
         return high;
     }
+
+    /// <summary>
+    /// The spots found, split into those on the climb itself and those on the way to it (see <see cref="OnTheClimb"/>).
+    /// The climb's are measured by their height, so that spread (see <see cref="Spread"/>) they go all the way up it, from
+    /// its foot through halfway up to its top; the way's by how far along the way they lie.
+    /// </summary>
+    internal static void Split(List<(Vector3 spot, float share)> found, out List<(Vector3 spot, float share)> climb, out List<(Vector3 spot, float share)> way)
+    {
+        climb = new List<(Vector3, float)>();
+        way = new List<(Vector3, float)>();
+        foreach ((Vector3 spot, float share) f in found)
+        {
+            if (OnTheClimb(f.spot))
+            {
+                climb.Add((f.spot, f.spot.y));
+            }
+            else
+            {
+                way.Add(f);
+            }
+        }
+        LastClimb = climb.Count > 0 ? (climb.Min(c => c.share), climb.Max(c => c.share)) : (0f, 0f);
+        int[] bins = new int[10];
+        float span = Mathf.Max(LastClimb.high - LastClimb.low, 1e-3f);
+        foreach ((Vector3 spot, float height) c in climb)
+        {
+            bins[Mathf.Clamp((int)((c.height - LastClimb.low) / span * 10f), 0, 9)]++;
+        }
+        LastClimbSpots = string.Join(" ", bins);
+    }
+
+    /// <summary>For the tests: the heights of the lowest and the highest spot found on the climb, and how many were found in each tenth of its height, the last time spots were split.</summary>
+    internal static (float low, float high) LastClimb;
+    internal static string LastClimbSpots = "";
+
+    /// <summary>For the tests: the heights of the spots put on the climb, the last time spots were placed (see <see cref="Place"/>).</summary>
+    internal static List<float> LastClimbPlaced = new List<float>();
 
     /// <summary>
     /// Spots out of those found along a stretch of the way (each with how far along it lies): this many, one at each such
@@ -253,98 +290,4 @@ internal static class NewMobs
 
     /// <summary>For the tests and the log: spots found for the new mobs that lay under the map, and were passed over.</summary>
     internal static int UnderMapSpots;
-
-    /// <summary>Their run settings, set up with the game's own (before it orders, loads and syncs them).</summary>
-    [HarmonyPatch(typeof(RunSettings), nameof(RunSettings.InitializeDefaultValues))]
-    private static class ThreatSettings
-    {
-        private static void Postfix()
-        {
-            foreach ((RunSettings.SETTINGTYPE setting, _, _, _, _) in Threats)
-            {
-                RunSettings.AddDefaultSetting(setting, 1, 1);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Their switches on the Custom Run screen: the switch of the last threat in their biome's group copied, right after
-    /// it, with their own setting and name; the threats' columns then a row longer, so every switch still fits.
-    /// </summary>
-    [HarmonyPatch(typeof(CustomOptionsWindow), nameof(CustomOptionsWindow.Initialize))]
-    private static class ThreatToggles
-    {
-        private static void Postfix(CustomOptionsWindow __instance)
-        {
-            CustomOptionToggle[] toggles = __instance.GetComponentsInChildren<CustomOptionToggle>(true);
-            CustomOptionToggle scorpions = toggles.FirstOrDefault(t => t.settingType == RunSettings.SETTINGTYPE.Hazard_Scorpions);
-            if (scorpions == null)
-            {
-                Plugin.Log.LogWarning("New mobs: the Custom Run screen has no threats to copy; their switches are not on it (custom runs keep them on).");
-                return;
-            }
-            int added = 0;
-            foreach ((RunSettings.SETTINGTYPE setting, string key, _, _, RunSettings.SETTINGTYPE after) in Threats)
-            {
-                if (toggles.Any(t => t.settingType == setting))
-                {
-                    continue;
-                }
-                CustomOptionToggle neighbour = toggles.FirstOrDefault(t => t.settingType == after && t.transform.parent == scorpions.transform.parent) ?? scorpions;
-                GameObject made = Object.Instantiate(neighbour.gameObject, neighbour.transform.parent);
-                made.name = key;
-                made.transform.SetSiblingIndex(neighbour.transform.GetSiblingIndex() + 1);
-                made.GetComponent<CustomOptionToggle>().settingType = setting;
-                foreach (LocalizedText label in made.GetComponentsInChildren<LocalizedText>(true))
-                {
-                    label.SetIndex(key);
-                }
-                added++;
-            }
-            if (added > 0)
-            {
-                FitColumns(scorpions.transform.parent, added);
-            }
-        }
-    }
-
-    /// <summary>
-    /// The threats' grid (switches and the dotted lines between the biomes, filling column after column) as many columns
-    /// wide as before ours: its rows lowered so that a column holds what it takes.
-    /// </summary>
-    private static void FitColumns(Transform list, int added)
-    {
-        GridLayoutGroup grid = list.GetComponent<GridLayoutGroup>();
-        if (grid == null || grid.startAxis != GridLayoutGroup.Axis.Vertical)
-        {
-            Plugin.Log.LogWarning("New mobs: the Custom Run screen's threats are not in columns as expected ("
-                + string.Join(", ", list.GetComponents<Component>().Select(c => c.GetType().Name)) + "); the last of them may not fit.");
-            return;
-        }
-        int shown = 0;
-        foreach (Transform child in list)
-        {
-            if (child.gameObject.activeSelf && !(child.TryGetComponent(out LayoutElement element) && element.ignoreLayout))
-            {
-                shown++;
-            }
-        }
-        int rows = grid.constraint == GridLayoutGroup.Constraint.FixedRowCount
-            ? grid.constraintCount
-            : Mathf.Max(1, Mathf.FloorToInt((((RectTransform)list).rect.height - grid.padding.vertical + grid.spacing.y + 0.01f) / (grid.cellSize.y + grid.spacing.y)));
-        int columns = Mathf.Max(1, Mathf.CeilToInt((shown - added) / (float)rows));
-        int needed = Mathf.CeilToInt(shown / (float)columns);
-        if (needed <= rows)
-        {
-            return;
-        }
-        // A hair under the exact share, so the last row is not lost to rounding.
-        float scale = rows / (float)needed * 0.998f;
-        grid.cellSize = new Vector2(grid.cellSize.x, grid.cellSize.y * scale);
-        grid.spacing = new Vector2(grid.spacing.x, grid.spacing.y * scale);
-        if (grid.constraint == GridLayoutGroup.Constraint.FixedRowCount)
-        {
-            grid.constraintCount = needed;
-        }
-    }
 }

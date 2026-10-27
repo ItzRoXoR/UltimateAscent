@@ -229,7 +229,7 @@ internal static class EffectPreview
 
         private static void Postfix(ref bool __result)
         {
-            if (__result && Rules.Enabled(Lvl.HotCampfires))
+            if (__result && Features.A17_HotCampfires.On)
             {
                 __result = false;
             }

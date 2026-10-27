@@ -24,7 +24,8 @@ internal sealed partial class Runner
     /// <summary>
     /// Where the new mobs live (on a map with the beach, the Tropics and the Alps, as 80): seven in ten of the crabs, of
     /// the ground snakes and of the goats (as whole groups) on the climb itself (the segment's wall up to its campfire),
-    /// the rest on the way to it; 21 ground snakes and 7 tree snakes whatever the map. One of each on the climb pictured, where the scout is in its
+    /// the rest on the way to it, those on the climb spread all the way up it; 30 ground snakes and 10 tree snakes whatever the map, each ground snake
+    /// where a scout can stand, on the map's own ground with a plant near. One of each on the climb pictured, where the scout is in its
     /// part of the map (the crabs from the beach, the snakes once the Tropics are reached, the goats in the Alps).
     /// </summary>
     private IEnumerator NewMobPlacement()
@@ -45,6 +46,7 @@ internal sealed partial class Runner
                 Crabs.Spawned > 0 && Crabs.OnClimb == NewMobs.OnClimb(Crabs.Spawned),
                 $"put on the climb {Crabs.OnClimb} of {Crabs.Spawned} (wanted {NewMobs.OnClimb(Crabs.Spawned)}); on it now {highCrabs.Count} of {crabs.Count}, "
                 + $"{string.Join(", ", highCrabs.Select(c => (c.transform.position.y - start.y).ToString("0")))} m above where the scouts wake; spots found {Crabs.SpotsFound} of {Crabs.SpotsTried}");
+            SpreadUpTheClimb("the crabs", Crabs.ClimbPlaced, Crabs.ClimbHeights, Crabs.ClimbSpots);
             if (Map.CurrentPlace == Place.Shore)
             {
                 BeachCrab shown = highCrabs.OrderBy(c => c.transform.position.y).Skip(highCrabs.Count / 2).FirstOrDefault();
@@ -73,27 +75,58 @@ internal sealed partial class Runner
                 List<Snake> snakes = Snakes.All.Where(s => s != null).ToList();
                 List<Snake> grounded = snakes.Where(s => !s.IsTree).ToList();
                 List<Snake> high = grounded.Where(s => NewMobs.OnTheClimb(s.Home)).ToList();
-                // On the ground: not on a giant tree (nothing of it under the spot's first surface from above), and close
-                // above the map's own ground or wall.
+                // On the ground: the map's own or one of its rocks, never a giant tree, its crown or anything else.
                 List<string> upTrees = new List<string>();
                 foreach (Snake snake in grounded)
                 {
-                    bool onTree = Physics.Raycast(snake.Home + Vector3.up * 0.5f, Vector3.down, out RaycastHit below, 2f, HelperFunctions.terrainMapMask) && Snakes.InGiantTree(below.collider);
-                    float up = NewMobs.AboveTerrain(snake.Home);
-                    if (onTree || up > 2.2f)
+                    bool hit = Physics.Raycast(snake.Home + Vector3.up * 0.5f, Vector3.down, out RaycastHit below, 2f, HelperFunctions.terrainMapMask);
+                    if (!hit || Snakes.InGiantTree(below.collider) || !Snake.Climbable(below.collider))
                     {
-                        upTrees.Add($"{snake.Home:F0} ({(onTree ? "on a giant tree, " : "")}{up:0.0} m above the ground)");
+                        upTrees.Add($"{snake.Home:F0} ({(hit ? below.collider.name : "nothing")} under it)");
                     }
                 }
-                Check("ground snakes live on the ground, never on a giant tree or its crown",
+                Check("ground snakes live on the ground or its rocks, never on a giant tree or its crown",
                     grounded.Count > 0 && upTrees.Count == 0,
-                    $"{grounded.Count} ground snakes; up off the ground: {(upTrees.Count == 0 ? "none" : string.Join(", ", upTrees))}");
-                Check("21 ground snakes and 7 tree snakes in the Tropics, whatever the map; seven in ten of the ground snakes on the climb itself (the Tropics' wall up to their campfire), the rest on the jungle floor",
+                    $"{grounded.Count} ground snakes; on anything else: {(upTrees.Count == 0 ? "none" : string.Join(", ", upTrees))}"
+                    + $"; on rocks {grounded.Count(s => Physics.Raycast(s.Home + Vector3.up * 0.5f, Vector3.down, out RaycastHit r, 2f, HelperFunctions.terrainMapMask) && !NewMobs.IsTerrain(r.collider))}");
+                Check("30 ground snakes and 10 tree snakes in the Tropics, whatever the map; seven in ten of the ground snakes on the climb itself (the Tropics' wall up to their campfire), the rest on the jungle floor",
                     snakes.Count == Snakes.GroundCount + Snakes.TreeCount && snakes.Count - grounded.Count <= Snakes.TreeCount
                     && Snakes.OnClimb == NewMobs.OnClimb(grounded.Count) && high.Count == Snakes.OnClimb,
                     $"{snakes.Count} snakes, {snakes.Count - grounded.Count} in trees; on the climb {high.Count} of {grounded.Count} ground snakes (put there {Snakes.OnClimb}, wanted {NewMobs.OnClimb(grounded.Count)}); "
                     + $"this map's third part: {Singleton<MapHandler>.Instance.segments[(int)Segment.Alpine].biome}; "
                     + $"the ground snakes' spots {string.Join(", ", grounded.Select(s => $"{s.Home.y:0} m{(NewMobs.OnTheClimb(s.Home) ? " (climb)" : "")}"))}; spots found {Snakes.SpotsFound} of {Snakes.SpotsTried}");
+                SpreadUpTheClimb("the ground snakes", Snakes.ClimbPlaced, Snakes.ClimbHeights, Snakes.ClimbSpots);
+                // Each ground snake's spot: room for a scout standing there, the map's own ground, plants or grass blades near.
+                List<string> wrong = new List<string>();
+                foreach (Snake snake in grounded)
+                {
+                    int blades = Snakes.Green != null ? Snakes.Green.GrassAt(snake.Home) : 0;
+                    bool ground = Physics.Raycast(snake.Home + Vector3.up * 0.5f, Vector3.down, out RaycastHit floor, 1.5f, HelperFunctions.terrainMapMask) && Snake.Climbable(floor.collider);
+                    float plant = Snakes.Green != null ? Snakes.Green.PlantNear(snake.Home, Snakes.PlantsNear) : float.PositiveInfinity;
+                    bool room = Snakes.RoomForScout(snake.Home);
+                    if (!room || !ground || (float.IsInfinity(plant) && blades < Snakes.GrassBlades))
+                    {
+                        wrong.Add($"{snake.Home:F0}: room {room}, the map's ground or rock {ground}, plant {(float.IsInfinity(plant) ? "none" : plant.ToString("0.0") + " m")} ({blades} grass blades)");
+                    }
+                }
+                // The places on the climb otherwise fit, before the plants were asked for: how high, how far from a plant.
+                List<(float height, float plant, bool blades)> candidates = Snakes.ClimbCandidates;
+                if (candidates.Count > 0)
+                {
+                    float low = candidates.Min(c => c.height), span = Mathf.Max(candidates.Max(c => c.height) - low, 0.01f);
+                    int[] tenths = new int[10];
+                    foreach ((float height, float plant, bool blades) c in candidates)
+                    {
+                        tenths[Mathf.Clamp((int)((c.height - low) / span * 10f), 0, 9)]++;
+                    }
+                    string within = string.Join(", ", new[] { 4f, 6f, 8f, 12f, 16f }.Select(d => $"{d:0} m {candidates.Count(c => c.plant <= d)}"));
+                    Info("the places on the climb fit for a ground snake but for plants", $"{candidates.Count}, {low:0}-{low + span:0} m, in each tenth of that from the foot: {string.Join(" ", tenths)}; "
+                        + $"a plant within {within}, none within 16 m {candidates.Count(c => float.IsInfinity(c.plant))}; among grass blades {candidates.Count(c => c.blades)}");
+                }
+                Check("every ground snake lives where a scout can stand, on the map's ground or a rock of it, with a plant near or among the game's grass blades",
+                    grounded.Count > 0 && wrong.Count == 0,
+                    $"{grounded.Count} spots; wrong: {(wrong.Count == 0 ? "none" : string.Join("; ", wrong))}; places passed over for want of room {Snakes.NoRoom}, of the map's ground or rock {Snakes.NoGround}, "
+                    + $"plants {Snakes.NoPlants}; spots among the game's grass blades {Snakes.WithBlades} of {Snakes.SpotsFound}; {Snakes.Green?.Blades ?? 0} grass blades and {Snakes.Green?.Plants ?? 0} plants in the map");
                 if (Map.CurrentPlace == Place.Tropics)
                 {
                     Snake shown = high.OrderBy(s => s.Home.y).Skip(high.Count / 2).FirstOrDefault();
@@ -126,6 +159,7 @@ internal sealed partial class Runner
                     Mathf.Abs(Goats.OnClimb - NewMobs.OnClimb(goats.Count)) <= 1 && high.Count == Goats.OnClimb,
                     $"on the climb {high.Count} of {goats.Count} (put there {Goats.OnClimb}, wanted {NewMobs.OnClimb(goats.Count)}); "
                     + $"their spots {string.Join(", ", goats.Select(g => $"{g.Home.y:0} m{(NewMobs.OnTheClimb(g.Home) ? " (climb)" : "")}"))}");
+                SpreadUpTheClimb("the goats", Goats.ClimbPlaced, Goats.ClimbHeights, Goats.ClimbSpots);
                 Goat shown = high.OrderBy(g => g.Home.y).Skip(high.Count / 2).FirstOrDefault();
                 if (shown != null)
                 {
@@ -155,6 +189,25 @@ internal sealed partial class Runner
         {
             Protect(false);
         }
+    }
+
+    /// <summary>
+    /// The heights of the mobs put on the climb (when they spawned) are spread all the way up it: from the lowest spot found on it to the highest
+    /// (when they spawned): wherever on it spots were found (each tenth of its height with three or more), some of them live
+    /// near (within 15% of its height), the more so the more mobs there are on it (with three or more, every such tenth).
+    /// </summary>
+    private void SpreadUpTheClimb(string who, List<float> heights, (float low, float high) climb, string found)
+    {
+        float span = climb.high - climb.low;
+        List<float> up = heights.Select(y => span > 0.5f ? (y - climb.low) / span : 0.5f).OrderBy(f => f).ToList();
+        float gap = up.Count == 0 ? 1f : up.Zip(up.Skip(1), (a, b) => b - a).Append(up.First()).Append(1f - up.Last()).Max();
+        int[] tenths = (found ?? "").Split(' ').Select(t => int.TryParse(t, out int n) ? n : 0).ToArray();
+        List<float> left = Enumerable.Range(0, tenths.Length).Where(i => tenths[i] >= 3).Select(i => (i + 0.5f) / 10f)
+            .Where(c => up.Count == 0 || up.Min(f => Mathf.Abs(f - c)) > 0.15f).ToList();
+        bool spread = up.Count >= 3 ? left.Count == 0 : up.Count > 0;
+        Check($"{who} on the climb are spread all the way up it, halfway up too, not only near its top", spread,
+            $"{up.Count} on the climb, {climb.low:0}-{climb.high:0} m (the spots found on it): at {string.Join(", ", up.Select(f => (f * 100f).ToString("0") + "%"))} of its height; "
+            + $"the widest gap {gap * 100f:0}%; spots found in each tenth of its height, from its foot: {found}; tenths with spots and no mob near: {left.Count}");
     }
 
     /// <summary>The scout taken to a place a few metres from a point, with it in sight, looking at it, and the view pictured.</summary>
@@ -324,8 +377,9 @@ internal sealed partial class Runner
     /// <summary>
     /// The boarding pass on a custom run and the Custom Run screen, opened as a player does (the pass's custom-run button,
     /// then its Custom Options button): the map picker beside that button, not on it; the threats with the new mobs each
-    /// in its biome's group (crabs after the urchins, snakes after the rain, goats after the blizzards), each its own
-    /// switch, on by default, its click turning it off and on again, and every threat inside the threats' panel. Both
+    /// in its biome's group (crabs after the urchins, snakes after the rain, goats after the blizzards) and the eruptions
+    /// after the rising lava, each its own switch, on by default, its click turning it off and on again, and every
+    /// threat inside the threats' panel. Both
     /// pictured; the scorpions' switch and every switch's name listed; the pass left as it was.
     /// </summary>
     private IEnumerator CustomRunThreats()
@@ -391,7 +445,7 @@ internal sealed partial class Runner
         Screenshot("custom-run-threats");
         List<string> results = new List<string>();
         bool right = scorpions != null && window.isOpen;
-        foreach ((RunSettings.SETTINGTYPE setting, _, string english, string russian, RunSettings.SETTINGTYPE after) in NewMobs.Threats)
+        foreach ((RunSettings.SETTINGTYPE setting, _, string english, string russian, RunSettings.SETTINGTYPE after) in UltimateAscent.Features.CustomRunThreats.Threats)
         {
             CustomOptionToggle toggle = toggles.FirstOrDefault(t => t.settingType == setting);
             if (toggle == null)
@@ -416,7 +470,7 @@ internal sealed partial class Runner
             right &= toggle.gameObject.activeInHierarchy && named && index == neighbourAt + 1 && onByDefault && was == 1 && clicked == 0 && tickOff && again == 1 && tickOn;
             results.Add($"{english}: shown {toggle.gameObject.activeInHierarchy}, named '{label}', at {index} (after {after} at {neighbourAt}); on by default {onByDefault} (was {was}); clicked: {clicked} (ticked {!tickOff}), again: {again} (ticked {tickOn})");
         }
-        Check("the Custom Run screen's threats have the new mobs each in its biome's group (crabs after the urchins, snakes after the rain, goats after the blizzards), each its own switch, on by default, and every threat fits its panel",
+        Check("the Custom Run screen's threats have the new mobs each in its biome's group (crabs after the urchins, snakes after the rain, goats after the blizzards) and the eruptions after the rising lava, each its own switch, on by default, and every threat fits its panel",
             right && outside.Count == 0,
             $"screen open {window.isOpen}; " + string.Join("; ", results) + $"; outside the threats' panel: {(outside.Count == 0 ? "none" : string.Join(", ", outside))}");
 
