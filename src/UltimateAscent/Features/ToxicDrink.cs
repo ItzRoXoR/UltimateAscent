@@ -10,9 +10,11 @@ namespace UltimateAscent.Features;
 
 /// <summary>
 /// The Toxic Drink: the Energy Drink's can in the player's own purple label. Drunk, it makes you
-/// walk and climb 4 times as fast for 10 s (3 times for 7 s with ascent 15's rule); when the boost is
-/// over it poisons you for 4 a second for 5 s (8 a second with ascent 15's rule, as it lands from ascent 14
-/// on). Its can looks the way a cooked Energy Drink's does (the game's first cooking tint). Cooked,
+/// walk and climb 4 times as fast for 10 s (with ascent 15's rule, for 7 s: walking 3 times and climbing
+/// 3.5 times as fast); when the boost is over it poisons you for 4 a second for 5 s (8 a second with ascent
+/// 15's rule, as it lands from ascent 14 on). It and the Energy Drink override each other: drunk while the
+/// other's boost runs, it ends that boost (whose after-effect lands then: the Energy Drink's crash, the Toxic
+/// Drink's poison) and only its own runs; the same drink twice keeps the game's way (the longer time). Its can looks the way a cooked Energy Drink's does (the game's first cooking tint). Cooked,
 /// it works like a cooked Energy Drink: it bursts when drunk (a knock-down and a push, never knocking you
 /// out or making you drowsy, as ascent 17's explosions would), and the poison is gone. Its drinking sound
 /// is the Energy Drink's, 1.5 times as fast. It cools you by 60 heat (the Energy Drink: 30; from ascent 15, as every
@@ -38,8 +40,9 @@ internal static class ToxicDrink
     internal const float Speed = 4f;
     internal const float Seconds = 10f;
 
-    /// <summary>...and with ascent 15's rule.</summary>
+    /// <summary>...and with ascent 15's rule (walking, climbing).</summary>
     internal const float SpeedWorse = 3f;
+    internal const float ClimbSpeedWorse = 3.5f;
     internal const float SecondsWorse = 7f;
 
     /// <summary>The poison a second once the boost is over, for 5 s (with ascent 15's rule: as it lands from ascent 14 on).</summary>
@@ -87,6 +90,7 @@ internal static class ToxicDrink
     private static bool Worse => Rules.Enabled(Lvl.WorseItems);
 
     internal static float SpeedNow => Worse ? SpeedWorse : Speed;
+    internal static float ClimbSpeedNow => Worse ? ClimbSpeedWorse : Speed;
     internal static float SecondsNow => Worse ? SecondsWorse : Seconds;
 
     /// <summary>All the poison after the boost, as it lands on the bar.</summary>
@@ -112,6 +116,98 @@ internal static class ToxicDrink
     {
         doses.Clear();
         drowsyFloor = -1f;
+        boostFrom.Clear();
+    }
+
+    /// <summary>The drinks whose boosts override each other.</summary>
+    private enum SpeedDrink
+    {
+        None,
+        Energy,
+        Toxic,
+    }
+
+    /// <summary>The drink being drunk now (while its actions run), and which drink each running boost came from.</summary>
+    private static SpeedDrink drinking;
+    private static readonly Dictionary<Affliction_FasterBoi, SpeedDrink> boostFrom = new Dictionary<Affliction_FasterBoi, SpeedDrink>();
+
+    [HarmonyPatch(typeof(Action_ApplyAffliction), nameof(Action_ApplyAffliction.RunAction))]
+    private static class Drinking
+    {
+        private static void Prefix(Action_ApplyAffliction __instance, out SpeedDrink __state)
+        {
+            __state = drinking;
+            drinking = IsToxic(__instance.item) ? SpeedDrink.Toxic : A14_Items.NameOf(__instance.item) == A14_Items.EnergyDrinkName ? SpeedDrink.Energy : SpeedDrink.None;
+        }
+
+        private static Exception Finalizer(SpeedDrink __state, Exception __exception)
+        {
+            drinking = __state;
+            return __exception;
+        }
+    }
+
+    [HarmonyPatch(typeof(Affliction_FasterBoi), nameof(Affliction_FasterBoi.OnApplied))]
+    private static class BoostFrom
+    {
+        private static void Prefix(Affliction_FasterBoi __instance)
+        {
+            if (drinking != SpeedDrink.None)
+            {
+                boostFrom[__instance] = drinking;
+            }
+        }
+    }
+
+    [HarmonyPatch(typeof(Affliction_FasterBoi), nameof(Affliction_FasterBoi.OnRemoved))]
+    private static class BoostGone
+    {
+        private static void Postfix(Affliction_FasterBoi __instance)
+        {
+            boostFrom.Remove(__instance);
+        }
+    }
+
+    /// <summary>
+    /// The Energy Drink drunk while a Toxic Drink's boost runs, or the other way round: the running boost ends (its
+    /// after-effect lands now: the Energy Drink's crash, the Toxic Drink's poison) and only the new one runs. The game
+    /// would keep the running boost's speed for the longer of the two times, as it still does for the same drink twice.
+    /// </summary>
+    [HarmonyPatch(typeof(Affliction_FasterBoi), nameof(Affliction_FasterBoi.Stack))]
+    private static class OneDrinkAtATime
+    {
+        private static bool Prefix(Affliction_FasterBoi __instance, Affliction incomingAffliction)
+        {
+            Character character = __instance.character;
+            if (drinking == SpeedDrink.None || !(incomingAffliction is Affliction_FasterBoi incoming) || character == null || !character.IsLocal
+                || !boostFrom.TryGetValue(__instance, out SpeedDrink running) || running == drinking)
+            {
+                return true;
+            }
+            CharacterAfflictions afflictions = character.refs.afflictions;
+            // The game shares the new list with everyone once the new boost is in (as it does for every boost).
+            afflictions.RemoveAffliction(__instance, fromRPC: false, pushAfflictions: false);
+            if (running == SpeedDrink.Toxic)
+            {
+                PoisonFromNow();
+            }
+            incoming.character = character;
+            afflictions.afflictionList.Add(incoming);
+            incoming.OnApplied();
+            return false;
+        }
+    }
+
+    /// <summary>The poison after a Toxic Drink's boost begins now (that boost was ended early).</summary>
+    private static void PoisonFromNow()
+    {
+        foreach (Dose dose in doses)
+        {
+            if (dose.startsAt > Time.time)
+            {
+                dose.startsAt = Time.time;
+            }
+        }
     }
 
     /// <summary>
@@ -407,7 +503,7 @@ internal static class ToxicDrink
             __state = new[] { boost.totalTime, boost.moveSpeedMod, boost.climbSpeedMod };
             boost.totalTime = SecondsNow;
             boost.moveSpeedMod = SpeedNow - 1f;
-            boost.climbSpeedMod = SpeedNow - 1f;
+            boost.climbSpeedMod = ClimbSpeedNow - 1f;
             Character drinker = __instance.character;
             bool cooked = __instance.item.GetData<IntItemData>(DataEntryKey.CookedAmount).Value > 0;
             if (drinker != null && drinker.IsLocal && !cooked)

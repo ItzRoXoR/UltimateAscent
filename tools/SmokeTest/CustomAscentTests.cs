@@ -6,9 +6,11 @@ using Photon.Pun;
 using TMPro;
 using UltimateAscent.Core;
 using UltimateAscent.Features;
+using UltimateAscent.Features.Weather;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using Zorro.Core;
+using Status = CharacterAfflictions.STATUSTYPE;
 
 namespace UltimateAscent.SmokeTest;
 
@@ -301,6 +303,86 @@ internal sealed partial class Runner
         {
             pass.customRunButton.onClick.Invoke();
         }
+    }
+
+    /// <summary>
+    /// Ascent 25's weather past the Caldera and the Gloom ("-Ascent 25", a map with the volcano: "-Biome 80"): in the Kiln
+    /// the storms are driven, none kept calm, and the extra tornadoes stay (only the Nadir keeps its normal weather); at the
+    /// Peak a snowstorm blowing on the scout neither chills nor heats, as in the Caldera.
+    /// </summary>
+    private IEnumerator UpperWeatherCheck()
+    {
+        if (target < Lvl.AllWeather || Compat.Tfa.ApocalypseActive)
+        {
+            Info("the upper mountain's weather check is skipped", target < Lvl.AllWeather ? $"testing ascent {target}; run it with -Ascent 25" : "TFA's Apocalypse runs the weather");
+            yield break;
+        }
+        Character local = Local;
+        // The storms stay calm for the first 30 s after waking up (WeatherGrace): past that first.
+        for (float until = Time.time + 45f; Time.time < until && WeatherGrace.Blocking;)
+        {
+            yield return null;
+        }
+        int tornadoesBefore = FindObjectsByType<Tornado>(FindObjectsSortMode.None).Count(ExtraTornadoes.IsCustom);
+        MapHandler.JumpToSegment(Segment.TheKiln);
+        yield return new WaitForSeconds(8f);
+        Place place = Map.CurrentPlace;
+        List<WindChillZone> storms = FindObjectsByType<WindChillZone>(FindObjectsSortMode.None)
+            .Where(z => z != null && (z.name == "RainStorm" || z.name == "WindStorm" || z.name == "SnowStorm")).ToList();
+        List<string> calm = storms.Where(A25_AllWeather.SuppressZone).Select(z => z.name).ToList();
+        int tornadoesAfter = FindObjectsByType<Tornado>(FindObjectsSortMode.None).Count(ExtraTornadoes.IsCustom);
+        Check("ascent 25's storms blow in the Kiln too, under the Caldera's rules, and its extra tornadoes stay (only the Nadir keeps its normal weather) (25)",
+            (place == Place.Kiln || place == Place.Citadel) && A25_AllWeather.DrivesVanillaWeather && !A25_AllWeather.Excluded && A25_AllWeather.UpperMountain(place)
+            && storms.Count >= 3 && calm.Count == 0 && tornadoesAfter >= tornadoesBefore,
+            $"in the {place}; driven {A25_AllWeather.DrivesVanillaWeather}, kept as it is {A25_AllWeather.Excluded}; storms {string.Join(", ", storms.Select(z => z.name + (z.windActive ? " (blowing)" : "")))}, "
+            + $"kept calm: {(calm.Count == 0 ? "none" : string.Join(", ", calm))}; extra tornadoes {tornadoesBefore} before, {tornadoesAfter} here");
+
+        // On top of the peak (the game counts it as part of the climb's last part, the Kiln's or the Citadel's).
+        Transform summit = PeakHill.Summit();
+        if (summit != null && Physics.Raycast(summit.position + Vector3.up * 80f, Vector3.down, out RaycastHit top, 200f, HelperFunctions.terrainMapMask))
+        {
+            local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, top.point + Vector3.up * 1.5f, false);
+        }
+        yield return new WaitForSeconds(4f);
+        place = Map.CurrentPlace;
+        bool onPeak = summit != null && Vector3.Distance(local.Center, summit.position) < 40f;
+        // Ascent 25's own storms as they come and go (the wind and the snowstorm take turns up here): the snowstorm
+        // measured once it is full on the scout, the wind's push read while it blows.
+        WindChillZone realSnow = storms.FirstOrDefault(z => z != null && z.name == "SnowStorm");
+        WindChillZone realWind = storms.FirstOrDefault(z => z != null && z.name == "WindStorm");
+        float snowCold = -1f, snowHeat = -1f, snowExposure = 0f, windExposure = 0f, windForce = -1f, seconds = 0f;
+        float waited = Time.time;
+        Protect(true);
+        for (float until = Time.time + 240f; Time.time < until && (snowCold < 0f || windForce < 0f);)
+        {
+            yield return null;
+            if (windForce < 0f && realWind != null && realWind.windActive && realWind.windPlayerFactor > 0.1f)
+            {
+                windExposure = realWind.windPlayerFactor;
+                windForce = realWind.windForce;
+            }
+            if (snowCold < 0f && realSnow != null && realSnow.windActive && realSnow.windPlayerFactor > 0.1f && realSnow.hasBeenActiveFor > 5f)
+            {
+                Protect(false);
+                Afflictions.SetStatus(Status.Cold, 0f);
+                Afflictions.SetStatus(Status.Hot, 0f);
+                Meter cold = new Meter(Status.Cold);
+                Meter heat = new Meter(Status.Hot);
+                yield return new WaitForSeconds(3f);
+                cold.Stop();
+                heat.Stop();
+                Protect(true);
+                snowCold = cold.Total;
+                snowHeat = heat.Total;
+                seconds = cold.Seconds;
+                snowExposure = realSnow.windPlayerFactor;
+            }
+        }
+        Check("on the peak ascent 25's storms blow too: a snowstorm there neither chills nor heats, the wind pushes as in the Caldera (25)",
+            onPeak && A25_AllWeather.UpperMountain(place) && snowCold >= 0f && snowCold < 0.0005f && snowHeat < 0.0005f && Mathf.Abs(windForce - 30f) < 0.01f,
+            $"on the peak {onPeak} ({(summit != null ? Vector3.Distance(local.Center, summit.position) : -1f):0} m from the summit, counted as the {place}); "
+            + (snowCold >= 0f ? $"the snowstorm on the scout at exposure {snowExposure:0.00}: {snowCold * 100f:0.##} cold, {snowHeat * 100f:0.##} heat in {seconds:0.0} s" : "no snowstorm on the scout")
+            + "; " + (windForce >= 0f ? $"the wind at exposure {windExposure:0.00}, pushing {windForce:0}" : "no wind on the scout") + $" (watched {Time.time - waited:0} s)");
     }
 
     /// <summary>

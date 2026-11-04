@@ -18,15 +18,20 @@ namespace UltimateAscent.SmokeTest;
 /// <summary>Checks of the round after 1.4.0: crab, ghosts and the Torch, the Citadel, the Nadir, ravens, the multiplayer six-slot backpack.</summary>
 internal sealed partial class Runner
 {
-    /// <summary>Arrows the traps fire (their visuals message, which every shot sends).</summary>
+    /// <summary>Arrows the traps fire (their visuals message, which every shot sends), and how many of them hit a scout.</summary>
     [HarmonyPatch(typeof(ArrowShooter), nameof(ArrowShooter.FireArrowVisuals_RPC))]
     internal static class ArrowShots
     {
         internal static int Count;
+        internal static int Hits;
 
-        private static void Prefix()
+        private static void Prefix(bool hitPlayer)
         {
             Count++;
+            if (hitPlayer)
+            {
+                Hits++;
+            }
         }
     }
 
@@ -74,6 +79,30 @@ internal sealed partial class Runner
         harmony.CreateClassProcessor(typeof(HoldLootTables)).Patch();
         harmony.CreateClassProcessor(typeof(EruptionsSeen)).Patch();
         harmony.CreateClassProcessor(typeof(SoundsPlayed)).Patch();
+        harmony.CreateClassProcessor(typeof(PushRecorder)).Patch();
+        harmony.CreateClassProcessor(typeof(AfflictionRecorder)).Patch();
+        harmony.CreateClassProcessor(typeof(StoneContacts)).Patch();
+        harmony.CreateClassProcessor(typeof(BoostsEnded)).Patch();
+        harmony.CreateClassProcessor(typeof(CrabGlows)).Patch();
+        harmony.CreateClassProcessor(typeof(CrabFlashes)).Patch();
+        harmony.CreateClassProcessor(typeof(FakeMaxAscent)).Patch();
+    }
+
+    /// <summary>The random share of a push the game's Character.AddForce gets for one character (after the mod's own changes).</summary>
+    [HarmonyPatch(typeof(Character), nameof(Character.AddForce), typeof(Vector3), typeof(float), typeof(float))]
+    internal static class PushRecorder
+    {
+        internal static Character Of;
+        internal static readonly List<(float min, float max, float strength)> Seen = new List<(float, float, float)>();
+
+        [HarmonyPriority(Priority.Last)]
+        private static void Prefix(Character __instance, Vector3 move, float minRandomMultiplier, float maxRandomMultiplier)
+        {
+            if (Of != null && __instance == Of)
+            {
+                Seen.Add((minRandomMultiplier, maxRandomMultiplier, move.magnitude));
+            }
+        }
     }
 
     /// <summary>The sounds played through the game's sound player, while a check listens.</summary>
@@ -101,6 +130,9 @@ internal sealed partial class Runner
         /// <summary>The Caldera's lava river's level when each one broke out (NaN without one).</summary>
         internal static readonly List<float> Lava = new List<float>();
 
+        /// <summary>The ground under each one as it broke out (NaN for none).</summary>
+        internal static readonly List<float> Ground = new List<float>();
+
         private static Lava river;
 
         private static void Postfix(Vector3 position)
@@ -111,6 +143,8 @@ internal sealed partial class Runner
                 river = FindObjectsByType<Lava>(FindObjectsSortMode.None).FirstOrDefault(l => l.name == "River");
             }
             Lava.Add(river != null ? river.transform.position.y : float.NaN);
+            RaycastHit under = HelperFunctions.LineCheck(position + Vector3.up * 150f, position + Vector3.down * 30f, HelperFunctions.LayerType.TerrainMap);
+            Ground.Add(under.transform != null ? under.point.y : float.NaN);
         }
     }
 
@@ -460,8 +494,8 @@ internal sealed partial class Runner
     }
 
     /// <summary>
-    /// The peak's zombies (17): the scout is taken to the top of the peak's hill; the ten places are on its level ground, and each zombie appears as the scout comes near, dressed in one of the two
-    /// looks (skin, outfit, hat, eyes, mouth, freckles), without sash or medal. Pictured, then the scout goes back.
+    /// The peak's zombies (17): the scout is taken to the top of the peak's hill; the fifteen places are on level ground at its top, by the statue the gems go in and on the ledges of its rocks, and
+    /// each zombie appears as the scout comes near, dressed in one of the two looks (skin, outfit, hat, eyes, mouth, freckles), without sash or medal. Pictured, then the scout goes back.
     /// </summary>
     private IEnumerator PeakZombiesCheck()
     {
@@ -496,9 +530,20 @@ internal sealed partial class Runner
         {
             yield return null;
         }
-        Check("ten places for zombies on the level ground of the peak's hill, away from the summit (17)",
-            PeakZombies.Places.Count == PeakZombies.Count && PeakZombies.Places.All(p => Vector3.Distance(p, summit.position) >= PeakHill.AwayFromSummit),
-            $"{PeakZombies.Places.Count} places, {string.Join(", ", PeakZombies.Places.Select(p => $"{Vector3.Distance(p, summit.position):0} m"))} from the summit at {summit.position}");
+        Peak.ScoutStatue gemStatue = FindObjectsByType<Peak.ScoutStatue>(FindObjectsSortMode.None).Where(st => st != null).OrderBy(st => Vector3.Distance(st.transform.position, summit.position)).FirstOrDefault();
+        float Across(Vector3 a, Vector3 b) => new Vector2(a.x - b.x, a.z - b.z).magnitude;
+        bool OnTop(Vector3 p) => Across(p, summit.position) <= PeakHill.TopReach && p.y >= summit.position.y - PeakHill.TopDepth && Across(p, summit.position) >= PeakHill.FlareRoom - 0.01f;
+        bool ByStatue(Vector3 p) => gemStatue != null && Across(p, gemStatue.transform.position) <= PeakHill.StatueReach && Mathf.Abs(p.y - gemStatue.transform.position.y) <= 3.5f;
+        // The rocks around the peak: off its top and away from the statue, at least 20 m from the summit.
+        bool OnRocks(Vector3 p) => !OnTop(p) && (gemStatue == null || Vector3.Distance(p, gemStatue.transform.position) > PeakHill.StatueReach + 5f) && Vector3.Distance(p, summit.position) >= PeakHill.AwayFromSummit;
+        int byTheStatue = PeakZombies.Places.Count(p => ByStatue(p) && !OnTop(p));
+        int onTheRocks = PeakZombies.Places.Count(OnRocks);
+        string Where(Vector3 p) => OnTop(p) ? $"top {Across(p, summit.position):0} m out, {p.y - summit.position.y:+0.0;-0.0} m"
+            : ByStatue(p) ? $"statue {Vector3.Distance(p, gemStatue.transform.position):0.0} m off, {p.y - gemStatue.transform.position.y:+0.0;-0.0} m"
+            : $"rocks {Across(p, summit.position):0} m out, {p.y - summit.position.y:+0.0;-0.0} m";
+        Check("fifteen places for zombies: at the top of the peak (within 30 m of the summit, up to 30 m below it), at least three by the statue the gems go in, five on the rocks around the peak (17)",
+            PeakZombies.Places.Count == PeakZombies.Count && PeakZombies.Places.All(p => OnTop(p) || ByStatue(p) || OnRocks(p)) && byTheStatue >= PeakZombies.ByStatue && onTheRocks == PeakZombies.OnRocks,
+            $"{PeakZombies.Places.Count} places, {byTheStatue} by the statue, {onTheRocks} on the rocks: {string.Join("; ", PeakZombies.Places.Select(Where))} (summit at {summit.position:F1}{(gemStatue != null ? $", statue at {gemStatue.transform.position:F1}" : ", no statue")})");
         Vector2 look = local.data.lookValues;
         Protect(true);
         // Every place in turn: the scout comes near, its zombie appears; each is looked at as it is found.
@@ -509,17 +554,30 @@ internal sealed partial class Runner
         Customization options = Singleton<Customization>.Instance;
         try
         {
-            foreach (Vector3 place in PeakZombies.Places.ToList())
+            List<Vector3> places = PeakZombies.Places.ToList();
+            for (int placeIndex = 0; placeIndex < places.Count; placeIndex++)
             {
-                Vector3 toward = summit.position - place;
-                toward.y = 0f;
-                Vector3 stand = place + (toward.sqrMagnitude > 0.01f ? toward.normalized : Vector3.forward) * 2.5f + Vector3.up * 1.5f;
+                Vector3 place = places[placeIndex];
+                // 2.5 m from the place on the same ground: toward the summit, else toward the statue, else any way round.
+                Vector3 stand = place + Vector3.up * 1.5f;
+                Vector3 toSummit = summit.position - place;
+                Vector3 toStatue = gemStatue != null ? gemStatue.transform.position - place : Vector3.zero;
+                foreach (Vector3 way in new[] { toSummit, toStatue, Vector3.forward, Vector3.right, Vector3.back, Vector3.left })
+                {
+                    Vector3 flat = new Vector3(way.x, 0f, way.z);
+                    if (flat.sqrMagnitude > 0.01f && Physics.Raycast(place + flat.normalized * 2.5f + Vector3.up * 3f, Vector3.down, out RaycastHit beside, 5f, HelperFunctions.terrainMapMask)
+                        && Mathf.Abs(beside.point.y - place.y) < 1f && Snakes.RoomForScout(beside.point))
+                    {
+                        stand = beside.point + Vector3.up * 1.5f;
+                        break;
+                    }
+                }
                 local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, stand, false);
+                // This place's own zombie (on the small top the zombies wake at once and leave their places to go for the scout).
                 MushroomZombie found = null;
                 for (float until = Time.time + 4f; Time.time < until && found == null;)
                 {
-                    found = FindObjectsByType<MushroomZombie>(FindObjectsSortMode.None)
-                        .FirstOrDefault(z => PeakZombies.IsPeakZombie(z, out _) && Vector3.Distance(z.transform.position, place) < 6f && !seen.ContainsKey(z.photonView.ViewID));
+                    found = PeakZombies.standing.TryGetValue(placeIndex, out MushroomZombie own) && own != null && !seen.ContainsKey(own.photonView.ViewID) ? own : null;
                     yield return null;
                 }
                 if (found == null)
@@ -527,10 +585,16 @@ internal sealed partial class Runner
                     wrong.Add($"none at the place {Vector3.Distance(place, summit.position):0} m from the summit");
                     continue;
                 }
+                if (found.transform.position.y < place.y - 10f)
+                {
+                    wrong.Add($"the zombie {place.y - found.transform.position.y:0.0} m below its place (fallen off)");
+                }
                 // Dressed a frame or two in, and again once the game has faded it in.
+                Vector3 foundAt = found.transform.position;
                 yield return new WaitForSeconds(1.8f);
                 if (found == null)
                 {
+                    wrong.Add($"the zombie at the place {Across(place, summit.position):0} m out, {place.y - summit.position.y:+0.0;-0.0} m was gone 1.8 s after it appeared (last at {foundAt:F1})");
                     continue;
                 }
                 seen[found.photonView.ViewID] = found;
@@ -572,9 +636,37 @@ internal sealed partial class Runner
                     Info($"peak zombie look {index}", $"hats on: {otherHats}; hat {hat} '{wanted.Hat}' renderer {(hatRenderer != null ? hatRenderer.name + " enabled " + hatRenderer.enabled + " active " + hatRenderer.gameObject.activeInHierarchy : "none")}");
                 }
             }
-            Check("each of the peak's ten zombies appears as a scout comes near its place, half in each look, dressed as scouts (outfit, hat, skin, eyes, mouth) without sash, medal or mushrooms (17)",
-                seen.Count == PeakZombies.Count && looks.All(n => n == PeakZombies.Count / PeakZombies.Looks.Length) && wrong.Count == 0,
+            Check("each of the peak's fifteen zombies appears as a scout comes near its place, about half in each look, dressed as scouts (outfit, hat, skin, eyes, mouth) without sash, medal or mushrooms (17)",
+                seen.Count == PeakZombies.Count && looks.Max() - looks.Min() <= 1 && wrong.Count == 0,
                 $"{seen.Count} zombies ({string.Join(" / ", looks)} in each look), dressed {PeakZombies.Dressed} time(s){(wrong.Count > 0 ? "; " + string.Join("; ", wrong) : "")}");
+
+            // As in play: the scout at the summit for 20 s (statuses held), the zombies awake and after them across the top.
+            local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, onTop, false);
+            yield return new WaitForSeconds(20f);
+            // Each against its own place: those at the top within 35 m of the summit, those by the statue within 8 m below it, those on the rocks within 10 m below their ledges.
+            List<MushroomZombie> peakOnes = FindObjectsByType<MushroomZombie>(FindObjectsSortMode.None).Where(z => PeakZombies.IsPeakZombie(z, out _)).ToList();
+            float Lowest(MushroomZombie z)
+            {
+                for (int i = 0; i < places.Count; i++)
+                {
+                    if (PeakZombies.standing.TryGetValue(i, out MushroomZombie own) && own == z && !OnTop(places[i]))
+                    {
+                        return ByStatue(places[i]) ? gemStatue.transform.position.y - 8f : places[i].y - 10f;
+                    }
+                }
+                return summit.position.y - PeakHill.TopDepth - 5f;
+            }
+            List<MushroomZombie> fallen = peakOnes.Where(z => z.transform.position.y < Lowest(z)).ToList();
+            // The game puts a sleeping zombie away with no scout within its spawning range (+5 m); it comes back when one does.
+            float putAway = PeakZombies.SpawnRange() + 5f;
+            List<int> gone = Enumerable.Range(0, places.Count).Where(i => !(PeakZombies.standing.TryGetValue(i, out MushroomZombie z) && z != null)).ToList();
+            List<int> goneNear = gone.Where(i => Vector3.Distance(local.Center, places[i]) <= putAway).ToList();
+            Check("after 20 s after a scout at the summit, the peak's zombies are still up there: none has fallen off the top, from by the statue or off its ledge (17)",
+                goneNear.Count == 0 && fallen.Count == 0,
+                $"{peakOnes.Count} of them about ({seen.Count} seen at their places); fallen: {fallen.Count}; put away by the game (asleep, no scout within {putAway:0} m): {gone.Count}"
+                + (gone.Count > 0 ? $" ({string.Join(", ", gone.Select(i => $"{Vector3.Distance(local.Center, places[i]):0} m from the scout"))})" : "")
+                + (fallen.Count > 0 ? $" ({string.Join(", ", fallen.Select(z => $"{Lowest(z) - z.transform.position.y:0} m below where it may be"))})" : "")
+                + $"; heights {string.Join(", ", peakOnes.Select(z => $"{z.transform.position.y - summit.position.y:+0;-0}"))} m against the summit");
         }
         finally
         {
@@ -1109,6 +1201,21 @@ internal sealed partial class Runner
                 yield break;
             }
             Character local = Local;
+            LavaRising heldLava = segment == Segment.TheKiln ? KilnAsh.Lava : null;
+            Vector3 lavaWas = Vector3.zero;
+            if (heldLava != null && heldLava.lava != null && heldLava.lava.position.y > heldLava.startHeight + 1f)
+            {
+                // The Kiln's lava back at its start meanwhile: an earlier check set it rising, over the Kiln's floor by now.
+                lavaWas = heldLava.lava.position;
+                heldLava.enabled = false;
+                heldLava.lava.position = heldLava.lava.transform.position = new Vector3(lavaWas.x, heldLava.startHeight, lavaWas.z);
+                Physics.SyncTransforms();
+                Info("the Kiln's lava held at its start for the eruption check", $"it was at {lavaWas.y:0.0}, its start {heldLava.startHeight:0.0}");
+            }
+            else
+            {
+                heldLava = null;
+            }
             if (segment == Segment.Caldera && CalderaPathEruptions.Build() && CalderaPathEruptions.Ground.Count > 0)
             {
                 Vector3 middle = Vector3.Lerp(CalderaPathEruptions.Statue, CalderaPathEruptions.Campfire, 0.5f);
@@ -1138,6 +1245,14 @@ internal sealed partial class Runner
                 at = ground.point;
             }
             CalderaPathEruptions.Held = true;
+            // Only this check's eruption near the scout (the last stretch's from before may still burn).
+            foreach (RemoveAfterSeconds old in FindObjectsByType<RemoveAfterSeconds>(FindObjectsSortMode.None))
+            {
+                if (old != null && old.name.StartsWith("Eruption", StringComparison.Ordinal) && Vector3.Distance(old.transform.position, local.Center) < 40f)
+                {
+                    Destroy(old.gameObject);
+                }
+            }
             yield return new WaitForSeconds(1f);
             HeatSources.Clear();
             HeatSources.On = true;
@@ -1156,6 +1271,11 @@ internal sealed partial class Runner
                 yield return new WaitForSeconds(1f);
             }
             CalderaPathEruptions.Held = false;
+            if (heldLava != null)
+            {
+                heldLava.lava.position = heldLava.lava.transform.position = lavaWas;
+                heldLava.enabled = true;
+            }
             Info("eruption over its life", $"{(made != null ? made.name + " at " + made.transform.position + " rot " + made.transform.rotation.eulerAngles : "not found")}; " + string.Join(" | ", timeline));
             HeatSources.On = false;
             float heat = HeatSources.Totals.Where(kv => kv.Key.StartsWith("StatusEmitter", StringComparison.Ordinal) || kv.Key.Contains("BurnFrom")).Sum(kv => kv.Value);
@@ -1185,10 +1305,12 @@ internal sealed partial class Runner
                     }
                     own++;
                     float lavaThen = EruptionsSeen.Lava[e];
-                    RaycastHit under = HelperFunctions.LineCheck(where + Vector3.up * 150f, where + Vector3.down * 30f, HelperFunctions.LayerType.TerrainMap);
-                    float surface = Mathf.Max(under.transform != null ? under.point.y : float.MinValue, float.IsNaN(lavaThen) ? where.y : lavaThen);
-                    onSurface &= Mathf.Abs(where.y - surface) < 1.5f;
-                    heights.Add($"{where.y:0} (surface {surface:0})");
+                    // The ground as it broke out: the river, and what belongs to it, have moved with the tide since.
+                    float groundThen = EruptionsSeen.Ground[e];
+                    float surface = Mathf.Max(float.IsNaN(groundThen) ? float.MinValue : groundThen, float.IsNaN(lavaThen) ? where.y : lavaThen);
+                    bool on = Mathf.Abs(where.y - surface) < 1.5f;
+                    onSurface &= on;
+                    heights.Add($"{where.y:0} (surface {surface:0})" + (on ? "" : $" [lava then {lavaThen:0.0}, ground then {groundThen:0.0}]"));
                 }
                 Check("the Caldera's own eruptions break out on the ground or the lava's surface, not at the lava's lowest level (17)", own > 0 && onSurface,
                     $"{own} in 25 s at heights {string.Join(", ", heights)}");
@@ -1389,6 +1511,15 @@ internal sealed partial class Runner
             yield break;
         }
         Character local = Local;
+        // No eruptions meanwhile (the scout may still stand on the Caldera's last stretch, which is ablaze).
+        CalderaPathEruptions.Held = true;
+        foreach (RemoveAfterSeconds eruption in FindObjectsByType<RemoveAfterSeconds>(FindObjectsSortMode.None))
+        {
+            if (eruption != null && eruption.name.StartsWith("Eruption", StringComparison.Ordinal) && Vector3.Distance(eruption.transform.position, local.Center) < 40f)
+            {
+                Destroy(eruption.gameObject);
+            }
+        }
         Protect(false);
         Action calm = CalmForMeasuring();
         try
@@ -1415,6 +1546,7 @@ internal sealed partial class Runner
             ClearStatuses(Afflictions);
             calm();
             Protect(true);
+            CalderaPathEruptions.Held = false;
         }
 
         // Both set blowing, the wind 5 s first: the snowstorm waits, the wind keeps blowing.
@@ -1525,7 +1657,11 @@ internal sealed partial class Runner
 
     /// <summary>
     /// The Gloom's ghost and a burning Torch (9, 17): the ghost comes for the scout holding a lit Torch, is pushed
-    /// back and never arms. Then its burst, set off far from anyone: 50 s of blindness, 60 cold.
+    /// back and never arms. Then its burst, set off far from anyone: 50 s of blindness, 60 cold. Then its burst and a
+    /// cooked Energy Drink's (an explosion of 6 m, which knocks nobody out), each set off 4 m from the scout on a test
+    /// floor high above the map (nothing there to be thrown into; statuses held back): the ghost's pushes 1.5x as hard
+    /// as the game's, the Energy Drink's 3-4x as every other explosion. The scout is back where it was afterwards,
+    /// without thorns or blindness.
     /// </summary>
     private IEnumerator GhostAndTorchCheck()
     {
@@ -1638,6 +1774,54 @@ internal sealed partial class Runner
                     Out(lantern) && Out(faerie) && Out(ghostBurst) && !Out("VFX_DynamiteExplosion(Clone)") && !Out("VFX_FireworkExplosion") && !Out("VFX_SporeExploExplo") && !Out("Explosion") && !Out("Hitbox"),
                     $"knock out: {string.Join(", ", A17_Hazards.KnockOutBlasts)}; the Lantern's burst '{lantern}', the Faerie Lantern's '{faerie}', the ghost's '{ghostBurst}'");
             });
+
+            // The pushes themselves, on the scout: each burst set off 4 m away on a wide test floor high above the map,
+            // where a throw lands on nothing but the floor (in the Gloom one landed the scout in cacti); statuses held
+            // back, so neither knock-out nor the ghost's chill lands; its blindness is cured after.
+            GameObject drinkBurst = ItemByName(ToxicDrink.EnergyDrinkPrefab)?.GetComponent<Action_Spawn>()?.objectToSpawn;
+            List<(float min, float max, float strength)> ghostPush = new List<(float, float, float)>();
+            List<(float min, float max, float strength)> drinkPush = new List<(float, float, float)>();
+            Protect(true);
+            Vector3 home = local.Center;
+            Vector3 floorAt = new Vector3(home.x, 1600f, home.z);
+            GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            floor.name = "UltimateAscentTestFloor";
+            floor.layer = LayerMask.NameToLayer("Map");
+            floor.transform.SetPositionAndRotation(floorAt + Vector3.down * 0.5f, Quaternion.identity);
+            floor.transform.localScale = new Vector3(200f, 1f, 200f);
+            try
+            {
+                foreach ((GameObject prefab, List<(float min, float max, float strength)> into) in new[] { (spawner.ghostBallPrefab.explosionPrefab, ghostPush), (drinkBurst, drinkPush) })
+                {
+                    if (prefab == null)
+                    {
+                        continue;
+                    }
+                    local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, floorAt + Vector3.up * 1.2f, false);
+                    yield return new WaitForSeconds(3f);
+                    yield return BurstOnScout(prefab, into);
+                    // Knocked down (12 s for the ghost's), up again before the next.
+                    yield return new WaitForSeconds(13f);
+                }
+            }
+            finally
+            {
+                Destroy(floor);
+                local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, home + Vector3.up * 0.5f, false);
+                local.refs.afflictions.RemoveAllThorns();
+                while (local.refs.afflictions.HasAfflictionType(Peak.Afflictions.Affliction.AfflictionType.Blind, out Peak.Afflictions.Affliction blindness))
+                {
+                    local.refs.afflictions.RemoveAffliction(blindness);
+                }
+                local.AddIllegalStatus("BLIND", 0f);
+            }
+            yield return new WaitForSeconds(2f);
+            string Pushes(List<(float min, float max, float strength)> seen) => seen.Count == 0 ? "no push"
+                : $"{seen.Count} push(es), strength {seen[0].strength:0} (its falloff included), its random share {seen[0].min:0.00}-{seen[0].max:0.00}";
+            bool ghostRight = ghostPush.Count > 0 && ghostPush.All(p => Mathf.Abs(p.min - 0.7f * A17_Hazards.GhostPush) < 0.01f && Mathf.Abs(p.max - 1.3f * A17_Hazards.GhostPush) < 0.01f);
+            bool drinkRight = drinkPush.Count > 0 && drinkPush.All(p => Mathf.Abs(p.min - 0.7f * A17_Hazards.ExplosionPushMin) < 0.01f && Mathf.Abs(p.max - 1.3f * A17_Hazards.ExplosionPushMax) < 0.01f);
+            Check("the ghost's burst pushes 1.5x as hard as the game's (its random share 1.05-1.95, the game's 0.7-1.3); a cooked Energy Drink's burst still 3-4x (2.1-5.2) (17)",
+                ghostRight && drinkRight, $"the ghost's: {Pushes(ghostPush)}; the Energy Drink's ({(drinkBurst != null ? drinkBurst.name : "none")}): {Pushes(drinkPush)}");
         }
         finally
         {
@@ -1646,6 +1830,35 @@ internal sealed partial class Runner
                 PhotonNetwork.Destroy(made);
             }
             local.data.lookValues = look;
+        }
+    }
+
+    /// <summary>A burst set off 4 m from the scout where nothing stands between them; the pushes it gives the scout.</summary>
+    private IEnumerator BurstOnScout(GameObject prefab, List<(float min, float max, float strength)> into)
+    {
+        Character local = Local;
+        Vector3 from = local.Center;
+        Vector3 at = from + local.transform.forward * 4f;
+        for (int i = 0; i < 8; i++)
+        {
+            Vector3 way = Quaternion.Euler(0f, i * 45f, 0f) * Vector3.forward;
+            if (!Physics.Linecast(from, from + way * 4.5f, HelperFunctions.terrainMapMask))
+            {
+                at = from + way * 4f;
+                break;
+            }
+        }
+        PushRecorder.Seen.Clear();
+        PushRecorder.Of = local;
+        GameObject burst = Instantiate(prefab, at, Quaternion.identity);
+        yield return new WaitForSeconds(0.3f);
+        PushRecorder.Of = null;
+        into.AddRange(PushRecorder.Seen);
+        Info($"the burst {prefab.name} 4 m from the scout", $"{PushRecorder.Seen.Count} push(es) on the scout; its blasts: "
+            + string.Join(", ", prefab.GetComponentsInChildren<AOE>(true).Select(a => $"'{a.name}' reach {a.range:0.#} m, knockback {a.knockback:0}, by itself {a.auto}")));
+        if (burst != null)
+        {
+            Destroy(burst, 5f);
         }
     }
 
@@ -1767,8 +1980,8 @@ internal sealed partial class Runner
     }
 
     /// <summary>
-    /// The Citadel's ladders (17): the scout grabs one and holds on; the climb works with 1.2 times rock's speed and the
-    /// stamina it spends is 0.9 of rock's, against the game's 3 and 0.25 (ascent 17's rule off in memory).
+    /// The Citadel's ladders (17): the scout grabs one and holds on; the climb works with 1.5 times rock's speed and the
+    /// stamina it spends is 0.75 of rock's, against the game's 3 and 0.25 (ascent 17's rule off in memory).
     /// </summary>
     private IEnumerator LaddersCheck()
     {
@@ -1778,35 +1991,59 @@ internal sealed partial class Runner
             yield break;
         }
         Character local = Local;
-        ClimbModifierSurface ladder = FindObjectsByType<ClimbModifierSurface>(FindObjectsSortMode.None)
+        List<ClimbModifierSurface> Ladders() => FindObjectsByType<ClimbModifierSurface>(FindObjectsSortMode.None)
             .Where(c => c.staminaUsageMultiplier <= A17_Traps.GameLadderStamina && c.GetComponent<Collider>() != null)
-            .OrderBy(c => Vector3.Distance(c.transform.position, local.Center)).FirstOrDefault();
-        if (ladder == null)
+            .OrderBy(c => Vector3.Distance(c.transform.position, local.Center)).ToList();
+        List<ClimbModifierSurface> ladders = Ladders();
+        if (ladders.Count == 0)
         {
-            Info("the ladder checks are skipped", $"no ladder here ({Map.CurrentPlace}); run with -Biome AS");
+            // Not reached yet (a check run on its own): to the Citadel, on a Gloom map.
+            yield return ToTheCitadel(_ => { });
+            ladders = Ladders();
+        }
+        if (ladders.Count == 0)
+        {
+            Info("the ladder checks are skipped", $"no ladder here ({Map.CurrentPlace}); run with -Biome 81");
             yield break;
         }
-        Collider rungs = ladder.GetComponent<Collider>();
-        Vector3 middle = rungs.bounds.center;
-        // In front of it at its foot: the side it faces is the open one.
-        Vector3 facing = Vector3.ProjectOnPlane(ladder.transform.forward, Vector3.up).normalized;
+        // The nearest ladder with an open side in front of it: across its thin side first (a ladder's model may face up).
+        ClimbModifierSurface ladder = null;
+        Collider rungs = null;
+        Vector3 middle = Vector3.zero;
         Vector3 front = Vector3.zero;
-        foreach (Vector3 side in new[] { facing, -facing, ladder.transform.right, -ladder.transform.right })
+        foreach (ClimbModifierSurface candidate in ladders)
         {
-            Vector3 probe = middle + side * 2f;
-            if (!Physics.Linecast(probe, middle, HelperFunctions.terrainMapMask, QueryTriggerInteraction.Ignore) ||
-                Physics.Linecast(probe, middle, out RaycastHit hit, HelperFunctions.terrainMapMask, QueryTriggerInteraction.Ignore) && hit.collider == rungs)
+            Collider candidateRungs = candidate.GetComponent<Collider>();
+            Bounds box = candidateRungs.bounds;
+            Vector3 centre = new Vector3(box.center.x, Mathf.Min(box.center.y, box.min.y + 2f), box.center.z);
+            Vector3 thin = box.size.x < box.size.z ? Vector3.right : Vector3.forward;
+            Vector3 facing = Vector3.ProjectOnPlane(candidate.transform.forward, Vector3.up);
+            Vector3 across = Vector3.ProjectOnPlane(candidate.transform.right, Vector3.up);
+            foreach (Vector3 side in new[] { thin, -thin, facing, -facing, across, -across }.Where(s => s.sqrMagnitude > 0.25f).Select(s => s.normalized))
             {
-                front = side;
+                Vector3 probe = centre + side * 2f;
+                if (!Physics.Linecast(probe, centre, HelperFunctions.terrainMapMask, QueryTriggerInteraction.Ignore) ||
+                    Physics.Linecast(probe, centre, out RaycastHit hit, HelperFunctions.terrainMapMask, QueryTriggerInteraction.Ignore) && hit.collider == candidateRungs)
+                {
+                    ladder = candidate;
+                    rungs = candidateRungs;
+                    middle = centre;
+                    front = side;
+                    break;
+                }
+            }
+            if (ladder != null)
+            {
                 break;
             }
         }
-        if (front == Vector3.zero)
+        if (ladder == null)
         {
-            Info("the ladder checks are skipped", "no open side found in front of the nearest ladder");
+            Info("the ladder checks are skipped", $"no open side found in front of any of the {ladders.Count} ladders");
             yield break;
         }
-        Vector3 stand = new Vector3(middle.x, rungs.bounds.min.y + 1f, middle.z) + front * 0.9f;
+        // In front of its lower part (where the ladder hangs above a drop, in the air: it is grabbed before the scout falls far).
+        Vector3 stand = middle + front * (Vector3.Scale(rungs.bounds.extents, new Vector3(Mathf.Abs(front.x), 0f, Mathf.Abs(front.z))).magnitude + 0.6f);
         ConfigEntry<bool> hazards = UltimateAscent.Plugin.AscentSwitches[Lvl.Hazards];
         bool saved = hazards.Value;
         Vector2 look = local.data.lookValues;
@@ -1818,18 +2055,47 @@ internal sealed partial class Runner
             {
                 hazards.Value = on;
                 HostOptions.Invalidate();
-                local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, stand, false);
-                yield return new WaitForSeconds(1.5f);
-                for (float until = Time.time + 3f; Time.time < until && !(local.data.isClimbing && local.data.climbMod == ladder);)
+                IEnumerator InFront()
                 {
-                    Vector3 toward = Vector3.ProjectOnPlane(middle - MainCamera.instance.transform.position, Vector3.up).normalized;
-                    local.data.lookValues = new Vector2(Quaternion.LookRotation(toward).eulerAngles.y, 10f);
+                    local.refs.climbing.StopAnyClimbing();
+                    local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, stand, false);
+                    yield return new WaitForSeconds(0.1f);
+                    for (float until = Time.time + 3f; Time.time < until && local.warping;)
+                    {
+                        yield return null;
+                    }
+                }
+                yield return InFront();
+                float lastWarp = Time.time;
+                for (float until = Time.time + 6f; Time.time < until && !(local.data.isClimbing && local.data.climbMod == ladder);)
+                {
+                    // Caught the wall beside it, or fell past it: back in front of it, again.
+                    if (local.data.isClimbing || Time.time > lastWarp + 1.2f)
+                    {
+                        yield return InFront();
+                        lastWarp = Time.time;
+                    }
+                    Vector3 eye = MainCamera.instance.transform.position;
+                    Vector3 target = rungs.ClosestPointOnBounds(eye);
+                    target.y = Mathf.Clamp(eye.y, rungs.bounds.min.y + 0.3f, rungs.bounds.max.y - 0.3f);
+                    Vector3 toward = (target - eye).normalized;
+                    local.data.lookValues = HelperFunctions.DirectionToLook(toward);
                     local.refs.climbing.TryToStartWallClimb(forceAttempt: true, toward);
                     yield return null;
                 }
                 if (!(local.data.isClimbing && local.data.climbMod == ladder))
                 {
-                    Info("the scout did not get hold of the ladder", $"climbing {local.data.isClimbing}, surface {(local.data.climbMod != null ? local.data.climbMod.name : "rock or none")}");
+                    Vector3 eye = MainCamera.instance.transform.position;
+                    Vector3 target = rungs.ClosestPointOnBounds(eye);
+                    target.y = Mathf.Clamp(eye.y, rungs.bounds.min.y + 0.3f, rungs.bounds.max.y - 0.3f);
+                    RaycastHit reach = HelperFunctions.LineCheck(eye, eye + (target - eye).normalized * 1.25f, HelperFunctions.LayerType.TerrainMap);
+                    Screenshot("ladder-missed");
+                    Info("the scout did not get hold of the ladder",
+                        $"climbing {local.data.isClimbing}, surface {(local.data.climbMod != null ? local.data.climbMod.name : "rock or none")}; the ladder '{ladder.name}' "
+                        + $"bounds {rungs.bounds.center:F1} size {rungs.bounds.size:F1} ({rungs.GetType().Name}), standing at {stand:F1} (in front {front:F1}); the scout at {local.Center:F1}, grounded {local.data.isGrounded}, "
+                        + $"the eye {Vector3.Distance(eye, target):0.00} m from its nearest point; the grab's 1.25 m reach meets "
+                        + (reach.transform == null ? "nothing" : $"'{reach.collider.name}' at {reach.distance:0.00} m (the ladder's {reach.collider == rungs}, {Vector3.Angle(reach.normal, Vector3.up):0} degrees from up)")
+                        + $"; can climb {local.refs.climbing.CanClimb()}, stamina {local.data.currentStamina:0.00}, item in hand {(local.data.currentItem != null ? local.data.currentItem.name : "none")}");
                     break;
                 }
                 if (on)
@@ -1867,7 +2133,7 @@ internal sealed partial class Runner
         {
             float ratio = drain[false] > 0f ? drain[true] / drain[false] : 0f;
             float expected = A17_Traps.LadderStamina / ladder.staminaUsageMultiplier;
-            Check("ladders: climbing one is 1.2 times as fast as rock and costs 90% of rock's stamina (17; the game: 3 times, 25%)",
+            Check("ladders: climbing one is 1.5 times as fast as rock and costs 75% of rock's stamina (17; the game: 3 times, 25%)",
                 Mathf.Abs(speed[true] - A17_Traps.LadderSpeed) < 0.001f && Mathf.Abs(speed[false] - ladder.speedMultiplier) < 0.001f && Mathf.Abs(ratio - expected) < expected * 0.1f
                 && Mathf.Abs(ladder.staminaUsageMultiplier - 0.25f) < 0.001f,
                 $"speed {speed[true]:0.##} (ascent 17's rule off: {speed[false]:0.##}), stamina {drain[true] * 100f:0.00}/s against {drain[false] * 100f:0.00}/s with the rule off = x{ratio:0.00} (expected x{expected:0.00}); the ladder's own fields stay {ladder.speedMultiplier:0.##}/{ladder.staminaUsageMultiplier:0.##}");
@@ -1997,34 +2263,27 @@ internal sealed partial class Runner
         }
         Check("an arrow trap fires at a loose body in its line, but not at a swinging spike ball (9)", fired[false] > 0 && fired[true] == 0,
             $"a loose body: {fired[false]} shots, the same body as part of a spike ball: {fired[true]}");
-        // The green warning line: half a metre out of the opening from 17, the game's whole line with the rule off.
-        float LineLength()
-        {
-            LineRenderer line = shooter.lineRenderer;
-            if (line == null || line.positionCount < 2)
-            {
-                return -1f;
-            }
-            Vector3 a = line.useWorldSpace ? line.GetPosition(0) : line.transform.TransformPoint(line.GetPosition(0));
-            Vector3 b = line.useWorldSpace ? line.GetPosition(1) : line.transform.TransformPoint(line.GetPosition(1));
-            return Vector3.Distance(a, b);
-        }
+        // The green warning line: 1 m out of the opening from 17 (past the trap's mouth, where the line leaves its housing), the game's whole line with the rule off.
+        float mouth = GameFixes.Bore(shooter).mouth;
+        float OutOfTheMouth() => Vector3.Dot(LineEnds(shooter).end - shooter.pos, shooter.forward) - mouth;
         if (Rules.Enabled(Lvl.Hazards))
         {
-            float shortLine = LineLength();
+            yield return new WaitForSeconds(2.5f);
+            float shortLine = OutOfTheMouth();
+            bool shown = shooter.lineRenderer != null && shooter.lineRenderer.enabled;
             ConfigEntry<bool> hazards = UltimateAscent.Plugin.AscentSwitches[Lvl.Hazards];
             hazards.Value = false;
             HostOptions.Invalidate();
             yield return new WaitForSeconds(2.5f);
-            float gameLine = LineLength();
+            float gameLine = OutOfTheMouth();
             hazards.Value = true;
             HostOptions.Invalidate();
             yield return new WaitForSeconds(2.5f);
-            float againLine = LineLength();
-            Screenshot("arrow-trap-warning-line");
-            Check("an arrow trap's green warning line shows only its first half metre (17); with the rule off the game's whole line",
-                shortLine > 0.05f && shortLine <= A17_Traps.WarningLineReach + 0.01f && gameLine > A17_Traps.WarningLineReach + 0.5f && Mathf.Abs(againLine - shortLine) < 0.01f,
-                $"{shortLine:0.00} m, with the rule off {gameLine:0.00} m, on again {againLine:0.00} m");
+            float againLine = OutOfTheMouth();
+            yield return ArrowLinePicture(shooter, mouth, "arrow-trap-warning-line");
+            Check("an arrow trap's green warning line reaches 1 m out of its opening (17); with the rule off the game's whole line",
+                shown && Mathf.Abs(shortLine - A17_Traps.WarningLineReach) < 0.02f && gameLine > A17_Traps.WarningLineReach + 0.5f && Mathf.Abs(againLine - shortLine) < 0.01f,
+                $"{shortLine:0.00} m out of the mouth ({mouth:0.00} m past the muzzle), shown {shown}; with the rule off {gameLine:0.00} m, on again {againLine:0.00} m");
         }
     }
 
@@ -2479,13 +2738,16 @@ internal sealed partial class Runner
     {
         spot = Vector3.zero;
         along = Vector3.forward;
+        // Not on the floor its lava lies on (it rises from there).
+        LavaRising lava = KilnAsh.Lava;
+        float lowest = lava != null ? lava.startHeight + 10f : float.MinValue;
         for (float radius = 0f; radius <= 80f; radius += 8f)
         {
             for (int angle = 0; angle < 360; angle += radius == 0f ? 360 : 30)
             {
                 Vector3 from = near + Quaternion.Euler(0f, angle, 0f) * Vector3.forward * radius + Vector3.up * 30f;
                 RaycastHit hit = HelperFunctions.LineCheck(from, from + Vector3.down * 80f, HelperFunctions.LayerType.TerrainMap);
-                if (hit.transform == null || hit.normal.y < 0.85f || !KilnAsh.InKiln(hit.point))
+                if (hit.transform == null || hit.normal.y < 0.85f || !KilnAsh.InKiln(hit.point) || hit.point.y < lowest)
                 {
                     continue;
                 }
@@ -2515,9 +2777,10 @@ internal sealed partial class Runner
     }
 
     /// <summary>
-    /// Snakes (17), in the Tropics: 21 on the ground, seven in ten of them on the climb itself, and 7 in trees. A ground snake chases and bites
+    /// Snakes (17), in the Tropics: 25 on the ground, seven in ten of them on the climb itself, and 9 in trees. A ground snake chases and bites
     /// a scout standing near it (10 injury, then 40 poison over 10 s); a Stick's swing stuns a snake; a tree snake
-    /// sleeps coiled, wakes for a scout within 5 m and bites (30 injury), and the scout collapses within 15 s after.
+    /// sleeps coiled, hisses for 2 s without moving when a scout comes within 5 m, then uncoils and bites (30 injury), and
+    /// the scout collapses within 15 s after.
     /// </summary>
     private IEnumerator SnakeChecks()
     {
@@ -2536,7 +2799,7 @@ internal sealed partial class Runner
         }
         List<Snake> snakes = Snakes.All.Where(s => s != null).ToList();
         int trees = snakes.Count(s => s.IsTree);
-        Check("snakes live in the Tropics, 30 on the ground and a third as many (10) in trees, whatever the map (17)",
+        Check($"snakes live in the Tropics, {Snakes.GroundCount} on the ground and {Snakes.TreeCount} in trees, whatever the map (17)",
             snakes.Count == Snakes.GroundCount + Snakes.TreeCount && trees <= Snakes.TreeCount,
             $"{snakes.Count} snakes ({trees} in trees, {snakes.Count - trees} on the ground); this map's third part: {Singleton<MapHandler>.Instance.segments[(int)Segment.Alpine].biome}; "
             + $"tree snakes {string.Join(", ", snakes.Where(s => s.IsTree).Select(s => s.Doing))}");
@@ -2722,6 +2985,9 @@ internal sealed partial class Runner
                         // Hit, it is knocked back in a quick slide (no jump), then lies curled up, without striking, for the rest of its stun.
                         int bitesHit = Snakes.BitesTaken;
                         float biggestStep = 0f;
+                        // A jump is a step much faster than the slide (1.5 m in 0.25 s); a slow frame (the pictures taken
+                        // meanwhile stall one) only makes a step longer, not faster.
+                        float fastestStep = 0f;
                         float knockedBack = 0f;
                         float hitLift = float.PositiveInfinity;
                         float crawled = 0f;
@@ -2760,6 +3026,7 @@ internal sealed partial class Runner
                             if (since < 0.4f)
                             {
                                 biggestStep = Mathf.Max(biggestStep, stepNow);
+                                fastestStep = Mathf.Max(fastestStep, stepNow / Mathf.Max(Time.deltaTime, 0.001f));
                                 knockedBack = Vector3.ProjectOnPlane(ground.Head - hitAt, Vector3.up).magnitude;
                             }
                             crawled += stepNow;
@@ -2780,8 +3047,9 @@ internal sealed partial class Runner
                         }
                         Check("the snake the swing pushed back lies on the ground, not in the air (17)", hitLift < 0.35f, $"its head {hitLift:0.00} m above the ground 1.5 s after the hit");
                         Check("a hit knocks it back in a quick slide, not a jump (17)",
-                            ground.LastShove >= 0.3f && knockedBack >= Mathf.Min(1f, ground.LastShove * 0.8f) && biggestStep < 0.4f,
-                            $"knocked back {knockedBack:0.0} m in 0.4 s (its shove {ground.LastShove:0.0} m of the full 1.5, as far as the ground behind it allows{(ground.LastShoveStop.Length > 0 ? $"; cut short by {ground.LastShoveStop}" : "")}), the biggest step in a frame {biggestStep:0.00} m");
+                            ground.LastShove >= 0.3f && knockedBack >= Mathf.Min(1f, ground.LastShove * 0.8f) && fastestStep < 12f,
+                            $"knocked back {knockedBack:0.0} m in 0.4 s (its shove {ground.LastShove:0.0} m of the full 1.5, as far as the ground behind it allows{(ground.LastShoveStop.Length > 0 ? $"; cut short by {ground.LastShoveStop}" : "")}), "
+                            + $"its fastest step {fastestStep:0.0} m/s (the slide's 6), the biggest step in a frame {biggestStep:0.00} m");
                         Check("stunned, the snake makes no sound: no slither, no rattle (17)", stunnedSound < 0.01f,
                             $"its loudest sound from 0.5 s after the hit until the stun is nearly over: {stunnedSound:0.000}");
                         Check("knocked back and curling up, no part of it sinks into the ground (17)", sunk < 0.06f,
@@ -2797,7 +3065,7 @@ internal sealed partial class Runner
                         Check("once its stun is over, it goes for the scout who stunned it (17)", ground.Doing != "Stunned" && ground.Target == local,
                             $"the snake {ground.Doing}, going for {(ground.Target == local ? "the scout who hit it" : ground.Target != null ? "another scout" : "nobody")} ({Vector3.Distance(ground.Head, local.Center):0.0} m from them)");
                         // That chase lasts at least 10 s however far the scout runs: they go 60-80 m off at once (well beyond the
-                        // 20 m it gives up at), and it keeps after them until its 10 s are up, then gives up.
+                        // 15 m it gives up at), and it keeps after them until its 10 s are up, then gives up.
                         float chaseFrom = Time.time;
                         StepAway(local, ground.Head, 60f, 80f);
                         yield return new WaitForSeconds(0.5f);
@@ -2864,11 +3132,24 @@ internal sealed partial class Runner
                 float injuryBefore = afflictions.GetCurrentStatus(Status.Injury);
                 bool uncoiled = false, uncoilShot = false;
                 float wokeAt = -1f;
+                // First it hisses, curled up where it is: how long, how far its head moved meanwhile, how loud its hiss.
+                float hissFrom = -1f, hissMoved = 0f, hissLoudest = 0f;
+                Vector3 hissHead = tree.Head;
                 AttackSeen treeAttack = new AttackSeen();
-                for (float until = Time.time + 12f; Time.time < until && Snakes.BitesTaken == bitesBefore;)
+                for (float until = Time.time + 14f; Time.time < until && Snakes.BitesTaken == bitesBefore;)
                 {
                     yield return null;
                     treeAttack.Watch(tree);
+                    if (tree.Doing == "Hissing")
+                    {
+                        if (hissFrom < 0f)
+                        {
+                            hissFrom = Time.time;
+                            hissHead = tree.Head;
+                        }
+                        hissMoved = Mathf.Max(hissMoved, Vector3.Distance(tree.Head, hissHead));
+                        hissLoudest = Mathf.Max(hissLoudest, tree.rattle != null && tree.rattle.isPlaying ? tree.rattle.volume : 0f);
+                    }
                     if (tree.Doing == "Waking")
                     {
                         uncoiled = true;
@@ -2919,6 +3200,10 @@ internal sealed partial class Runner
                     collapsed = local.data.fallSeconds > Snakes.CollapseSeconds - 0.5f;
                     yield return null;
                 }
+                float hissed = hissFrom >= 0f && wokeAt >= 0f ? wokeAt - hissFrom : -1f;
+                Check("a tree snake that notices a scout within 5 m hisses for 2 s first (its hunt's hiss), still curled up where it is, then uncoils (17)",
+                    Mathf.Abs(hissed - Snakes.HissSeconds) < 0.25f && hissMoved < 0.05f && hissLoudest > 0.3f,
+                    $"hissing for {hissed:0.00} s before it uncoiled; its head moved {hissMoved * 100f:0.0} cm meanwhile; the hiss up to {hissLoudest:0.00} of its full {Snakes.RattleVolume:0.0}");
                 Check("a tree snake sleeps curled up, uncoils for a scout within 5 m and bites: 30 injury, then a 4 s collapse within 15 s (17)",
                     asleep == "Sleeping" && uncoiled && bitten && Mathf.Abs(injury - Snakes.TreeBiteInjury) < 0.013f && collapsed,
                     $"before: {asleep}; uncoiled first {uncoiled}; bitten {bitten}; +{injury * 100f:0.#} injury; collapsed {collapsed} ({Time.time - bittenAt:0.0} s after the bite)");
@@ -4740,6 +5025,23 @@ internal sealed partial class Runner
             {
                 grown.ForEach(v => { if (v != null) PhotonNetwork.Destroy(v.gameObject); });
             }
+
+            // Started alone (this test plays solo), the run's bushes grow the game's amounts with the switch on too.
+            List<PhotonView> alone = null;
+            int aloneBefore = MoreWildFood.Grown;
+            try
+            {
+                wild.Value = true;
+                alone = bush.SpawnItems(bush.spawnSpots);
+            }
+            finally
+            {
+                wild.Value = savedWild;
+            }
+            Check("\"More Wild Food in Multiplayer\" counts only for a run started with more than one player in the lobby: started alone, a bush grows the game's amount",
+                !MoreWildFood.StartedTogether && MoreWildFood.Grown == aloneBefore && alone != null && alone.Count > 0,
+                $"started with more than one player {MoreWildFood.StartedTogether} ({PhotonNetwork.PlayerList.Length} in the room); '{bush.name}' grew {(alone != null ? alone.Count : 0)}, {MoreWildFood.Grown - aloneBefore} of them more");
+            alone?.ForEach(v => { if (v != null) PhotonNetwork.Destroy(v.gameObject); });
         }
         else
         {
@@ -4764,13 +5066,26 @@ internal sealed partial class Runner
                 float curseBefore = afflictions.GetCurrentStatus(Status.Curse);
                 afflictions.SetStatus(Status.Hunger, 0f);
                 local.data.SetPetrify(40);
-                local.RPCA_ReviveAtPosition(statue.transform.position + Vector3.up * 1.5f, true, (int)statue.SegmentNumber);
+                // As on the host's game (in single-player, always): an opened statue is out of the game's luggage list
+                // before it revives anyone, and it revives at its own revive point.
+                bool listed = Luggage.ALL_LUGGAGE.Remove(statue);
+                try
+                {
+                    local.RPCA_ReviveAtPosition(statue.RandomRevivePoint, true, (int)statue.SegmentNumber);
+                }
+                finally
+                {
+                    if (listed)
+                    {
+                        Luggage.ALL_LUGGAGE.Add(statue);
+                    }
+                }
                 yield return new WaitForSeconds(1.5f);
                 int petrifyAfterStatue = local.data.petrifyAmount;
                 float afterStatue = afflictions.GetCurrentStatus(Status.Poison);
                 float curseAdded = afflictions.GetCurrentStatus(Status.Curse) - curseBefore;
                 float hunger = afflictions.GetCurrentStatus(Status.Hunger);
-                Check("a revive statue clears every status and gives the game's revive curse and hunger; another revive keeps 25% (15)",
+                Check("a revive statue (opened, as on the host's game) clears every status and gives the game's revive curse and hunger; another revive keeps 25% (15)",
                     Mathf.Abs(kept - 0.1f) < 0.013f && afterStatue < 0.001f && Mathf.Abs(curseAdded - Ascents.revivalCurse) < 0.013f && hunger > 0.2f,
                     $"40 poison: {kept * 100f:0.#} left after another revive, {afterStatue * 100f:0.#} after the statue's; the statue's added {curseAdded * 100f:0.#} curse (the game's {Ascents.revivalCurse * 100f:0}) and {hunger * 100f:0.#} hunger");
                 Check("a revive statue takes no petrification away (15)", petrifyAfterStatue == 40,

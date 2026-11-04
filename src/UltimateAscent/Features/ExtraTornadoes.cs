@@ -10,7 +10,8 @@ namespace UltimateAscent.Features;
 /// <summary>
 /// Ascent 25: the host spawns extra tornadoes near a random living scout (first after 5 s, then
 /// every 40-140 s) below the Kiln. They wander around the scouts instead of following the
-/// Mesa's tornado paths, and stay inside the map's invisible walls.
+/// Mesa's tornado paths, and stay inside the map's invisible walls. None come while the scouts rest at one of True
+/// Final Ascent's Builder's rest stops.
 /// </summary>
 internal static class ExtraTornadoes
 {
@@ -33,7 +34,8 @@ internal static class ExtraTornadoes
     /// <summary>Host only; called every frame.</summary>
     internal static void Tick()
     {
-        if (!Rules.Enabled(Lvl.AllWeather) || !Rules.Hazard(RunSettings.SETTINGTYPE.Hazard_Tornado) || !PhotonNetwork.InRoom || !PhotonNetwork.IsMasterClient || A25_AllWeather.Excluded || LoadingScreenHandler.loading || !MapHandler.ExistsAndInitialized)
+        if (!Rules.Enabled(Lvl.AllWeather) || !Rules.Hazard(RunSettings.SETTINGTYPE.Hazard_Tornado) || !PhotonNetwork.InRoom || !PhotonNetwork.IsMasterClient || A25_AllWeather.Excluded || LoadingScreenHandler.loading || !MapHandler.ExistsAndInitialized
+            || Compat.Tfa.RestPaused)
         {
             return;
         }
@@ -117,9 +119,9 @@ internal static class ExtraTornadoes
         }
     }
 
-    /// <summary>Extra tornadoes vanish once the scouts reach the Kiln.</summary>
+    /// <summary>Extra tornadoes vanish in the Nadir.</summary>
     [HarmonyPatch(typeof(Tornado), nameof(Tornado.Update))]
-    private static class LeaveAtTheKiln
+    private static class LeaveInTheNadir
     {
         private static bool Prefix(Tornado __instance)
         {
@@ -141,7 +143,7 @@ internal static class ExtraTornadoes
     }
 
     [HarmonyPatch(typeof(Tornado), nameof(Tornado.FixedUpdate))]
-    private static class NoPullAtTheKiln
+    private static class NoPullInTheNadir
     {
         private static bool Prefix(Tornado __instance) => !(A25_AllWeather.Excluded && IsCustom(__instance));
     }

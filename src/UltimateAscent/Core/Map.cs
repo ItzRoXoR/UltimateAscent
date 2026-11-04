@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using Zorro.Core;
 
@@ -27,7 +28,8 @@ internal enum Place
 /// Volcano biome) or the Gloom and the Citadel (both the Swamp biome; the game has no separate
 /// biome for the Citadel there). During True Final Ascent's FINAL ASCENT all biomes are stacked into
 /// the vanilla segments (Roots reports Tropics, Mesa reports Alpine, Gloom and Citadel report the
-/// Kiln), so there TFA's own stage tracking is used instead.
+/// Kiln), so there TFA's own stage tracking is used instead. Its Builder packs any chain of biomes into
+/// the segments the same way (a segment there can hold several blocks, and any biome).
 /// </summary>
 internal static class Map
 {
@@ -164,8 +166,84 @@ internal static class Map
 
     internal static bool InRoots => CurrentPlace == Place.Roots;
 
-    /// <summary>The Nadir (the game's own flag for it).</summary>
-    internal static bool InNadir => Ready && Singleton<MapHandler>.Instance != null && Singleton<MapHandler>.Instance.inNadir;
+    /// <summary>
+    /// The Nadir: the game's own flag for it, or the place (True Final Ascent's Builder makes its Nadir blocks out of a copy
+    /// of the Nadir the game does not count as one).
+    /// </summary>
+    internal static bool InNadir => Ready && (Singleton<MapHandler>.Instance.inNadir || CurrentPlace == Place.Nadir);
+
+    /// <summary>One of this mod's spawners under a part of the map's ground, which the game runs when it fills that part (once: a part that has one keeps it).</summary>
+    internal static void AddSpawner<T>(GameObject part, string name) where T : MonoBehaviour
+    {
+        if (part == null || part.transform.Find(name) != null)
+        {
+            return;
+        }
+        GameObject holder = new GameObject(name);
+        holder.transform.SetParent(part.transform, false);
+        holder.AddComponent<T>();
+    }
+
+    /// <summary>
+    /// The way through a part of the map: from where the scouts come into it (the campfire before it, or where they wake for
+    /// the first part) to its own campfire. The part is a segment's ground (<paramref name="segment"/> on a regular map),
+    /// or with True Final Ascent's Builder the block it belongs to (repeated biomes each have their own; the last one ends
+    /// at the peak).
+    /// </summary>
+    internal static bool WayThrough(Transform part, int segment, out Vector3 start, out Vector3 end)
+    {
+        start = end = Vector3.zero;
+        GameObject from;
+        GameObject to;
+        bool first;
+        Compat.Tfa.Stage stage = Compat.Tfa.StageOf(part);
+        if (stage != null)
+        {
+            from = stage.Before;
+            to = stage.Exit != null ? stage.Exit : stage.Campfire;
+            first = stage.First;
+        }
+        else
+        {
+            MapHandler map = MapHandler.Exists ? Singleton<MapHandler>.Instance : null;
+            if (map == null || map.segments == null || segment < 0 || segment >= map.segments.Length)
+            {
+                return false;
+            }
+            from = segment > 0 ? map.segments[segment - 1].segmentCampfire : null;
+            to = map.segments[segment].segmentCampfire;
+            first = segment == 0;
+        }
+        if (to != null)
+        {
+            end = to.transform.position;
+        }
+        else if (stage != null && Singleton<PeakHandler>.Instance != null)
+        {
+            // The Builder's last block has no campfire at its end: TFA puts the peak there.
+            end = Singleton<PeakHandler>.Instance.transform.position;
+        }
+        else
+        {
+            return false;
+        }
+        if (!first)
+        {
+            if (from == null)
+            {
+                return false;
+            }
+            start = from.transform.position;
+            return true;
+        }
+        List<SpawnPoint> points = SpawnPoint.allSpawnPoints.Where(p => p != null).ToList();
+        if (points.Count == 0)
+        {
+            return false;
+        }
+        start = points.Aggregate(Vector3.zero, (sum, p) => sum + p.transform.position) / points.Count;
+        return true;
+    }
 
     /// <summary>The biome a scene object belongs to (its <see cref="Biome"/> parent), if it has one.</summary>
     internal static bool TryGetBiome(Component component, out Biome.BiomeType biome)
@@ -227,17 +305,70 @@ internal static class Map
     /// <summary>Night, where there is night at all (see <see cref="DayNightApplies"/>).</summary>
     internal static bool IsNight => DayNightApplies && DayNightManager.instance != null && DayNightManager.instance.isDay < 0.5f;
 
-    /// <summary>Every segment below the Kiln: the part of the mountain with weather and the chasing fog.</summary>
-    internal static bool InLowerMountain
+    private static readonly HashSet<Collider> fogWalls = new HashSet<Collider>();
+    private static MapHandler fogWallsOf;
+    private static float fogWallsFound = float.NegativeInfinity;
+
+    /// <summary>
+    /// The fog walls between the segments: the game's (each segment's wall before and after it, a picture of fog with
+    /// an invisible slab behind it, on the plain layer) and True Final Ascent's Builder copies of them between its blocks.
+    /// Nothing there to see but fog, so nothing to stand on, hold or stop at.
+    /// </summary>
+    internal static bool IsFogWall(Collider collider)
     {
-        get
+        if (collider == null)
         {
-            if (!Ready)
-            {
-                return false;
-            }
-            int segment = (int)Singleton<MapHandler>.Instance.GetCurrentSegment();
-            return segment >= 0 && segment < (int)Segment.TheKiln;
+            return false;
         }
+        if (Compat.Tfa.BuilderWall(collider))
+        {
+            return true;
+        }
+        MapHandler map = MapHandler.Exists ? Singleton<MapHandler>.Instance : null;
+        if (map != fogWallsOf || UnityEngine.Time.time - fogWallsFound > 10f)
+        {
+            fogWallsOf = map;
+            fogWallsFound = UnityEngine.Time.time;
+            fogWalls.Clear();
+            if (map != null && map.segments != null)
+            {
+                foreach (MapHandler.MapSegment segment in map.segments)
+                {
+                    foreach (GameObject wall in segment != null ? new[] { segment.wallNext, segment.wallPrevious } : new GameObject[0])
+                    {
+                        if (wall != null)
+                        {
+                            fogWalls.UnionWith(wall.GetComponentsInChildren<Collider>(true));
+                        }
+                    }
+                }
+            }
+        }
+        return fogWalls.Contains(collider);
+    }
+
+    private static readonly RaycastHit[] fogWallHits = new RaycastHit[16];
+
+    /// <summary>Whether the line between two spots passes into a fog wall (from either end).</summary>
+    internal static bool ThroughFogWall(Vector3 from, Vector3 to)
+    {
+        Vector3 way = to - from;
+        float length = way.magnitude;
+        if (length < 1e-4f)
+        {
+            return false;
+        }
+        foreach ((Vector3 start, Vector3 direction) in new[] { (from, way / length), (to, -way / length) })
+        {
+            int count = Physics.RaycastNonAlloc(start, direction, fogWallHits, length, HelperFunctions.AllPhysicalExceptCharacter, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < count; i++)
+            {
+                if (IsFogWall(fogWallHits[i].collider))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }

@@ -24,7 +24,7 @@ internal sealed partial class Runner
     /// <summary>
     /// Where the new mobs live (on a map with the beach, the Tropics and the Alps, as 80): seven in ten of the crabs, of
     /// the ground snakes and of the goats (as whole groups) on the climb itself (the segment's wall up to its campfire),
-    /// the rest on the way to it, those on the climb spread all the way up it; 30 ground snakes and 10 tree snakes whatever the map, each ground snake
+    /// the rest on the way to it, those on the climb spread all the way up it; 25 ground snakes and 9 tree snakes whatever the map, each ground snake
     /// where a scout can stand, on the map's own ground with a plant near. One of each on the climb pictured, where the scout is in its
     /// part of the map (the crabs from the beach, the snakes once the Tropics are reached, the goats in the Alps).
     /// </summary>
@@ -89,7 +89,7 @@ internal sealed partial class Runner
                     grounded.Count > 0 && upTrees.Count == 0,
                     $"{grounded.Count} ground snakes; on anything else: {(upTrees.Count == 0 ? "none" : string.Join(", ", upTrees))}"
                     + $"; on rocks {grounded.Count(s => Physics.Raycast(s.Home + Vector3.up * 0.5f, Vector3.down, out RaycastHit r, 2f, HelperFunctions.terrainMapMask) && !NewMobs.IsTerrain(r.collider))}");
-                Check("30 ground snakes and 10 tree snakes in the Tropics, whatever the map; seven in ten of the ground snakes on the climb itself (the Tropics' wall up to their campfire), the rest on the jungle floor",
+                Check($"{Snakes.GroundCount} ground snakes and {Snakes.TreeCount} tree snakes in the Tropics, whatever the map; seven in ten of the ground snakes on the climb itself (the Tropics' wall up to their campfire), the rest on the jungle floor",
                     snakes.Count == Snakes.GroundCount + Snakes.TreeCount && snakes.Count - grounded.Count <= Snakes.TreeCount
                     && Snakes.OnClimb == NewMobs.OnClimb(grounded.Count) && high.Count == Snakes.OnClimb,
                     $"{snakes.Count} snakes, {snakes.Count - grounded.Count} in trees; on the climb {high.Count} of {grounded.Count} ground snakes (put there {Snakes.OnClimb}, wanted {NewMobs.OnClimb(grounded.Count)}); "

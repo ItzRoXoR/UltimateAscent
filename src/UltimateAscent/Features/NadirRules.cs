@@ -12,6 +12,7 @@ namespace UltimateAscent.Features;
 /// half the rate they would elsewhere on that ascent (see <see cref="StatusRecovery"/>), and blindness, numbness
 /// and a pause in poison healing last twice as long.</item>
 /// <item>From ascent 18 gravity pulls the scouts twice as hard there: in the air, and while they lie limp.</item>
+/// <item>From ascent 18 the rising ghosts petrify a scout in them 10 a second (the game: 5), still a tick a second.</item>
 /// </list>
 /// </summary>
 internal static class NadirRules
@@ -21,6 +22,9 @@ internal static class NadirRules
 
     /// <summary>How hard gravity pulls in the Nadir, against elsewhere.</summary>
     internal const float Gravity = 2f;
+
+    /// <summary>How much the rising ghosts petrify a scout in them, a second (the game: 5).</summary>
+    internal const float GhostPetrification = 10f;
 
     /// <summary>The share of their usual pace at which ailments wear off here and now.</summary>
     internal static float RecoveryShare => Rules.Enabled(Lvl.NadirRecovery) && Map.InNadir ? Recovery : 1f;
@@ -60,6 +64,35 @@ internal static class NadirRules
             {
                 __instance.timeElapsed -= back;
             }
+        }
+    }
+
+    /// <summary>
+    /// The rising ghosts (the game's petrifying field that rises with them): each tick (one a second) petrifies a scout
+    /// whose head is in them by <see cref="GhostPetrification"/> instead of the game's 5.
+    /// </summary>
+    [HarmonyPatch(typeof(StatusField), nameof(StatusField.TickStatus))]
+    private static class StonierGhosts
+    {
+        private static bool Prefix(StatusField __instance)
+        {
+            if (!Rules.Enabled(Lvl.NadirGhosts) || !__instance.tickBased || __instance.statusType != CharacterAfflictions.STATUSTYPE.Petrify)
+            {
+                return true;
+            }
+            LavaRising rising = __instance.GetComponentInParent<LavaRising>();
+            if (rising == null || rising.risingFieldType != LavaRising.RisingFieldType.VoidGhosts)
+            {
+                return true;
+            }
+            __instance.tick += Time.deltaTime;
+            if (__instance.tick >= __instance.timeBetweenTicks)
+            {
+                // Petrification lands in whole points (the game drops the rest): the nudge keeps float rounding from losing one.
+                __instance.IncreaseStatus(GhostPetrification / 100f * __instance.timeBetweenTicks + 0.0001f);
+                __instance.tick = 0f;
+            }
+            return false;
         }
     }
 

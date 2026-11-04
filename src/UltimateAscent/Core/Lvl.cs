@@ -44,6 +44,8 @@ internal static class Lvl
     internal const int ExtremeWeather = 18;
     // New: gravity is twice as strong in the Nadir.
     internal const int NadirGravity = 18;
+    // New: the Nadir's rising ghosts petrify twice as fast.
+    internal const int NadirGhosts = 18;
     // More Ascents (extended): no revive statues; 20 starting curse, 15 curse per revive, revives keep petrification.
     internal const int NoReviveStatues = 19;
     // More Ascents: Bing Bong calls upon an evil force if not given attention.

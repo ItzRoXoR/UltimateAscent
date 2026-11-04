@@ -12,8 +12,8 @@ namespace UltimateAscent.Features;
 /// A scout who is far ahead of somebody and has nobody within 35 m gets hunted by the Scoutmaster
 /// for 30 s (70 s from ascent 17); a scout coming within 35 m calls him off. On every ascent the game's own
 /// Scoutmaster also gives up on his target when another scout is within 35 m of them (the game: 15 m).
-/// Every death curses the survivors, and
-/// being thrown adds curse. Eating a scout poisons you for 50 and curses you for 25 (the game: 10
+/// Every death curses the survivors (each death of each scout, a scout turned into a mushroom zombie too, but not a
+/// scout whose player left the lobby), and being thrown adds curse. Eating a scout poisons you for 50 and curses you for 25 (the game: 10
 /// curse).
 /// </summary>
 internal static class A11_RuleZero
@@ -219,7 +219,10 @@ internal static class A11_RuleZero
         }
     }
 
-    /// <summary>Survivors are cursed whenever a scout dies; bigger lobbies get less.</summary>
+    /// <summary>A death curses the survivors only if the dead scout's player is still in the lobby this long after it.</summary>
+    private const float LeaveGrace = 1.5f;
+
+    /// <summary>Survivors are cursed whenever a scout dies (every death: a revive makes the scout alive again).</summary>
     [HarmonyPatch(typeof(Character), nameof(Character.RPCA_Die))]
     private static class CurseOnDeath
     {
@@ -230,27 +233,77 @@ internal static class A11_RuleZero
 
         private static void Postfix(Character __instance, bool __state)
         {
-            // A scout who has only just appeared and dies is the game's dead-on-arrival for a joiner, not a death.
-            if (__state || !Rules.Enabled(Lvl.RuleZero) || __instance.isBot || __instance.isScoutmaster || LateJoiners.JustArrived(__instance))
+            if (!__state)
             {
-                return;
+                Died(__instance);
             }
-            Character local = Character.localCharacter;
-            if (local == null || local == __instance || local.data.dead)
+        }
+    }
+
+    /// <summary>A scout who dies infected and turns into a mushroom zombie is dead too (the game marks it without RPCA_Die).</summary>
+    [HarmonyPatch(typeof(Character), nameof(Character.FinishZombifying))]
+    private static class CurseOnZombified
+    {
+        private static void Prefix(Character __instance, out bool __state)
+        {
+            __state = __instance.data != null && __instance.data.dead;
+        }
+
+        private static void Postfix(Character __instance, bool __state)
+        {
+            if (!__state)
             {
-                return;
+                Died(__instance);
             }
-            int players = 0;
-            foreach (Character character in Character.AllCharacters)
+        }
+    }
+
+    /// <summary>
+    /// A scout died: the local survivor is cursed (bigger lobbies get less), 1.5 s later, if the dead scout's player is
+    /// still in the lobby then: a player leaving it takes their scout with them, and that is no death.
+    /// </summary>
+    private static void Died(Character dead)
+    {
+        // A scout who has only just appeared and dies is the game's dead-on-arrival for a joiner, not a death.
+        if (!Rules.Enabled(Lvl.RuleZero) || dead.isBot || dead.isScoutmaster || LateJoiners.JustArrived(dead))
+        {
+            return;
+        }
+        Character local = Character.localCharacter;
+        if (local == null || local == dead || local.data.dead || !PlayerStays(dead))
+        {
+            return;
+        }
+        int players = 0;
+        foreach (Character character in Character.AllCharacters)
+        {
+            if (character != null && !character.isBot && !character.isScoutmaster)
             {
-                if (character != null && !character.isBot && !character.isScoutmaster)
-                {
-                    players++;
-                }
+                players++;
             }
-            float curse = players <= 2 ? 0.12f : players <= 4 ? 0.08f : players <= 6 ? 0.04f : 0.02f;
+        }
+        float curse = players <= 2 ? 0.12f : players <= 4 ? 0.08f : players <= 6 ? 0.04f : 0.02f;
+        local.StartCoroutine(CurseIfStillHere(local, dead, curse));
+    }
+
+    private static System.Collections.IEnumerator CurseIfStillHere(Character local, Character dead, float curse)
+    {
+        yield return new WaitForSeconds(LeaveGrace);
+        if (local != null && !local.data.dead && dead != null && PlayerStays(dead))
+        {
             local.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Curse, curse);
         }
+    }
+
+    /// <summary>The scout's player is in the lobby (not gone, not away waiting to come back).</summary>
+    private static bool PlayerStays(Character scout)
+    {
+        if (!PhotonNetwork.InRoom || scout.photonView == null)
+        {
+            return true;
+        }
+        Photon.Realtime.Player owner = PhotonNetwork.CurrentRoom.GetPlayer(scout.photonView.OwnerActorNr);
+        return owner != null && !owner.IsInactive;
     }
 
     [HarmonyPatch(typeof(CharacterInteractible), nameof(CharacterInteractible.GetEaten))]

@@ -8,16 +8,19 @@ namespace UltimateAscent.Features;
 /// <summary>
 /// Ascent 18 (13DDA): weather is more extreme, including the lava in the Caldera.
 /// <list type="bullet">
-/// <item>Wind storms blow 1.5x (Roots: 2.5x) harder; rain makes the ground and walls very slippery
-/// and, while you are airborne under open sky, pulls you down harder (an extra 40 m/s², 60 in the
-/// Tropics: about twice, in the Tropics three times, the pull of a normal jump); snowstorms chill 20%
+/// <item>Wind storms blow 1.5x (Roots: 2.5x) harder; in the rain (see <see cref="WetGrab"/>) a grab taken while
+/// already on the wall holds no higher than where the hands let go, so letting go and grabbing higher is slower
+/// than climbing on (climbing on is as in the game's rain; at ascent 25 outside the Tropics a little easier, see
+/// <see cref="WetWalls"/>); vines get slippery and take more stamina,
+/// most in the Tropics (see <see cref="WetVines"/>); gravity and jumps are left as they are. Snowstorms chill 20%
 /// more in the Alpine segment and at night, and scorch you by day elsewhere, a heat only sunscreen keeps
 /// off (from ascent 15 all but a quarter of it). While a snowstorm blows where you are, no sun burns
 /// through it: the scorching sun (the Mesa's, and ascent 23's everywhere) neither heats you nor roasts
 /// what shields you.</item>
 /// <item>Tornadoes spawn every 20-120 s; one that catches you spins, drags and lifts you 2.5 times as
 /// hard (in the Mesa it also makes you drowsy).</item>
-/// <item>The Mesa's midday sun burns 6 heat a second; the Gloom's fog makes you 2.5 drowsy a second.</item>
+/// <item>The Mesa's midday sun burns 6 heat a second; the Gloom's fog makes you 2.5 drowsy a second, the
+/// Citadel's rising gloom 5 a second.</item>
 /// <item>The Caldera's lava river rises and falls like a tide, synchronised for everyone.</item>
 /// <item>The fog becomes poisonous and three times as strong (see <see cref="FogSphereRules"/>).</item>
 /// <item>Cold nights chill 1.5 times as fast. In the Alpine, the first and the last quarter of the
@@ -29,13 +32,27 @@ internal static class A18_ExtremeWeather
     private const float NightColdMultiplier = 1.5f;
 
     /// <summary>
-    /// How much harder rain pulls a scout who is in the air under open sky (m/s² on the hips). The game's
-    /// own pull starts as a slight lift when a jump begins and builds up the longer a scout is in the
-    /// air (to 500 after about 3 s of falling); over a normal jump it is about 30, so rain roughly
-    /// doubles a jump's pull, triples it in the Tropics.
+    /// How much of a full-speed climb the game's rain takes off a scout climbing on: half. Ascent 18 leaves it so, in the
+    /// Tropics and elsewhere.
     /// </summary>
-    internal const float RainPull = 40f;
-    internal const float TropicsRainPull = 60f;
+    internal const float GameWetSlide = 0.5f;
+
+    /// <summary>
+    /// Ascent 25's rain outside the Tropics (the rain's own biome) takes only this much of a full-speed climb off a scout
+    /// climbing on, so it gains 60% of a dry climb there, against half in the Tropics (the user's).
+    /// </summary>
+    internal const float OutsideTropicsSlide = 0.4f;
+
+    /// <summary>
+    /// How hard a scout on a vine slides down it in the rain where it hangs straight down, against a full-speed climb:
+    /// in the Tropics, and elsewhere.
+    /// </summary>
+    internal const float VineSlide = 0.6f;
+    internal const float VineSlideElsewhere = 0.3f;
+
+    /// <summary>How many times the stamina a vine takes (climbing along it, or hanging on) in the rain: in the Tropics, and elsewhere.</summary>
+    internal const float WetVineStamina = 2f;
+    internal const float WetVineStaminaElsewhere = 1.5f;
 
     /// <summary>How much harder a tornado spins, drags and lifts the scouts it has caught.</summary>
     internal const float TornadoPull = 2.5f;
@@ -46,10 +63,21 @@ internal static class A18_ExtremeWeather
     /// <summary>The Gloom's fog, a second (the game: 0.9, 1.17 with ascent 14's boost).</summary>
     internal const float GloomFogDrowsiness = 0.025f;
 
+    /// <summary>The Citadel's rising gloom, a second (the game: 0.9, 1.17 with ascent 14's boost).</summary>
+    internal const float CitadelGloomDrowsiness = 0.05f;
+
     private static float mesaSunTime;
 
     /// <summary>The last frame a snowstorm blew on the local scout (the game applies a storm only while it blows where the scout is).</summary>
     private static int snowstormFrame = -10;
+
+    /// <summary>
+    /// The last frame the game's rain fell on the local scout, how wet it made the walls (the game's own slipperiness), and
+    /// whether that was in the Tropics, the rain's own biome (elsewhere it is weaker).
+    /// </summary>
+    private static int rainFrame = -10;
+    private static float rainWetness;
+    private static bool rainInTropics;
 
     private static bool On => Rules.Enabled(Lvl.ExtremeWeather);
 
@@ -136,8 +164,16 @@ internal static class A18_ExtremeWeather
             {
                 return true;
             }
-            Segment segment = Map.CurrentSegment;
+            // True Final Ascent's Builder: its rest stops spare the resting scouts (TFA's own guard would come after this).
+            if (Compat.Tfa.RestSpares(character))
+            {
+                __instance.windPlayerFactor = 0f;
+                return false;
+            }
             Place place = Map.CurrentPlace;
+            // The game's segments, as a regular map has them: the Alpine's holds the Mesa, the Caldera's the Gloom.
+            bool alpineSegment = place == Place.Alpine || place == Place.Mesa;
+            bool calderaSegment = place == Place.Caldera || place == Place.Gloom;
             string name = __instance.name;
             if (name == "SnowStorm")
             {
@@ -152,8 +188,8 @@ internal static class A18_ExtremeWeather
                 Overrides.Set(__instance, nameof(WindChillZone.windForce), alpine ? 20f : 12f);
                 Overrides.Set(__instance, nameof(WindChillZone.statusApplicationPerSecond), alpine ? 0.07f : 0.01f);
             }
-            // Ascent 25: from the Caldera and the Gloom on (no day or night there) a storm neither chills nor heats.
-            bool noTemperature = Rules.Enabled(Lvl.AllWeather) && (place == Place.Caldera || place == Place.Gloom);
+            // Ascent 25: from the Caldera and the Gloom on, up to the Peak (no day or night there), a storm neither chills nor heats.
+            bool noTemperature = Rules.Enabled(Lvl.AllWeather) && A25_AllWeather.UpperMountain(place);
             if (!On)
             {
                 if (!noTemperature)
@@ -176,15 +212,7 @@ internal static class A18_ExtremeWeather
 
             if (name == "WindStorm")
             {
-                float force = 30f;
-                if (place == Place.Roots)
-                {
-                    force = 50f;
-                }
-                else if (segment == Segment.TheKiln || segment == Segment.Peak)
-                {
-                    force = 0f;
-                }
+                float force = place == Place.Roots ? 50f : 30f;
                 Overrides.Set(__instance, nameof(WindChillZone.windForce), force);
             }
 
@@ -200,11 +228,11 @@ internal static class A18_ExtremeWeather
                 {
                     // Neither cold nor heat (see above).
                 }
-                else if (segment == Segment.Alpine || Map.IsNight)
+                else if (alpineSegment || Map.IsNight)
                 {
                     character.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Cold, amount * 1.2f);
                 }
-                else if (segment != Segment.Caldera)
+                else if (!calderaSegment)
                 {
                     // Only sunscreen keeps this heat off (from ascent 15 all but a quarter); a parasol or a glider does not.
                     if (!character.data.wearingSunscreen)
@@ -222,27 +250,145 @@ internal static class A18_ExtremeWeather
                 character.refs.afflictions.AddStatus(__instance.statusType, amount);
             }
 
-            if (name == "RainStorm")
-            {
-                if (character.data.groundedFor > 0.5f || character.data.isClimbing)
-                {
-                    character.data.slippy = Mathf.Clamp01(Mathf.Max(character.data.slippy, factor * 200f));
-                }
-                else
-                {
-                    RaycastHit hit = HelperFunctions.LineCheck(character.Center + new Vector3(0f, 500f, 0f), character.Center, HelperFunctions.LayerType.AllPhysical);
-                    if (hit.transform == null || hit.transform.root == character.transform.root)
-                    {
-                        float pull = segment == Segment.Tropics ? TropicsRainPull : RainPull;
-                        character.GetBodypart(BodypartType.Hip).rig.linearVelocity -= new Vector3(0f, pull * Time.deltaTime, 0f);
-                    }
-                }
-            }
-            else if (__instance.setSlippy)
+            if (__instance.setSlippy)
             {
                 character.data.slippy = Mathf.Clamp01(Mathf.Max(character.data.slippy, factor * 10f));
             }
+            if (name == "RainStorm")
+            {
+                rainFrame = Time.frameCount;
+                rainWetness = Mathf.Clamp01(factor * 10f);
+                rainInTropics = place == Place.Tropics;
+            }
             return false;
+        }
+    }
+
+    /// <summary>How wet the game's rain makes the walls for this scout now (0 out of the rain; only the local scout's own).</summary>
+    internal static float Wetness(Character character)
+    {
+        return On && Rules.Owns(character) && Time.frameCount - rainFrame <= 1 ? rainWetness : 0f;
+    }
+
+    /// <summary>
+    /// Ascent 25: in the rain outside the Tropics the game's rain slides a scout on a wall back less, <see
+    /// cref="OutsideTropicsSlide"/> of a full-speed climb instead of half, so climbing on gains 60% of a dry climb there
+    /// (the Tropics: half, the game's). Only the rain's own share of the slipperiness (not a jellyfish's); not while
+    /// hanging from a piton.
+    /// </summary>
+    [HarmonyPatch(typeof(CharacterClimbing), nameof(CharacterClimbing.GetRequestedPostition))]
+    private static class WetWalls
+    {
+        private static void Postfix(CharacterClimbing __instance, ref Vector3 __result)
+        {
+            Character character = __instance.character;
+            float wet = Wetness(character);
+            if (wet <= 0f || rainInTropics || !Rules.Enabled(Lvl.AllWeather) || character.data.currentClimbHandle != null)
+            {
+                return;
+            }
+            float rain = Mathf.Min(Mathf.Clamp01(character.data.slippy), wet);
+            Vector3 up = Vector3.ProjectOnPlane(Vector3.up, character.data.climbNormal).normalized;
+            __result += up * ((GameWetSlide - OutsideTropicsSlide) * rain * __instance.climbSpeed * Time.fixedDeltaTime * __instance.climbSpeedMod);
+        }
+    }
+
+    /// <summary>
+    /// In the rain, a grab taken while the scout is already on the wall (they let go and grab again) holds no higher than
+    /// where the hands let go: a hold reached for higher up on a wet wall slips down to there. So letting go and grabbing
+    /// higher only gains what climbing on gains in between, less the drop while the hands are off the wall: slower than
+    /// climbing on. A grab from the ground, or one below where the hands were, holds as in the game.
+    /// </summary>
+    [HarmonyPatch(typeof(CharacterClimbing), nameof(CharacterClimbing.StartClimbRpc))]
+    private static class WetGrab
+    {
+        private static void Prefix(CharacterClimbing __instance, ref Vector3 climbPos, Vector3 climbNormal)
+        {
+            Character character = __instance.character;
+            float above = climbPos.y - character.data.climbPos.y;
+            if (above <= 0f || !character.data.hasClimbedSinceGrounded || Wetness(character) <= 0f)
+            {
+                return;
+            }
+            // Down along the wall to the height the hands let go at (the climb settles onto the face from there).
+            Vector3 down = -Vector3.ProjectOnPlane(Vector3.up, climbNormal).normalized;
+            climbPos += down * (above / Mathf.Max(-down.y, 0.1f));
+        }
+    }
+
+    /// <summary>
+    /// A wet vine is slippery: on it in the rain, unless climbing up it, the scout slides down along it toward its lowest
+    /// point, where the vine hangs straight down at <see cref="VineSlide"/> of a full-speed climb in the Tropics
+    /// (elsewhere <see cref="VineSlideElsewhere"/>), slower where it slopes gently, not at all where it is
+    /// level. Climbing up it keeps the game's pace (the rain costs stamina there, <see cref="WetVineScope"/>). Not while
+    /// sliding along it the game's way (after grabbing it at speed).
+    /// </summary>
+    [HarmonyPatch(typeof(CharacterVineClimbing), nameof(CharacterVineClimbing.FixedUpdate))]
+    private static class WetVines
+    {
+        private static void Postfix(CharacterVineClimbing __instance)
+        {
+            Character character = __instance.character;
+            JungleVine vine = character != null ? character.data.heldVine : null;
+            float wet = Wetness(character);
+            if (vine == null || wet <= 0f || !character.data.isVineClimbing || __instance.Sliding())
+            {
+                return;
+            }
+            float at = character.data.vinePercent;
+            Vector3 along = vine.GetPosition(at + 0.02f) - vine.GetPosition(at - 0.02f);
+            if (along.sqrMagnitude < 0.0001f)
+            {
+                return;
+            }
+            // How steeply the vine rises toward its far end here: the slide goes the other way, unless the scout climbs up.
+            float rise = along.y / along.magnitude;
+            if (__instance._currentClimbInput * rise > 0.01f)
+            {
+                return;
+            }
+            float slide = (rainInTropics ? VineSlide : VineSlideElsewhere) * wet * rise * vine.LengthFactor() * __instance.climbSpeed * __instance.climbSpeedMod * Time.fixedDeltaTime;
+            character.data.vinePercent = Mathf.Clamp(at - slide, 0.01f, 0.99f);
+        }
+    }
+
+    /// <summary>
+    /// While the scout is on a vine in the rain, the stamina it takes (climbing along it, or hanging on) is doubled in the
+    /// Tropics, 1.5 times elsewhere.
+    /// </summary>
+    [HarmonyPatch(typeof(CharacterVineClimbing), nameof(CharacterVineClimbing.Update))]
+    private static class WetVineScope
+    {
+        [ThreadStatic] internal static int Depth;
+
+        private static void Prefix(CharacterVineClimbing __instance, out bool __state)
+        {
+            __state = Wetness(__instance.character) > 0f;
+            if (__state)
+            {
+                Depth++;
+            }
+        }
+
+        private static Exception Finalizer(Exception __exception, bool __state)
+        {
+            if (__state)
+            {
+                Depth--;
+            }
+            return __exception;
+        }
+    }
+
+    [HarmonyPatch(typeof(Character), nameof(Character.UseStamina))]
+    private static class WetVineStaminaUse
+    {
+        private static void Prefix(ref float usage)
+        {
+            if (WetVineScope.Depth > 0)
+            {
+                usage *= rainInTropics ? WetVineStamina : WetVineStaminaElsewhere;
+            }
         }
     }
 
@@ -322,7 +468,8 @@ internal static class A18_ExtremeWeather
     /// nothing shades the scout from it) burns 6 heat a second, exactly as it lands on the bar. An open
     /// parasol or a glider held overhead still keeps it off, and sunscreen too (but for the quarter ascent 15
     /// lets through); a snowstorm blowing on the scout hides it. Not while True Final Ascent runs a weather;
-    /// in its Apocalypse mode TFA switches the game's sun off and burns with its own.
+    /// in its Apocalypse mode TFA switches the game's sun off and burns with its own. TFA's Builder: not at its
+    /// rest stops while the scouts rest, and its invisible walls between blocks do not shade it.
     /// </summary>
     [HarmonyPatch(typeof(HotSun), nameof(HotSun.Update))]
     private static class MesaSun
@@ -333,7 +480,7 @@ internal static class A18_ExtremeWeather
             {
                 return true;
             }
-            if (SnowstormHidesSun)
+            if (SnowstormHidesSun || Compat.Tfa.RestSpares(Character.localCharacter))
             {
                 return false;
             }
@@ -345,7 +492,7 @@ internal static class A18_ExtremeWeather
             {
                 return false;
             }
-            RaycastHit shade = HelperFunctions.LineCheck(local.Center + clock.sun.transform.forward * -1000f, local.Center, HelperFunctions.LayerType.AllPhysical);
+            RaycastHit shade = Compat.Tfa.SunLineCheck(local.Center + clock.sun.transform.forward * -1000f, local.Center, HelperFunctions.LayerType.AllPhysical);
             if (shade.transform != null && shade.transform.root != local.transform.root)
             {
                 return false;
@@ -377,9 +524,9 @@ internal static class A18_ExtremeWeather
     }
 
     /// <summary>
-    /// The Gloom's fog (the game's own sleepy fog over the Gloom, not the Citadel's rising gloom) makes the
-    /// scouts whose heads are in it 2.5 drowsy a second, exactly as it lands on the bar; the game's safe
-    /// zones (lit bell towers, campfires, stoves, candles, Faerie Lanterns) still keep it off.
+    /// The Gloom's fog (the game's own sleepy fog over the Gloom) makes the scouts whose heads are in it 2.5 drowsy a
+    /// second, and the Citadel's rising gloom 5 a second, exactly as it lands on the bar; the game's safe zones (lit bell
+    /// towers, campfires, stoves, candles, Faerie Lanterns) still keep them off.
     /// </summary>
     [HarmonyPatch(typeof(Peak.StatusFieldGloom), nameof(Peak.StatusFieldGloom.TickStatus))]
     private static class GloomFog
@@ -387,7 +534,13 @@ internal static class A18_ExtremeWeather
         private static bool Prefix(Peak.StatusFieldGloom __instance)
         {
             Character local = Character.localCharacter;
-            if (!On || local == null || __instance.GetComponentInParent<LavaRising>() != null)
+            if (!On || local == null)
+            {
+                return true;
+            }
+            LavaRising rising = __instance.GetComponentInParent<LavaRising>();
+            bool citadel = rising != null && rising.risingFieldType == LavaRising.RisingFieldType.Gloom;
+            if (rising != null && !citadel)
             {
                 return true;
             }
@@ -395,7 +548,8 @@ internal static class A18_ExtremeWeather
             {
                 return false;
             }
-            ExactStatus.Add(local.refs.afflictions, CharacterAfflictions.STATUSTYPE.Drowsy, GloomFogDrowsiness * Time.deltaTime, "gloom fog");
+            ExactStatus.Add(local.refs.afflictions, CharacterAfflictions.STATUSTYPE.Drowsy,
+                (citadel ? CitadelGloomDrowsiness : GloomFogDrowsiness) * Time.deltaTime, citadel ? "citadel gloom" : "gloom fog");
             if (__instance.additionalStatuses != null)
             {
                 foreach (Peak.StatusFieldBase.StatusFieldStatus other in __instance.additionalStatuses)
@@ -418,5 +572,15 @@ internal static class A18_ExtremeWeather
     private static class TideEffects
     {
         private static bool Prefix(Lava __instance) => CalderaTide.Apply(__instance);
+    }
+
+    /// <summary>
+    /// True Final Ascent's rest island in a Caldera it made larger stands as high above the game's tide as the lava's heat
+    /// reaches; the higher tide here does not heat the scouts on it.
+    /// </summary>
+    [HarmonyPatch(typeof(Lava), "Heat")]
+    private static class TideSparesRestIsland
+    {
+        private static bool Prefix(Lava __instance) => !CalderaTide.OnRestIsland(__instance);
     }
 }

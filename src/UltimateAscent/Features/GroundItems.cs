@@ -11,7 +11,7 @@ namespace UltimateAscent.Features;
 /// <summary>
 /// Stones and sticks lying around (<see cref="StoneItem"/>, <see cref="StickItem"/>), in every climb, custom runs
 /// included unless the config's "New Items" switch is off: up to 20 of each on the beach and up to 20
-/// of each in the Tropics or the Roots. They lie near the spots the game chose for its mushroom patches
+/// of each in the Tropics or the Roots (in the Roots Spruce Branches in the sticks' place, see <see cref="SpruceBranch"/>). They lie near the spots the game chose for its mushroom patches
 /// and berry bushes: a few metres away, on ground at the same level and open to the sky, not steeper than
 /// 30 degrees, out of the water and 4 m apart. The host lays them out when the game fills that part of the
 /// map with its own items, and the game clears them with the rest when the climb moves on.
@@ -47,14 +47,12 @@ internal static class GroundItems
             Placed.Clear();
             for (int i = 0; i < 2; i++)
             {
-                GameObject segment = map.segments[i].segmentParent;
-                if (segment == null || segment.transform.Find(SpawnerName) != null)
-                {
-                    continue;
-                }
-                GameObject holder = new GameObject(SpawnerName);
-                holder.transform.SetParent(segment.transform, false);
-                holder.AddComponent<GroundItemSpawner>();
+                Map.AddSpawner<GroundItemSpawner>(map.segments[i].segmentParent, SpawnerName);
+            }
+            // True Final Ascent's Builder: every Shore, Tropics and Roots block (copies made before this call carry theirs).
+            foreach (Compat.Tfa.Stage stage in Compat.Tfa.Stages().Where(s => s.Kind == "Shore" || s.Kind == "Tropics" || s.Kind == "Roots"))
+            {
+                Map.AddSpawner<GroundItemSpawner>(stage.Terrain, SpawnerName);
             }
         }
     }
@@ -77,7 +75,10 @@ internal static class GroundItems
         WaterZone[] water = Object.FindObjectsByType<WaterZone>(FindObjectsSortMode.None);
         List<Vector3> taken = new List<Vector3>();
         List<Item> placed = new List<Item>();
-        foreach (Item template in new[] { StoneItem.Template, StickItem.Template })
+        // In the Roots (most of the ground the game's patches and bushes stand on is the Roots'), branches for sticks.
+        bool roots = anchors.Count(a => Map.TryGetGroundBiome(a + Vector3.up * 0.5f, out Biome.BiomeType biome) && biome == Biome.BiomeType.Roots) * 2 > anchors.Count;
+        Item stick = roots && SpruceBranch.Template != null ? SpruceBranch.Template : StickItem.Template;
+        foreach (Item template in new[] { StoneItem.Template, stick })
         {
             if (template == null)
             {

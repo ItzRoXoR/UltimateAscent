@@ -155,11 +155,12 @@ internal static class ExactStatus
         owed.Clear();
     }
 
-    internal static void Add(CharacterAfflictions afflictions, CharacterAfflictions.STATUSTYPE type, float target, string source)
+    /// <summary>Adds <paramref name="target"/> as it lands on the bar (in its steps, the rest carried); returns what landed now.</summary>
+    internal static float Add(CharacterAfflictions afflictions, CharacterAfflictions.STATUSTYPE type, float target, string source)
     {
         if (afflictions == null || target <= 0f)
         {
-            return;
+            return 0f;
         }
         string key = source + "/" + (int)type;
         owed.TryGetValue(key, out float carried);
@@ -171,5 +172,6 @@ internal static class ExactStatus
             total -= steps * A15_StrongerAilments.Step;
         }
         owed[key] = Mathf.Max(0f, total);
+        return steps * A15_StrongerAilments.Step;
     }
 }

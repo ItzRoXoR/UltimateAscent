@@ -794,6 +794,7 @@ internal static class A17_Hazards
         kilnEruptionAt = -1f;
         kilnEruptionMinute = -1;
         kilnEruptedMinute = -1;
+        rivers.Clear();
     }
 
     /// <summary>
@@ -1256,7 +1257,8 @@ internal static class A17_Hazards
     /// campfire that opens the Kiln or of the Caldera's statue, its last stretch is ablaze (see <see cref="CalderaPathEruptions"/>), and from the Kiln's start on the
     /// Kiln erupts as well (the host chooses where and sends the game's own eruption message, as for the Caldera's).
     /// In a custom run with the Custom Run screen's Eruptions switched off the volcano never erupts, the game's own
-    /// eruptions included, on any ascent.
+    /// eruptions included, on any ascent. A Caldera True Final Ascent's Builder made larger erupts as TFA has it erupt
+    /// (along its whole length); its last stretch and the Kilns still erupt as above.
     /// </summary>
     [HarmonyPatch(typeof(EruptionSpawner), nameof(EruptionSpawner.Update))]
     private static class Eruptions
@@ -1271,25 +1273,6 @@ internal static class A17_Hazards
             {
                 return true;
             }
-            int minute = KilnAsh.ClockMinute;
-            if (PhotonNetwork.IsMasterClient && Map.InVolcanoKiln && minute >= 0 && minute != kilnEruptedMinute)
-            {
-                if (minute != kilnEruptionMinute)
-                {
-                    kilnEruptionMinute = minute;
-                    kilnEruptionAt = UnityEngine.Random.Range(KilnEruptionFrom, KilnEruptionTo);
-                }
-                float phase = KilnAsh.ClockPhase;
-                if (phase >= kilnEruptionAt && phase <= KilnEruptionTo + 0.5f)
-                {
-                    kilnEruptedMinute = minute;
-                    if (KilnEruptionSpot(out Vector3 spot))
-                    {
-                        __instance.photonView.RPC("RPCA_SpawnEruption", RpcTarget.All, spot);
-                    }
-                }
-            }
-            CalderaPathEruptions.Tick(__instance);
             if (PhotonNetwork.IsMasterClient && HelperFunctions.AnyPlayerInZRange(__instance.min.position.z, __instance.max.position.z))
             {
                 __instance.counter -= Time.deltaTime;
@@ -1299,7 +1282,7 @@ internal static class A17_Hazards
                     Vector3 position = __instance.transform.position;
                     position.x += UnityEngine.Random.Range(-155f, 155f);
                     position.z += UnityEngine.Random.Range(-140f, 140f);
-                    position = OnTheSurface(position);
+                    position = OnTheSurface(__instance, position);
                     if (!CalderaPathEruptions.TooClose(position) && !CalderaPathEruptions.Held)
                     {
                         __instance.photonView.RPC("RPCA_SpawnEruption", RpcTarget.All, position);
@@ -1310,16 +1293,89 @@ internal static class A17_Hazards
         }
     }
 
-    private static Lava calderaRiver;
-
-    /// <summary>The ground under this spot, or the lava's surface where that is higher (the lava river as it is now).</summary>
-    private static Vector3 OnTheSurface(Vector3 position)
+    /// <summary>
+    /// The host, every frame: the Kiln's eruption of the minute, and the Caldera's last stretch ablaze. Not tied to the
+    /// Caldera's eruption spawner, which True Final Ascent's Builder leaves out of a Kiln that does not follow its Caldera
+    /// and runs its own way in a Caldera it made larger.
+    /// </summary>
+    internal static void Tick()
     {
-        if (calderaRiver == null)
+        if (!On || !Rules.Hazard(CustomRunThreats.Eruptions) || !PhotonNetwork.IsMasterClient || !Map.Ready)
         {
-            calderaRiver = UnityEngine.Object.FindObjectsByType<Lava>(FindObjectsSortMode.None).FirstOrDefault(l => l.name == "River");
+            return;
         }
-        float lava = calderaRiver != null ? calderaRiver.transform.position.y : position.y;
+        int minute = KilnAsh.ClockMinute;
+        if (Map.InVolcanoKiln && minute >= 0 && minute != kilnEruptedMinute)
+        {
+            if (minute != kilnEruptionMinute)
+            {
+                kilnEruptionMinute = minute;
+                kilnEruptionAt = UnityEngine.Random.Range(KilnEruptionFrom, KilnEruptionTo);
+            }
+            float phase = KilnAsh.ClockPhase;
+            if (phase >= kilnEruptionAt && phase <= KilnEruptionTo + 0.5f)
+            {
+                kilnEruptedMinute = minute;
+                if (KilnEruptionSpot(out Vector3 spot))
+                {
+                    Erupt(spot);
+                }
+            }
+        }
+        CalderaPathEruptions.Tick();
+    }
+
+    private const string EruptionMessage = "eruption";
+
+    /// <summary>
+    /// The host: an eruption breaks out here on every scout's game. Sent as the game's own eruption message by a running
+    /// eruption spawner, or, where none runs (a Kiln of True Final Ascent's Builder that does not follow its Caldera), as
+    /// this mod's message, on which each game breaks it out with a sleeping spawner's eruption.
+    /// </summary>
+    internal static void Erupt(Vector3 spot)
+    {
+        EruptionSpawner running = UnityEngine.Object.FindObjectsByType<EruptionSpawner>(FindObjectsSortMode.None).FirstOrDefault(s => s.isActiveAndEnabled && s.GetComponent<PhotonView>() != null);
+        if (running != null)
+        {
+            running.GetComponent<PhotonView>().RPC("RPCA_SpawnEruption", RpcTarget.All, spot);
+            return;
+        }
+        Net.SendAll(EruptionMessage, spot);
+    }
+
+    internal static void Listen()
+    {
+        Net.Handle(EruptionMessage, args =>
+        {
+            if (args.Length < 1 || !(args[0] is Vector3 spot))
+            {
+                return;
+            }
+            EruptionSpawner spawner = Resources.FindObjectsOfTypeAll<EruptionSpawner>().FirstOrDefault(s => s != null && s.gameObject.scene.IsValid() && s.eruption != null);
+            if (spawner != null)
+            {
+                spawner.RPCA_SpawnEruption(spot);
+            }
+        });
+    }
+
+    private static readonly Dictionary<EruptionSpawner, Lava> rivers = new Dictionary<EruptionSpawner, Lava>();
+
+    /// <summary>
+    /// The ground under this spot, or the lava's surface where that is higher (the lava river as it is now: the one nearest
+    /// the spawner, its own Caldera's where True Final Ascent's Builder has several).
+    /// </summary>
+    private static Vector3 OnTheSurface(EruptionSpawner spawner, Vector3 position)
+    {
+        if (!rivers.TryGetValue(spawner, out Lava river) || river == null)
+        {
+            // Asleep ones too: the game switches the river off when nobody is near it, and it keeps its level meanwhile.
+            Vector3 at = spawner.transform.position;
+            river = UnityEngine.Object.FindObjectsByType<Lava>(FindObjectsInactive.Include, FindObjectsSortMode.None).Where(l => l.name == "River")
+                .OrderBy(l => new Vector2(l.transform.position.x - at.x, l.transform.position.z - at.z).sqrMagnitude).FirstOrDefault();
+            rivers[spawner] = river;
+        }
+        float lava = river != null ? river.transform.position.y : position.y;
         RaycastHit ground = HelperFunctions.LineCheck(position + Vector3.up * 150f, position + Vector3.down * 30f, HelperFunctions.LayerType.TerrainMap);
         position.y = ground.transform != null ? Mathf.Max(ground.point.y, lava) : lava;
         return position;
@@ -1572,15 +1628,15 @@ internal static class A17_Hazards
         }
     }
 
-    // ---- Explosions: double status, much stronger knockback, 3x longer knock-down; only the explosions listed in
-    // KnockOutBlasts also knock you out. Some bursts land exact targets instead (amounts given as they land on the
-    // bar, before falloff).
+    // ---- Explosions: double status, much stronger knockback (the Gloom ghost's only 1.5x), 3x longer knock-down; only
+    // the explosions listed in KnockOutBlasts also knock you out. Some bursts land exact targets instead (amounts given
+    // as they land on the bar, before falloff).
 
     /// <summary>
     /// The explosions (by their objects' names) whose knock-down also knocks you out: a cooked Lantern or Faerie Lantern
     /// bursting, and the Gloom ghost's burst. Every other explosion only knocks you down.
     /// </summary>
-    internal static readonly string[] KnockOutBlasts = { "VFX_DynamiteExplosionSmall", "VFX_DynamiteExplosionFae", "VFX_ExplosionGhost" };
+    internal static readonly string[] KnockOutBlasts = { "VFX_DynamiteExplosionSmall", "VFX_DynamiteExplosionFae", GhostBlastName };
 
     internal static bool KnocksOut(AOE aoe) => KnockOutBlasts.Any(name => aoe.name.StartsWith(name, StringComparison.Ordinal));
 
@@ -1597,6 +1653,17 @@ internal static class A17_Hazards
     /// <summary>The Gloom's ghost: 60 cold (the game: 35) and 50 s of blindness (the game: 20 s).</summary>
     private const float GhostCold = 0.6f;
     internal const float GhostBlindSeconds = 50f;
+
+    /// <summary>An explosion pushes 3-4x as hard as the game's (its random share of the push, 0.7-1.3, made 2.1-5.2)...</summary>
+    internal const float ExplosionPushMin = 3f;
+    internal const float ExplosionPushMax = 4f;
+
+    /// <summary>...the Gloom ghost's burst only 1.5x (1.05-1.95).</summary>
+    internal const float GhostPush = 1.5f;
+
+    internal const string GhostBlastName = "VFX_ExplosionGhost";
+
+    internal static bool IsGhostBlast(AOE aoe) => aoe.name.StartsWith(GhostBlastName, StringComparison.Ordinal);
 
     /// <summary>
     /// A Mandrake's scream: up to 75 drowsiness per scream, falloff included (the game: 5 a hit, 40 up close).
@@ -1757,6 +1824,7 @@ internal static class A17_Hazards
         [ThreadStatic] internal static string ExactSource;
         [ThreadStatic] internal static bool KnocksNobodyOut;
         [ThreadStatic] internal static Mandrake Screaming;
+        [ThreadStatic] internal static bool GhostBlast;
 
         internal struct Scope
         {
@@ -1764,6 +1832,7 @@ internal static class A17_Hazards
             internal string previous;
             internal bool previousKnocksNobodyOut;
             internal Mandrake previousScreaming;
+            internal bool previousGhostBlast;
         }
 
         private static void Prefix(AOE __instance, out Scope __state)
@@ -1777,6 +1846,7 @@ internal static class A17_Hazards
                 previous = ExactSource,
                 previousKnocksNobodyOut = KnocksNobodyOut,
                 previousScreaming = Screaming,
+                previousGhostBlast = GhostBlast,
             };
             if (__state.entered)
             {
@@ -1784,6 +1854,7 @@ internal static class A17_Hazards
                 ExactSource = Retune(__instance) ? "aoe:" + __instance.name : null;
                 KnocksNobodyOut = IsEnergyDrinkBurst(__instance) || !KnocksOut(__instance);
                 Screaming = __instance.statusType == CharacterAfflictions.STATUSTYPE.Drowsy ? __instance.GetComponentInParent<Mandrake>() : null;
+                GhostBlast = IsGhostBlast(__instance);
             }
         }
 
@@ -1795,6 +1866,7 @@ internal static class A17_Hazards
                 ExactSource = __state.previous;
                 KnocksNobodyOut = __state.previousKnocksNobodyOut;
                 Screaming = __state.previousScreaming;
+                GhostBlast = __state.previousGhostBlast;
             }
             return __exception;
         }
@@ -1834,8 +1906,8 @@ internal static class A17_Hazards
         {
             if (Explosions.Depth > 0)
             {
-                minRandomMultiplier *= 3f;
-                maxRandomMultiplier *= 4f;
+                minRandomMultiplier *= Explosions.GhostBlast ? GhostPush : ExplosionPushMin;
+                maxRandomMultiplier *= Explosions.GhostBlast ? GhostPush : ExplosionPushMax;
             }
         }
     }

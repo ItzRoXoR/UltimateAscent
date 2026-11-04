@@ -10,9 +10,8 @@ using Zorro.Core;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// Snakes in the Tropics: 30 on the ground, seven in ten of them on the climb itself (spread all the way up it), and a
-/// third as many (10) in the giant trees; on every ascent, below 17 half as strong and a third slower to chase (see
-/// <see cref="NewMobs"/>).
+/// Snakes in the Tropics: 25 on the ground, seven in ten of them on the climb itself (spread all the way up it), and 9
+/// in the giant trees; on every ascent, below 17 half as strong and a third slower to chase (see <see cref="NewMobs"/>).
 /// <list type="bullet">
 /// <item>Ground snakes (about 1.4 m long, 11 cm thick) never sleep: they slither around, and once they see a scout (as near as a
 /// scorpion notices one) they chase them. A bite: 10 injury, then 40 poison over 10 s. Each lives where a scout can stand,
@@ -20,8 +19,8 @@ namespace UltimateAscent.Features;
 /// along the rock (at most 1.5 m/s there), to wherever they wander within 10 m above or below their spot, and after a
 /// scout above or below them (they strike only once off the cliff).</item>
 /// <item>Snakes never leave the Tropics: they stop where the Tropics' ground ends, and give up a scout who goes beyond it.</item>
-/// <item>Tree snakes (about 3.6 m long, 28 cm thick) sleep curled up in a ball on a branch of the giant trees (the Tropics' 90-110 m tall ones; where there are none, they live on the ground); when a scout comes within 5 m they uncoil, raising the head towards them, jump at them and
-/// chase; once the scout is 20 m away they crawl back to the foot of their tree and climb it as snakes do, winding up the
+/// <item>Tree snakes (about 3.6 m long, 28 cm thick) sleep curled up in a ball on a branch of the giant trees (the Tropics' 90-110 m tall ones; where there are none, they live on the ground); when a scout comes within 5 m they hiss for 2 s, still curled up where they are, then uncoil, raising the head towards them, jump at them and
+/// chase; once the scout is 15 m away they crawl back to the foot of their tree and climb it as snakes do, winding up the
 /// trunk and along the branches, back to their spot to sleep. A bite: 30 injury, then for 2 minutes the scout
 /// collapses (the game's knock-down, as from the Roots' mushrooms) for 4 s every 15-30 s (another bite meanwhile starts the
 /// 2 minutes over, it does not stack); a poison drop over the stamina bar drains as that time runs out, and the game's
@@ -29,8 +28,8 @@ namespace UltimateAscent.Features;
 /// <item>Both rear up and jump at the scout to bite, mouth open and fangs out (the scorpion's glint on the fangs after the
 /// strike, its sparks as the bite lands); for 3 s after it they do not strike, but slither round the scout 3.5 m out
 /// (or after them, if further off), then go for another scout within their reach for aggression if there is one, or
-/// for the same scout again. They cannot be picked up; a Stick's swing (4 s), a Torch's (2 s), a Stone thrown hard (2 s)
-/// or a kick (1 s) knocks one back 1.5 m, and it curls up for that long; then it goes for the scout who stunned it (the
+/// for the same scout again. They cannot be picked up; a Stick's swing (4 s), a Torch's (2 s), a Stone that shatters on
+/// it (2 s; thrown hard enough to shatter, it does) or a kick (1 s) knocks one back 1.5 m, and it curls up for that long; then it goes for the scout who stunned it (the
 /// first, if more did), when they are within its reach for aggression.</item>
 /// </list>
 /// The host runs the snakes (a room object each); everyone else sees them through the network. Their bodies are
@@ -63,12 +62,14 @@ internal static class Snakes
 
     // Hunting.
     internal const float TreeWakeDistance = 5f;
+    /// <summary>A tree snake that notices a scout hisses this long first, curled up where it is (it does not move).</summary>
+    internal const float HissSeconds = 2f;
     /// <summary>A tree snake takes this long to uncoil, raising its head towards the scout, before it strikes.</summary>
     internal const float UncoilSeconds = 0.8f;
     /// <summary>Before each strike on the ground a snake takes this long to rear up into an S.</summary>
     internal const float RearSeconds = 0.3f;
-    internal const float TreeGiveUpDistance = 20f;
-    internal const float GroundGiveUpDistance = 20f;
+    internal const float TreeGiveUpDistance = 15f;
+    internal const float GroundGiveUpDistance = 15f;
     /// <summary>Once it goes for a scout, a snake keeps after them at least this long, however far they run (then it gives up beyond the distances above).</summary>
     internal const float MinChaseSeconds = 10f;
     internal const float LungeFrom = 2.5f;
@@ -92,7 +93,7 @@ internal static class Snakes
     internal const float RattleVolume = 0.7f;
     internal const float SlitherReach = 18f;
     internal const float RattleReach = 30f;
-    internal const float GroundChaseSpeed = 3.6f;
+    internal const float GroundChaseSpeed = 3.4f;
     internal const float TreeChaseSpeed = 3.2f;
 
     /// <summary>How fast a snake chases now (a third slower below ascent 17).</summary>
@@ -101,9 +102,9 @@ internal static class Snakes
     internal const float WanderRange = 40f;
     internal const float FallbackSight = 8f;
 
-    /// <summary>The ground snakes, and the tree snakes: a third as many (a tree snake with no tree to live in lives on the ground).</summary>
-    internal const int GroundCount = 30;
-    internal const int TreeCount = GroundCount / 3;
+    /// <summary>The ground snakes, and the tree snakes (a tree snake with no tree to live in lives on the ground).</summary>
+    internal const int GroundCount = 25;
+    internal const int TreeCount = 9;
 
     // Where the ground snakes live: the Tropics' ground (no steeper than 30 degrees, about level round it, not in water)
     // along the way from their first campfire to their last, 15 m or more from both, 4 m or more apart; where a scout
@@ -254,9 +255,6 @@ internal static class Snakes
             HelperFunctions.terrainMapMask, QueryTriggerInteraction.Ignore);
     }
 
-    /// <summary>A stone hits a snake when it flies at least this fast (the game's own bonk speed).</summary>
-    internal const float StoneHitSpeed = 10f;
-
     internal static bool On => NewMobs.Allowed(NewMobs.SnakesThreat);
 
     internal static readonly List<Snake> All = new List<Snake>();
@@ -382,26 +380,33 @@ internal static class Snakes
     private static GameObject template;
     private static Material skinMaterial;
 
-    /// <summary>The second part of each map gets a spawner; it spawns only where that part is the Tropics.</summary>
+    /// <summary>
+    /// The second part of each map gets a spawner where that part is the Tropics; with True Final Ascent's Builder every
+    /// Tropics block does (each copy its own). Only once the map is set up (see <see cref="Crabs"/>).
+    /// </summary>
     [HarmonyPatch(typeof(MapHandler), nameof(MapHandler.InitializeMap))]
     private static class EveryMap
     {
         private static void Postfix()
         {
-            MapHandler map = MapHandler.Exists ? Singleton<MapHandler>.Instance : null;
+            MapHandler map = MapHandler.ExistsAndInitialized ? Singleton<MapHandler>.Instance : null;
             if (map == null || map.segments == null || map.segments.Length < 2)
             {
                 return;
             }
-            MapHandler.MapSegment second = map.segments[1];
-            GameObject parent = second.segmentParent;
-            if (parent == null || second.biome != Biome.BiomeType.Tropics || parent.transform.Find(SpawnerName) != null)
+            if (Compat.Tfa.BuilderActive)
             {
+                foreach (Compat.Tfa.Stage stage in Compat.Tfa.Stages().Where(s => s.Kind == "Tropics"))
+                {
+                    Map.AddSpawner<SnakeSpawner>(stage.Terrain, SpawnerName);
+                }
                 return;
             }
-            GameObject holder = new GameObject(SpawnerName);
-            holder.transform.SetParent(parent.transform, false);
-            holder.AddComponent<SnakeSpawner>();
+            MapHandler.MapSegment second = map.segments[1];
+            if (second.biome == Biome.BiomeType.Tropics)
+            {
+                Map.AddSpawner<SnakeSpawner>(second.segmentParent, SpawnerName);
+            }
         }
     }
 
@@ -449,17 +454,12 @@ internal static class Snakes
     /// </summary>
     private static List<Vector3> GroundSpots(Transform segment, int count)
     {
-        MapHandler map = Singleton<MapHandler>.Instance;
-        GameObject first = map.segments[(int)Segment.Tropics - 1].segmentCampfire;
-        GameObject last = map.segments[(int)Segment.Tropics].segmentCampfire;
         OnClimb = SpotsFound = SpotsTried = 0;
-        if (first == null || last == null)
+        if (!Map.WayThrough(segment, (int)Segment.Tropics, out Vector3 a, out Vector3 b))
         {
             Plugin.Log.LogWarning("Snakes: the Tropics' campfires were not found; no ground snakes.");
             return new List<Vector3>();
         }
-        Vector3 a = first.transform.position;
-        Vector3 b = last.transform.position;
         Vector3 along = b - a;
         along.y = 0f;
         float length = along.magnitude;
@@ -842,6 +842,12 @@ internal static class Snakes
         return up.sqrMagnitude > 1e-6f ? up.normalized : Vector3.ProjectOnPlane(Vector3.forward, normal).normalized;
     }
 
+    /// <summary>
+    /// On every player's game as it starts, with the mod's items: the network template, which the host's snakes are made
+    /// from on the other games (by its name, so a game without it makes none).
+    /// </summary>
+    internal static void Build() => Register();
+
     /// <summary>The network template, made once: a PhotonView watching a Snake, kept inactive beside the mod's items.</summary>
     internal static bool Register()
     {
@@ -892,7 +898,7 @@ internal static class Snakes
 
     /// <summary>
     /// The skin: u along the body (a tile every nine radii), v once around it from the top of the back (0 and 1) to the
-    /// middle of the belly (0.5). Ground snakes are olive with dark saddles across the back and spots along the sides;
+    /// middle of the belly (0.5). Ground snakes are yellow with dark saddles across the back and spots along the sides;
     /// tree snakes are green with a broken pale line along each side. Both have a paler belly and a faint scale texture.
     /// </summary>
     internal static Texture2D Pattern(Kind kind)
@@ -900,9 +906,10 @@ internal static class Snakes
         const int Wide = 64;
         const int High = 32;
         bool tree = kind == Kind.Tree;
-        Color back = tree ? new Color(0.16f, 0.45f, 0.14f) : new Color(0.5f, 0.45f, 0.24f);
+        // The game's item shading warms these (its olive came out orange-brown): the yellow has as much green as red.
+        Color back = tree ? new Color(0.16f, 0.45f, 0.14f) : new Color(0.93f, 0.86f, 0.14f);
         Color mark = tree ? new Color(0.75f, 0.8f, 0.35f) : new Color(0.2f, 0.17f, 0.09f);
-        Color belly = tree ? new Color(0.72f, 0.78f, 0.38f) : new Color(0.86f, 0.8f, 0.58f);
+        Color belly = tree ? new Color(0.72f, 0.78f, 0.38f) : new Color(0.98f, 0.94f, 0.62f);
         Texture2D texture = new Texture2D(Wide, High, TextureFormat.RGBA32, false, false) { name = "UA_SnakePattern_" + kind, wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Bilinear };
         for (int x = 0; x < Wide; x++)
         {
@@ -1096,6 +1103,11 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
         Waking,
         /// <summary>About to strike: it draws the front of its body up into an S, facing the scout, mouth half open.</summary>
         Rearing,
+        /// <summary>
+        /// A tree snake that has noticed a scout: hunting them already (it hisses), but it does not move yet; then, curled up
+        /// on its branch, it wakes, or on its way home it goes after them.
+        /// </summary>
+        Hissing,
     }
 
     /// <summary>The skeleton: a bone at the snout, one at the back of the head, the rest spread evenly to the tail tip.</summary>
@@ -1868,8 +1880,8 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
         pace = Mathf.Lerp(pace, moved, Time.deltaTime * 6f);
         float quick = Mathf.Clamp01(pace / Snakes.GroundChaseSpeed);
         bool stunned = state == State.Stunned;
-        bool crawling = state != State.Sleeping && state != State.Lunging && state != State.Waking && state != State.Rearing && !stunned;
-        bool hunting = state == State.Chasing || state == State.Lunging || state == State.Resting || state == State.Waking || state == State.Rearing;
+        bool crawling = state != State.Sleeping && state != State.Hissing && state != State.Lunging && state != State.Waking && state != State.Rearing && !stunned;
+        bool hunting = state == State.Chasing || state == State.Lunging || state == State.Resting || state == State.Hissing || state == State.Waking || state == State.Rearing;
         Fade(slither, crawling && pace > 0.05f ? Snakes.SlitherVolume * Mathf.Clamp01(0.6f + 0.4f * quick) : 0f, stunned ? StunnedHush : 1.5f, (IsTree ? 0.85f : 1f) * (0.9f + 0.25f * quick));
         Fade(rattle, hunting ? Snakes.RattleVolume : 0f, stunned ? StunnedHush : 2f, IsTree ? 0.85f : 1.05f);
     }
@@ -1932,8 +1944,31 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
                 if (nearest != null && distance <= Snakes.TreeWakeDistance)
                 {
                     GoFor(nearest);
-                    state = State.Waking;
-                    stateUntil = now + Snakes.UncoilSeconds;
+                    state = State.Hissing;
+                    stateUntil = now + Snakes.HissSeconds;
+                }
+                break;
+            case State.Hissing:
+                if (target == null || !target.data.fullyConscious || Vector3.Distance(head, target.Center) > Snakes.TreeWakeDistance * 2f || OutOfTropics(target))
+                {
+                    // The scout is gone: back to sleep (or on its way home).
+                    target = null;
+                    state = coiled ? State.Sleeping : State.Returning;
+                    break;
+                }
+                if (now >= stateUntil)
+                {
+                    if (coiled)
+                    {
+                        state = State.Waking;
+                        stateUntil = now + Snakes.UncoilSeconds;
+                    }
+                    else
+                    {
+                        state = State.Chasing;
+                        onWay = false;
+                        clinging = false;
+                    }
                 }
                 break;
             case State.Rearing:
@@ -2096,10 +2131,10 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
             case State.Returning:
                 if (nearest != null && distance <= Snakes.TreeWakeDistance)
                 {
+                    // It hisses first, still where it is (on the ground or on its way up its tree).
                     GoFor(nearest);
-                    state = State.Chasing;
-                    onWay = false;
-                    clinging = false;
+                    state = State.Hissing;
+                    stateUntil = now + Snakes.HissSeconds;
                     break;
                 }
                 if (now - returningSince > ReturnGiveUp && (nearest == null || distance > UnseenDistance))
@@ -2131,16 +2166,17 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
         {
             returningSince = now;
         }
-        if (state != State.Returning)
+        // Hissing on its way home, it holds on where it is.
+        if (state != State.Returning && state != State.Hissing)
         {
             onWay = false;
         }
-        if (state != State.Returning && !onWall)
+        if (state != State.Returning && state != State.Hissing && !onWall)
         {
             clinging = false;
         }
         lastState = state;
-        if (state != State.Lunging && state != State.Sleeping && state != State.Waking && !clinging)
+        if (state != State.Lunging && state != State.Sleeping && !(state == State.Hissing && coiled) && state != State.Waking && !clinging)
         {
             Settle();
         }
@@ -2259,7 +2295,11 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
     {
         Unaware = true;
         target = null;
-        if (state == State.Chasing || state == State.Rearing || state == State.Resting || state == State.Waking)
+        if (state == State.Hissing)
+        {
+            state = coiled ? State.Sleeping : State.Returning;
+        }
+        else if (state == State.Chasing || state == State.Rearing || state == State.Resting || state == State.Waking)
         {
             state = IsTree ? State.Returning : State.Wandering;
         }
@@ -2909,7 +2949,7 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
         }
         lastHead = head;
         bool curledByHit = state == State.Stunned && Time.time >= shoveUntil;
-        if ((state == State.Sleeping && Vector3.Distance(head, home) < 0.3f) || state == State.Waking || curledByHit)
+        if (((state == State.Sleeping || state == State.Hissing) && Vector3.Distance(head, home) < 0.3f) || state == State.Waking || curledByHit)
         {
             for (int i = 0; i < Bones; i++)
             {
@@ -3583,18 +3623,22 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
 
     internal Vector3 EyeSpot(float side) => bones != null ? bones[0].TransformPoint(new Vector3(side * radius * 0.85f, radius * 0.35f, -radius * HeadRadii * 0.4f)) : head;
 
-    /// <summary>A stone thrown hard hits the snake (the host decides).</summary>
+    /// <summary>
+    /// A stone flying fast enough to shatter shatters on the snake and stuns it (the host decides the stun, the stone's
+    /// owner breaks it); a slower one does nothing to it.
+    /// </summary>
     private void OnTriggerEnter(Collider other)
     {
-        if (!photonView.IsMine)
+        Item item = other.GetComponentInParent<Item>();
+        if (item == null || !StoneItem.IsStone(item) || item.rig == null || item.itemState != ItemState.Ground || item.rig.linearVelocity.magnitude <= StoneItem.BreakSpeed)
         {
             return;
         }
-        Item item = other.GetComponentInParent<Item>();
-        if (item != null && StoneItem.IsStone(item) && item.rig != null && item.rig.linearVelocity.magnitude >= Snakes.StoneHitSpeed)
+        if (photonView.IsMine)
         {
             Stun(StoneItem.Knockdown, item.rig.linearVelocity, item.lastThrownCharacter);
         }
+        StoneItem.ShatterOn(item);
     }
 
     [PunRPC]

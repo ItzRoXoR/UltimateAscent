@@ -45,6 +45,46 @@ internal static class Crabs
     /// <summary>A scout this near (on the level) is noticed, and after the first 6 s kept after while this near.</summary>
     internal const float NoticeDistance = 2f;
     internal const float MinChaseSeconds = 6f;
+
+    /// <summary>
+    /// A scout who is down (knocked down, out, waking up on the beach) is left alone, and still this long once back on
+    /// their feet: no crab goes for them or pinches them before they are up.
+    /// </summary>
+    internal const float UpFor = 5f;
+
+    /// <summary>When each scout was last down, as this game sees them (every frame, see <see cref="Tick"/>).</summary>
+    private static readonly Dictionary<Character, float> lastDown = new Dictionary<Character, float>();
+
+    internal static void Reset()
+    {
+        lastDown.Clear();
+    }
+
+    /// <summary>Every frame: which scouts are down now.</summary>
+    internal static void Tick()
+    {
+        if (!Rules.InRun)
+        {
+            return;
+        }
+        foreach (Character scout in Character.AllCharacters)
+        {
+            if (scout != null && scout.data != null && (scout.data.fallSeconds > 0f || !scout.data.fullyConscious || scout.data.passedOutOnTheBeach > 0f))
+            {
+                lastDown[scout] = Time.time;
+            }
+        }
+    }
+
+    /// <summary>The scout is up, and has been for the last 5 s: a crab may go for them.</summary>
+    internal static bool UpLongEnough(Character scout)
+    {
+        if (scout == null || scout.data == null || scout.data.fallSeconds > 0f || !scout.data.fullyConscious || scout.data.passedOutOnTheBeach > 0f)
+        {
+            return false;
+        }
+        return !lastDown.TryGetValue(scout, out float at) || Time.time - at >= UpFor;
+    }
     /// <summary>How fast a crab goes, crawling about or chasing.</summary>
     internal const float Speed = 1f;
     /// <summary>Crawling about, a crab this near the spot it crawls to has got there: it rests a moment, then crawls on to another.</summary>
@@ -311,26 +351,33 @@ internal static class Crabs
         ItemsKnockedOut++;
     }
 
-    /// <summary>The first part of each map (the beach) gets a spawner.</summary>
+    /// <summary>
+    /// The first part of each map (the beach) gets a spawner; with True Final Ascent's Builder every Shore block does (each
+    /// copy its own). Only once the map is set up: TFA builds FINAL ASCENT between a first call it holds back and the real one.
+    /// </summary>
     [HarmonyPatch(typeof(MapHandler), nameof(MapHandler.InitializeMap))]
     private static class EveryMap
     {
         private static void Postfix()
         {
-            MapHandler map = MapHandler.Exists ? Singleton<MapHandler>.Instance : null;
+            MapHandler map = MapHandler.ExistsAndInitialized ? Singleton<MapHandler>.Instance : null;
             if (map == null || map.segments == null || map.segments.Length == 0)
             {
                 return;
             }
-            MapHandler.MapSegment beach = map.segments[0];
-            GameObject parent = beach.segmentParent;
-            if (parent == null || beach.biome != Biome.BiomeType.Shore || parent.transform.Find(SpawnerName) != null)
+            if (Compat.Tfa.BuilderActive)
             {
+                foreach (Compat.Tfa.Stage stage in Compat.Tfa.Stages().Where(s => s.Kind == "Shore"))
+                {
+                    Map.AddSpawner<CrabSpawner>(stage.Terrain, SpawnerName);
+                }
                 return;
             }
-            GameObject holder = new GameObject(SpawnerName);
-            holder.transform.SetParent(parent.transform, false);
-            holder.AddComponent<CrabSpawner>();
+            MapHandler.MapSegment beach = map.segments[0];
+            if (beach.biome == Biome.BiomeType.Shore)
+            {
+                Map.AddSpawner<CrabSpawner>(beach.segmentParent, SpawnerName);
+            }
         }
     }
 
@@ -343,7 +390,7 @@ internal static class Crabs
             return spawned;
         }
         Physics.SyncTransforms();
-        foreach (Vector3 spot in Places())
+        foreach (Vector3 spot in Places(segment))
         {
             GameObject made = PhotonNetwork.InstantiateItemRoom(PrefabName, spot + Vector3.up * 0.1f, Quaternion.Euler(0f, Random.Range(0f, 360f), 0f));
             PhotonView madeView = made != null ? made.GetComponent<PhotonView>() : null;
@@ -357,21 +404,11 @@ internal static class Crabs
         return spawned;
     }
 
-    /// <summary>Where the scouts wake on the beach (between the spawn points), and the beach's campfire at the top of it.</summary>
-    internal static bool Way(out Vector3 start, out Vector3 end)
-    {
-        start = end = Vector3.zero;
-        MapHandler map = MapHandler.Exists ? Singleton<MapHandler>.Instance : null;
-        GameObject campfire = map != null && map.segments != null && map.segments.Length > 0 ? map.segments[0].segmentCampfire : null;
-        List<SpawnPoint> points = SpawnPoint.allSpawnPoints.Where(p => p != null).ToList();
-        if (campfire == null || points.Count == 0)
-        {
-            return false;
-        }
-        start = points.Aggregate(Vector3.zero, (sum, p) => sum + p.transform.position) / points.Count;
-        end = campfire.transform.position;
-        return true;
-    }
+    /// <summary>
+    /// Where the scouts wake on the beach (between the spawn points), and the beach's campfire at the top of it. With True
+    /// Final Ascent's Builder, of the beach given (a Shore block's ground): from the campfire before it, unless it comes first.
+    /// </summary>
+    internal static bool Way(out Vector3 start, out Vector3 end, Transform beach = null) => Map.WayThrough(beach, 0, out start, out end);
 
     /// <summary>How far along the beach's way a point is (0 where the scouts wake, 1 at the campfire).</summary>
     internal static float Share(Vector3 point, Vector3 start, Vector3 end)
@@ -389,10 +426,10 @@ internal static class Crabs
     /// beach's wall up to the campfire), the rest on the sand before it, each spread along its stretch, 5 m or more apart
     /// (see <see cref="NewMobs.Place"/>).
     /// </summary>
-    private static List<Vector3> Places()
+    private static List<Vector3> Places(Transform beach)
     {
         List<Vector3> places = new List<Vector3>();
-        if (!Way(out Vector3 a, out Vector3 b))
+        if (!Way(out Vector3 a, out Vector3 b, beach))
         {
             Plugin.Log.LogWarning("Crabs: the beach's spawn points or campfire were not found; no crabs.");
             return places;
@@ -672,9 +709,10 @@ internal sealed class BeachCrab : Mob
         }
     }
 
+    /// <summary>Awake and about, and up on their feet for the last 5 s (see <see cref="Crabs.UpLongEnough"/>).</summary>
     private static bool Fit(Character scout)
     {
-        return scout != null && !scout.data.dead && scout.data.fullyConscious;
+        return scout != null && !scout.data.dead && scout.data.fullyConscious && Crabs.UpLongEnough(scout);
     }
 
     /// <summary>Within 2 m of it, on the level (its feet, not the middle of its body, against the crab on the ground).</summary>
@@ -695,6 +733,11 @@ internal sealed class BeachCrab : Mob
     /// </summary>
     public override void InflictAttack(Character character)
     {
+        // A scout who went down meanwhile (or is not up long enough) is not pinched.
+        if (character != null && !Crabs.UpLongEnough(character))
+        {
+            return;
+        }
         CrabLook look = GetComponent<CrabLook>();
         if (look != null)
         {

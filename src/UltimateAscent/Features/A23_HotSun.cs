@@ -13,7 +13,7 @@ namespace UltimateAscent.Features;
 /// up to the Caldera and the Gloom (from there on it is the game's sun again), and whatever you hold up
 /// to shield yourself from it is roasted.
 /// <list type="bullet">
-/// <item>Standing in direct sunlight adds heat (the Mesa keeps its own, stronger sun). Sunscreen
+/// <item>Standing in direct sunlight adds 2 heat a second (the Mesa keeps its own, stronger sun). Sunscreen
 /// still protects, though from ascent 15 a quarter of the heat gets through (<see cref="A14_Items"/>).
 /// In the Alpine the sun does nothing at all; its nights are long instead
 /// (<see cref="A18_AlpineNights"/>).</item>
@@ -30,14 +30,16 @@ namespace UltimateAscent.Features;
 /// and turns to the Kiln's ash where it was.</item>
 /// </list>
 /// Burned items burn your hands from ascent 17 on (<see cref="BurnedItems"/>). While True Final
-/// Ascent runs an Apocalypse weather the sun rules rest, heat and roasting alike, the way TFA rests
+/// Ascent runs a weather (an Apocalypse weather, or one another mod starts through TFA) the sun rules rest, heat and roasting alike, the way TFA rests
 /// More Ascents' sun: its weather, its own sun events included, is TFA's to tune. They rest too while a
-/// snowstorm blows where the scout is (ascent 18: no sun burns through one, see A18_ExtremeWeather).
-/// A player's Hot Mode (<see cref="ChallengeModes"/>) brings this sun to ascents below 23: the same roasting, 65% of the heat.
+/// snowstorm blows where the scout is (ascent 18: no sun burns through one, see A18_ExtremeWeather), and at TFA's
+/// Builder's rest stops while the scouts rest; the Builder's invisible walls between its blocks do not shade the sun.
+/// A player's Hot Mode (<see cref="ChallengeModes"/>) brings this sun to ascents below 23: the same roasting, its own (milder) heat.
 /// </summary>
 internal static class A23_HotSun
 {
-    private const float HeatPerSecond = 0.005f;
+    /// <summary>The scorching sun's heat a second, as it lands on the bar.</summary>
+    internal const float HeatPerSecond = 0.02f;
 
     /// <summary>Ascent 23's scorching sun applies where the scouts are: on, and not yet at the Caldera or the Gloom.</summary>
     internal static bool ScorchingHere => Rules.Enabled(Lvl.HotSun) && A09_FogAndKiln.BeforeTheVolcano;
@@ -100,16 +102,17 @@ internal static class A23_HotSun
         Character local = Character.localCharacter;
         Item roasted = null;
         if (local != null && local.data != null && !local.data.dead && !local.inAirport && Map.Ready && !Map.InAlpine &&
-            DayNightManager.instance != null && DayNightManager.instance.sun != null && !Compat.Tfa.WeatherRunning && !A18_ExtremeWeather.SnowstormHidesSun)
+            DayNightManager.instance != null && DayNightManager.instance.sun != null && !Compat.Tfa.WeatherRunning && !A18_ExtremeWeather.SnowstormHidesSun
+            && !Compat.Tfa.RestSpares(local))
         {
             float intensity = DayNightManager.instance.sun.intensity;
             bool scorching = ScorchingHere && intensity > 1f;
             bool mesaSun = Rules.Enabled(Lvl.ExtremeWeather) && Map.InMesa && intensity >= MesaSunIntensity;
-            // Hot Mode: this ascent's sun below ascent 23, where it would scorch: it roasts the same, and heats at 65%.
+            // Hot Mode: this ascent's sun below ascent 23, where it would scorch: it roasts the same, with its own heat.
             bool hotMode = ChallengeModes.HotRoasts && A09_FogAndKiln.BeforeTheVolcano && intensity > 1f;
             if (scorching || mesaSun || hotMode)
             {
-                roasted = Sunbathe(local, scorching ? 1f : hotMode ? ChallengeModes.HotModeHeat : 0f);
+                roasted = Sunbathe(local, scorching ? HeatPerSecond : hotMode ? ChallengeModes.HotModeHeatPerSecond : 0f);
             }
         }
         if (exposures.Count == 0)
@@ -141,7 +144,7 @@ internal static class A23_HotSun
     {
         Transform sun = DayNightManager.instance.sun.transform;
         Item held = local.data.currentItem;
-        RaycastHit hit = HelperFunctions.LineCheck(local.Center + sun.forward * -1000f, local.Center, HelperFunctions.LayerType.AllPhysical);
+        RaycastHit hit = Compat.Tfa.SunLineCheck(local.Center + sun.forward * -1000f, local.Center, HelperFunctions.LayerType.AllPhysical);
         bool blockedByHeld = hit.transform != null && held != null && hit.transform.GetComponentInParent<Item>() == held;
         bool inSunlight = hit.transform == null || hit.transform.root == local.transform.root || blockedByHeld;
         if (!inSunlight)
@@ -165,7 +168,7 @@ internal static class A23_HotSun
         // Ascent 15: sunscreen keeps off only three quarters of the heat.
         float share = local.data.wearingSunscreen ? A14_Items.SunscreenLeak : 1f;
         // The sun's heat lands as it comes, without ascent 14's boost.
-        A15_StrongerAilments.AddUnboosted(local.refs.afflictions, CharacterAfflictions.STATUSTYPE.Hot, HeatPerSecond * heat * share * Time.deltaTime);
+        A15_StrongerAilments.AddUnboosted(local.refs.afflictions, CharacterAfflictions.STATUSTYPE.Hot, heat * share * Time.deltaTime);
         return roasting;
     }
 

@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using HarmonyLib;
 using Photon.Pun;
+using TMPro;
 using UltimateAscent.Core;
 using UnityEngine;
 
@@ -17,8 +19,11 @@ namespace UltimateAscent.Features;
 /// Ascent's FINAL ASCENT when it is installed, otherwise the highest unlocked ascent), right from the
 /// end of the list goes back to Tenderfoot.</item>
 /// <item>The boarding pass opens on the ascent chosen in the config ("Default Ascent").</item>
-/// <item>Ascents 9-25 give no reward, so their reward line stays hidden.</item>
-/// <item>Ascents 9-25 (a custom run's picked ascent too) can only be started when every player has this mod in the same version.</item>
+/// <item>Ascent 25 shows the Pain Sash on the reward line while the player has not unlocked it; the other ascents from 9
+/// show none. The reward line, the game's own ascents' too,
+/// sits under the ascent's text, at its left, in one row, leaving the card's bottom right to the map picker.</item>
+/// <item>Ascents 9-25 (a custom run's picked ascent too) can only be started when every player has this mod in the same
+/// version; the players missing it are named in a line over the pass, at its top left.</item>
 /// </list>
 /// </summary>
 internal static class BoardingPassUi
@@ -33,6 +38,29 @@ internal static class BoardingPassUi
     private static bool startWasInteractable;
     private static string lastMissing;
     private static float nextRefresh;
+
+    /// <summary>The line over the pass naming the players who miss this version of the mod.</summary>
+    private static TextMeshProUGUI notice;
+
+    /// <summary>For the in-game test: the players named as missing the mod (a solo game has nobody else).</summary>
+    internal static string MissingForTest;
+
+    /// <summary>The gap between the ascent's text and the reward line under it, and between the pass and the line over it.</summary>
+    private const float RewardGap = 5f;
+    private const float NoticeGap = 12f;
+
+    /// <summary>The gap between "REWARD:" and the banner beside it, and the room kept from the map picker.</summary>
+    private const float RewardWordsGap = 10f;
+    private const float RewardMargin = 6f;
+
+    /// <summary>The reward line is never made smaller than this to fit.</summary>
+    private const float RewardSmallest = 0.7f;
+
+    /// <summary>The reward line's own size, before it is fitted under the text.</summary>
+    private static Vector3? rewardScale;
+
+    /// <summary>The notice's left edge: in line with the plane at the pass's top left.</summary>
+    private const float NoticeIndent = 48f;
 
     internal static void OnSceneChanged()
     {
@@ -184,10 +212,35 @@ internal static class BoardingPassUi
             }
             if (!custom && IsRegular(index) && index >= Lvl.First)
             {
-                // Ascents 9-25 have no reward, so no reward line.
-                __instance.reward.gameObject.SetActive(false);
+                // Ascents 9-25: the Pain Sash on 25 while it is locked, else no reward line.
+                bool shown = CosmeticUnlocks.Reward(index, out string name, out Color banner);
+                __instance.reward.gameObject.SetActive(shown);
+                if (shown)
+                {
+                    __instance.rewardText.text = name;
+                    __instance.rewardImage.color = banner;
+                }
             }
+            TightenModifiersLine(__instance);
+            RewardUnderText(__instance);
             RefreshStart(__instance);
+        }
+    }
+
+    /// <summary>The game's empty line before "And all previous modifiers.", and the same line about half as tall.</summary>
+    private const string GameGap = "\n\n<alpha=#CC><size=70%>";
+    private const string TightGap = "\n<size=45%>\n</size><alpha=#CC><size=70%>";
+
+    /// <summary>
+    /// "And all previous modifiers." closer to the ascent's text (the empty line between them about half as tall), on every
+    /// ascent that has it: room for the reward line under it, even under ascent 25's three lines.
+    /// </summary>
+    private static void TightenModifiersLine(BoardingPass pass)
+    {
+        TMP_Text description = pass.ascentDesc;
+        if (description != null && description.text != null && description.text.Contains(GameGap))
+        {
+            description.text = description.text.Replace(GameGap, TightGap);
         }
     }
 
@@ -215,7 +268,15 @@ internal static class BoardingPassUi
     private static string MissingPlayers(BoardingPass pass)
     {
         int index = CustomRunAscent.OnPass(pass);
-        if (index < Lvl.First || index > Lvl.Last || !PhotonNetwork.InRoom || PhotonNetwork.OfflineMode)
+        if (index < Lvl.First || index > Lvl.Last)
+        {
+            return null;
+        }
+        if (MissingForTest != null)
+        {
+            return MissingForTest;
+        }
+        if (!PhotonNetwork.InRoom || PhotonNetwork.OfflineMode)
         {
             return null;
         }
@@ -244,12 +305,139 @@ internal static class BoardingPassUi
                 startBlocked = true;
             }
             pass.startGameButton.interactable = false;
-            pass.ascentDesc.text += $"\n\n<color=#FF9A7A><size=70%>Everyone needs Ultimate Ascent {Plugin.Version} for this ascent. Missing: {missing}</size></color>";
         }
         else if (startBlocked)
         {
             pass.startGameButton.interactable = startWasInteractable;
             startBlocked = false;
         }
+        Notice(pass, missing);
+    }
+
+    /// <summary>
+    /// The players missing this version of the mod, named in a line over the pass at its top left (in the ascent text's
+    /// lettering and the notice's colour), growing upward when it takes more than one line; hidden when nobody is missing.
+    /// </summary>
+    private static void Notice(BoardingPass pass, string missing)
+    {
+        if (notice == null)
+        {
+            if (missing == null)
+            {
+                return;
+            }
+            Transform panel = pass.ascentDesc != null && pass.ascentDesc.transform.parent != null ? pass.ascentDesc.transform.parent.parent : null;
+            RectTransform card = panel != null ? panel.parent as RectTransform : null;
+            if (card == null)
+            {
+                Plugin.Log.LogWarning("Boarding pass: no place for the version notice; it is put in the ascent's text.");
+                pass.ascentDesc.text += $"\n\n<color=#FF9A7A><size=70%>{NoticeText(missing)}</size></color>";
+                return;
+            }
+            GameObject holder = new GameObject("UltimateAscent Version Notice", typeof(RectTransform));
+            RectTransform rect = (RectTransform)holder.transform;
+            rect.SetParent(card, false);
+            rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
+            rect.pivot = Vector2.zero;
+            rect.anchoredPosition = new Vector2(NoticeIndent, NoticeGap);
+            rect.sizeDelta = new Vector2(card.rect.width - 2f * NoticeIndent, 0f);
+            notice = holder.AddComponent<TextMeshProUGUI>();
+            notice.font = pass.ascentDesc.font;
+            notice.fontSharedMaterial = pass.ascentDesc.font.material;
+            notice.fontSize = pass.ascentDesc.fontSize * 0.7f;
+            notice.color = new Color32(0xFF, 0x9A, 0x7A, 0xFF);
+            notice.alignment = TextAlignmentOptions.BottomLeft;
+            notice.enableWordWrapping = true;
+            notice.overflowMode = TextOverflowModes.Overflow;
+            notice.raycastTarget = false;
+        }
+        notice.gameObject.SetActive(missing != null);
+        if (missing != null)
+        {
+            notice.text = NoticeText(missing);
+        }
+    }
+
+    private static string NoticeText(string missing) => $"Everyone needs Ultimate Ascent {Plugin.Version} for this ascent. Missing: {missing}";
+
+    /// <summary>The line naming the players who miss the mod, while it shows (for the in-game test).</summary>
+    internal static TMP_Text NoticeShown => notice != null && notice.gameObject.activeInHierarchy ? notice : null;
+
+    /// <summary>
+    /// The game's reward line (on the highest unlocked of its own ascents) right under the ascent's text, "And all previous
+    /// modifiers.", at its left, in one row: "REWARD:", then the banner with the scout it gives. The game has the words
+    /// over the banner at the card's bottom right, where the map picker is; under the text there is room for one row
+    /// only. It is made smaller only as far as it must to fit between the text, the card's bottom and the map picker.
+    /// </summary>
+    private static void RewardUnderText(BoardingPass pass)
+    {
+        RectTransform reward = pass.reward != null ? pass.reward.transform as RectTransform : null;
+        RectTransform card = reward != null ? reward.parent as RectTransform : null;
+        if (card == null || !pass.reward.activeSelf || pass.ascentDesc == null)
+        {
+            return;
+        }
+        Rect text = TextArea(pass.ascentDesc, card);
+        if (text.width <= 0f)
+        {
+            return;
+        }
+        rewardScale ??= reward.localScale;
+
+        // "REWARD:" beside the banner, level with it (in the banner's own units).
+        Rect banner = reward.rect;
+        float width = banner.width;
+        TMP_Text words = pass.reward.GetComponentsInChildren<TMP_Text>(true).FirstOrDefault(t => t != pass.rewardText);
+        if (words != null)
+        {
+            Rect letters = TextArea(words, reward);
+            words.rectTransform.anchoredPosition += new Vector2(banner.xMin - RewardWordsGap - letters.xMax, banner.center.y - letters.center.y);
+            width += letters.width + RewardWordsGap;
+        }
+
+        // The room under the text: down to the card's bottom, across to the map picker.
+        float right = card.rect.xMax - RewardMargin;
+        if (MapPicker.Line != null && MapPicker.Line.activeSelf && MapPicker.Line.transform.parent == card)
+        {
+            RectTransform picker = (RectTransform)MapPicker.Line.transform;
+            UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(picker);
+            right = Mathf.Min(right, Area(picker, card).xMin - RewardMargin);
+        }
+        Rect room = Rect.MinMaxRect(text.xMin, card.rect.yMin, right, text.yMin - RewardGap);
+        float fit = Mathf.Min(1f, room.width / (width * rewardScale.Value.x), room.height / (banner.height * rewardScale.Value.y));
+        reward.localScale = rewardScale.Value * Mathf.Max(fit, RewardSmallest);
+
+        // All of the line as it shows now: the banner and the words on it and beside it.
+        Rect shown = Area(reward, card);
+        foreach (TMP_Text part in pass.reward.GetComponentsInChildren<TMP_Text>())
+        {
+            Rect area = TextArea(part, card);
+            shown = area.width > 0f ? Rect.MinMaxRect(Mathf.Min(shown.xMin, area.xMin), Mathf.Min(shown.yMin, area.yMin), Mathf.Max(shown.xMax, area.xMax), Mathf.Max(shown.yMax, area.yMax)) : shown;
+        }
+        reward.anchoredPosition += new Vector2(room.xMin - shown.xMin, room.yMax - shown.yMax);
+    }
+
+    /// <summary>Where a text's letters are, in another part's units.</summary>
+    private static Rect TextArea(TMP_Text text, RectTransform within)
+    {
+        text.ForceMeshUpdate(true);
+        Bounds bounds = text.textBounds;
+        if (bounds.size.x <= 0f)
+        {
+            return Rect.zero;
+        }
+        Vector3 min = within.InverseTransformPoint(text.transform.TransformPoint(bounds.min));
+        Vector3 max = within.InverseTransformPoint(text.transform.TransformPoint(bounds.max));
+        return Rect.MinMaxRect(Mathf.Min(min.x, max.x), Mathf.Min(min.y, max.y), Mathf.Max(min.x, max.x), Mathf.Max(min.y, max.y));
+    }
+
+    /// <summary>Where a part is, in another part's units.</summary>
+    private static Rect Area(RectTransform part, RectTransform within)
+    {
+        Vector3[] corners = new Vector3[4];
+        part.GetWorldCorners(corners);
+        Vector3 min = within.InverseTransformPoint(corners[0]);
+        Vector3 max = within.InverseTransformPoint(corners[2]);
+        return Rect.MinMaxRect(Mathf.Min(min.x, max.x), Mathf.Min(min.y, max.y), Mathf.Max(min.x, max.x), Mathf.Max(min.y, max.y));
     }
 }

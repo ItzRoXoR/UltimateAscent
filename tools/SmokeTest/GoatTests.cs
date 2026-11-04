@@ -169,7 +169,7 @@ internal sealed partial class Runner
                         if (above > floated)
                         {
                             floated = above;
-                            floatedAt = $"{goat.Doing} at {goat.Feet:F1}";
+                            floatedAt = $"{goat.Doing} at {goat.Feet:F1}, its ground {Vector3.Angle(goat.GroundUp, Vector3.up):0} degrees steep, last stopped: {goat.LastStop}";
                         }
                         if (under > sunk)
                         {
@@ -638,6 +638,130 @@ internal sealed partial class Runner
     }
 
     /// <summary>
+    /// How the goats get about, left alone (17, on a map with the Alps): every goat of the Alps going about for 3
+    /// minutes (in memory, however far the scout is; in a climb only those within 120 m of a scout do), noticed by none;
+    /// for each goat that leads its own way (one of a pair follows the other) how often it sets off somewhere new, how
+    /// much of the time it is on the move and how far it gets from its spot. Twice, each time from their spots: first
+    /// picking where to go next all round (for comparison, set in memory), then as they do, about the way they go.
+    /// </summary>
+    private IEnumerator GoatRoamChecks()
+    {
+        Character local = Local;
+        if (Map.CurrentPlace != Place.Alpine)
+        {
+            MapHandler.JumpToSegment(Segment.Alpine);
+            yield return new WaitForSeconds(8f);
+        }
+        if (Map.CurrentPlace != Place.Alpine)
+        {
+            Info("the goats' getting about is not watched", $"no Alps here ({Map.CurrentPlace}); run with -Biome and a map number that has the Alps (80)");
+            yield break;
+        }
+        for (float until = Time.time + 10f; Time.time < until && Goats.All.Count == 0;)
+        {
+            yield return null;
+        }
+        List<Goat> goats = Goats.All.Where(g => g != null).ToList();
+        Protect(true);
+        Action calm = CalmForMeasuring();
+        try
+        {
+            foreach (Goat goat in goats)
+            {
+                goat.Unaware = true;
+                goat.Puppet = false;
+            }
+            string allRound = "";
+            float allRoundFar = 0f;
+            Goats.AllAwake = true;
+            Dictionary<Goat, Vector3> spots = goats.ToDictionary(g => g, g => g.Home);
+            foreach (bool kept in new[] { false, true })
+            {
+                Goats.HeadingKept = kept;
+                foreach (Goat goat in goats.Where(g => g != null))
+                {
+                    goat.PlaceAt(spots[goat], spots[goat] + Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f) * Vector3.forward);
+                }
+                Goat centre = goats.Where(g => g != null).OrderByDescending(g => goats.Count(o => o != null && Vector3.Distance(o.Feet, g.Feet) <= 90f)).FirstOrDefault();
+                Vector3? watchFrom = centre != null ? StandNear(centre.Feet + Vector3.up * 0.6f, 6f, 14f, seeIt: true) ?? StandNear(centre.Feet + Vector3.up * 0.6f, 6f, 16f, firm: false) : null;
+                if (watchFrom == null)
+                {
+                    Fail("a place to watch the goats from", $"{goats.Count} goats; none with ground 6-16 m from it");
+                    yield break;
+                }
+                local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, watchFrom.Value + Vector3.up * 1.2f, false);
+                yield return new WaitForSeconds(1.5f);
+                const float watchSeconds = 180f;
+                Dictionary<Goat, Vector3> start = goats.ToDictionary(g => g, g => g.Feet);
+                Dictionary<Goat, int> setOffs = goats.ToDictionary(g => g, g => g.SetOffs);
+                Dictionary<Goat, float> moving = goats.ToDictionary(g => g, g => 0f);
+                Dictionary<Goat, float> farthest = goats.ToDictionary(g => g, g => 0f);
+                HashSet<Goat> awake = new HashSet<Goat>(goats.Where(g => g != null));
+                int shot = 0;
+                float nextShot = 5f;
+                for (float since = 0f; since < watchSeconds; since += Time.deltaTime)
+                {
+                    yield return null;
+                    foreach (Goat goat in goats.Where(g => g != null && awake.Contains(g)))
+                    {
+                        if (goat.Doing == "Roaming" || goat.Doing == "Leaping")
+                        {
+                            moving[goat] += Time.deltaTime;
+                        }
+                        farthest[goat] = Mathf.Max(farthest[goat], Goats.Flat(goat.Feet, start[goat]));
+                    }
+                    if (since >= nextShot && centre != null)
+                    {
+                        nextShot += 60f;
+                        LookAtPoint(local, centre.Feet + Vector3.up * 0.6f);
+                        yield return new WaitForSeconds(0.3f);
+                        Screenshot($"goats-about-{(kept ? "heading" : "allround")}-{++shot}");
+                    }
+                }
+                List<Goat> leaders = awake.Where(g => g != null && !g.Follower).ToList();
+                List<Goat> followers = awake.Where(g => g != null && g.Follower).ToList();
+                string Line(Goat g) => $"{g.SetOffs - setOffs[g]} set-offs, moving {moving[g] / watchSeconds * 100f:0}% of the time, up to {farthest[g]:0} m from where it was (last stopped: {g.LastStop})";
+                // The middle goat's (one stuck at a spot it cannot leave sets off again and again).
+                float Median(IEnumerable<float> values)
+                {
+                    List<float> sorted = values.OrderBy(v => v).ToList();
+                    return sorted.Count == 0 ? 0f : sorted.Count % 2 == 1 ? sorted[sorted.Count / 2] : (sorted[sorted.Count / 2 - 1] + sorted[sorted.Count / 2]) / 2f;
+                }
+                float everySeconds = leaders.Count > 0 ? Median(leaders.Select(g => watchSeconds / Mathf.Max(1, g.SetOffs - setOffs[g]))) : float.PositiveInfinity;
+                float movingShare = Median(leaders.Select(g => moving[g] / watchSeconds));
+                float far = Median(leaders.Select(g => farthest[g]));
+                float farAverage = leaders.Count > 0 ? leaders.Average(g => farthest[g]) : 0f;
+                // A goat setting off again and again on the spot (more than once every 3 s) is caught in a loop.
+                int mostSetOffs = awake.Where(g => g != null).Select(g => g.SetOffs - setOffs[g]).DefaultIfEmpty(0).Max();
+                string seen = $"{leaders.Count} goats leading their own way for {watchSeconds:0} s; the middle goat: set off every {everySeconds:0.0} s, on the move {movingShare * 100f:0}% of the time, "
+                    + $"up to {far:0} m from its spot (on average {farAverage:0} m); the most set-offs of any goat {mostSetOffs}; each: {string.Join("; ", leaders.Select(Line))}"
+                    + (followers.Count > 0 ? $"; following the other of their pair: {string.Join("; ", followers.Select(Line))}" : "");
+                if (!kept)
+                {
+                    allRound = $"the middle goat up to {far:0} m (on average {farAverage:0} m)";
+                    allRoundFar = far;
+                    Info("the goats picking where to go next all round, for comparison (set in memory)", seen);
+                    continue;
+                }
+                Check("left alone, a goat sets off somewhere new every 15 s or so, is on the move most of the time and keeps about the way it goes: in 3 minutes it gets 30 m and more from its spot, farther than picking where to go all round (17)",
+                    leaders.Count > 0 && everySeconds <= 16f && movingShare >= 0.5f && far >= 30f && far > allRoundFar && mostSetOffs <= 60,
+                    seen + $"; picking all round just before: {allRound}");
+            }
+        }
+        finally
+        {
+            Goats.HeadingKept = true;
+            Goats.AllAwake = false;
+            foreach (Goat goat in Goats.All.Where(g => g != null))
+            {
+                goat.Unaware = false;
+            }
+            calm();
+            Protect(false);
+        }
+    }
+
+    /// <summary>
     /// The goats' roaming (17, on a map with the Alps): a goat 100 m from its spot still picks where to go next round
     /// itself (its range is 150 m), and one 200 m off heads back towards its spot; on top of a real cliff of the Alps it
     /// picks ground below the cliff to go to as well as ground above it, and sent to the cliff's foot it comes down; and it
@@ -816,9 +940,12 @@ internal sealed partial class Runner
                     // On top: where it would roam to next, ground below the cliff among it.
                     picked = true;
                     Screenshot("goat-cliff-top");
+                    // Heading every way in turn (it picks about the way it goes).
                     int picks = 0, below = 0, above = 0;
+                    float headingWas = goat.Heading;
                     for (int i = 0; i < 100; i++)
                     {
+                        goat.Heading = i * 3.6f;
                         if (goat.TryPickRoam(out Vector3 to))
                         {
                             picks++;
@@ -826,6 +953,7 @@ internal sealed partial class Runner
                             above += to.y > goat.Feet.y + 4f ? 1 : 0;
                         }
                     }
+                    goat.Heading = headingWas;
                     Check("on top of a cliff a goat picks ground below it to roam to, as well as ground above (17)", picks >= 30 && below >= picks / 10,
                         $"{picks} picks of 100: {below} more than 4 m lower, {above} more than 4 m higher, the rest about level");
                 }

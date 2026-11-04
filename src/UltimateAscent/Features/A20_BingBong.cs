@@ -14,6 +14,9 @@ namespace UltimateAscent.Features;
 /// let the evil through anyway). After 10 seconds without, Bing Bong starts talking, line after line,
 /// in the voice he has once burned, for every scout to hear; he falls silent as soon as someone holds
 /// him, or when after 15 seconds every scout starts gaining crab status, until Bing Bong is held again.
+/// That crab status comes without the game's status effects (its glow over the scout, the injury flash and shake):
+/// instead, from its first step on the bar, every scout's screen turns red, from a faint tint to a dark red over nearly
+/// all of it in 10 seconds.
 /// Only the Cursed Skull cures that crab status (see <see cref="A14_Items"/>); Pandora's Lunchbox can
 /// even add to it. A burned Bing Bong (cooked three times or more; at ascent 16 one campfire cooking
 /// does it) never counts, and while freshly burned it burns the hand that holds it
@@ -26,6 +29,36 @@ internal static class A20_BingBong
     private const float WarningAfter = 10f;
     private const float PunishAfter = 15f;
     private const float CrabPerSecond = 0.05f;
+
+    /// <summary>The screen turns red over this long once the crab comes: from a faint tint to a dark red over nearly all of it.</summary>
+    internal const float RedSeconds = 10f;
+
+    /// <summary>How fast the red clears once Bing Bong is held again (or the scout is out of it).</summary>
+    internal const float RedClearSeconds = 1f;
+
+    private static readonly Color FaintRed = new Color(0.9f, 0.1f, 0.08f);
+    private static readonly Color DarkRed = new Color(0.45f, 0f, 0.02f);
+
+    /// <summary>The red all over the screen, and at its edges, from first to last.</summary>
+    internal const float TintFaint = 0.06f;
+    internal const float TintFull = 0.55f;
+    internal const float EdgesFaint = 0.2f;
+    internal const float EdgesFull = 0.97f;
+
+    /// <summary>How far in the edges have closed at the last (the clear middle is this many times smaller).</summary>
+    internal const float EdgesCloseIn = 3f;
+
+    /// <summary>How far the red has come (0: the faint tint, 1: nearly all dark red), and how much of it shows (it clears as a whole).</summary>
+    internal static float Redness { get; private set; }
+
+    internal static float RedShown { get; private set; }
+
+    /// <summary>How long Bing Bong had been left alone when the crab first landed on the bar (-1: not yet).</summary>
+    private static float redSince = -1f;
+
+    private static GameObject redCanvas;
+    private static UnityEngine.UI.RawImage redTint;
+    private static UnityEngine.UI.RawImage redEdges;
 
     /// <summary>The pause between two of his lines.</summary>
     private const float LineGap = 0.4f;
@@ -72,6 +105,13 @@ internal static class A20_BingBong
         groundedSince = -1f;
         HandedOver = false;
         Silence();
+        redSince = -1f;
+        Redness = 0f;
+        RedShown = 0f;
+        if (redCanvas != null)
+        {
+            redCanvas.SetActive(false);
+        }
     }
 
     /// <summary>
@@ -141,13 +181,17 @@ internal static class A20_BingBong
         if (!Rules.Enabled(Lvl.BingBong) || local == null || local.data == null || local.data.dead)
         {
             neglectedFor = 0f;
+            redSince = -1f;
             Silence();
+            Redden(false);
             return;
         }
         if (local.data.passedOutOnTheBeach > 0f || SomeoneHoldsBingBong())
         {
             neglectedFor = 0f;
+            redSince = -1f;
             Silence();
+            Redden(false);
             return;
         }
         neglectedFor += Time.deltaTime;
@@ -161,8 +205,100 @@ internal static class A20_BingBong
         }
         if (neglectedFor >= PunishAfter)
         {
-            local.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Crab, CrabPerSecond * Time.deltaTime);
+            // Without the game's status effects: the red screen shows it instead, from the crab's first step on the bar.
+            CharacterAfflictions afflictions = local.refs.afflictions;
+            float before = afflictions.GetCurrentStatus(CharacterAfflictions.STATUSTYPE.Crab);
+            afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Crab, CrabPerSecond * Time.deltaTime, playEffects: false);
+            if (redSince < 0f && afflictions.GetCurrentStatus(CharacterAfflictions.STATUSTYPE.Crab) > before)
+            {
+                redSince = neglectedFor;
+            }
         }
+        Redden(redSince >= 0f);
+    }
+
+    /// <summary>
+    /// The scout's screen while the crab comes: from the crab's first step on the bar it turns red over 10 s, from a faint
+    /// tint to a dark red that closes in from the edges until it covers nearly all of it, and clears within a second once
+    /// Bing Bong is held again. It lies over the world but under the game's HUD, on every scout's own game (each one
+    /// counts the neglect there).
+    /// </summary>
+    private static void Redden(bool crabComing)
+    {
+        if (crabComing)
+        {
+            Redness = Mathf.Clamp01((neglectedFor - redSince) / RedSeconds);
+            RedShown = 1f;
+        }
+        else if (RedShown > 0f)
+        {
+            RedShown = Mathf.MoveTowards(RedShown, 0f, Time.deltaTime / RedClearSeconds);
+            if (RedShown <= 0f)
+            {
+                Redness = 0f;
+            }
+        }
+        if (RedShown <= 0f)
+        {
+            if (redCanvas != null && redCanvas.activeSelf)
+            {
+                redCanvas.SetActive(false);
+            }
+            return;
+        }
+        if (redCanvas == null)
+        {
+            MakeRed();
+        }
+        redCanvas.SetActive(true);
+        Color red = Color.Lerp(FaintRed, DarkRed, Redness);
+        redTint.color = new Color(red.r, red.g, red.b, RedShown * Mathf.Lerp(TintFaint, TintFull, Redness));
+        redEdges.color = new Color(red.r, red.g, red.b, RedShown * Mathf.Lerp(EdgesFaint, EdgesFull, Redness));
+        // Seen from further off, the edges' picture leaves a smaller clear middle (past its rim it stays solid).
+        float span = Mathf.Lerp(1f, EdgesCloseIn, Redness);
+        redEdges.uvRect = new Rect(0.5f - span / 2f, 0.5f - span / 2f, span, span);
+    }
+
+    /// <summary>The red: a tint over the whole screen, and its edges, solid from the rim and clear in the middle.</summary>
+    private static void MakeRed()
+    {
+        const int size = 256;
+        Texture2D edges = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, name = "UltimateAscent Bing Bong Red" };
+        Color32[] pixels = new Color32[size * size];
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                float dx = (x + 0.5f) / size * 2f - 1f;
+                float dy = (y + 0.5f) / size * 2f - 1f;
+                float r = Mathf.Sqrt(dx * dx + dy * dy) / Mathf.Sqrt(2f);
+                float alpha = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.2f, 0.7f, r));
+                pixels[y * size + x] = new Color32(255, 255, 255, (byte)Mathf.RoundToInt(alpha * 255f));
+            }
+        }
+        edges.SetPixels32(pixels);
+        edges.Apply(false, true);
+        redCanvas = new GameObject("UltimateAscent Bing Bong Red");
+        Object.DontDestroyOnLoad(redCanvas);
+        Canvas canvas = redCanvas.AddComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = -100;
+        redTint = FullScreen("Tint", Texture2D.whiteTexture);
+        redEdges = FullScreen("Edges", edges);
+    }
+
+    private static UnityEngine.UI.RawImage FullScreen(string name, Texture texture)
+    {
+        GameObject holder = new GameObject(name, typeof(RectTransform));
+        holder.transform.SetParent(redCanvas.transform, false);
+        UnityEngine.UI.RawImage image = holder.AddComponent<UnityEngine.UI.RawImage>();
+        image.texture = texture;
+        image.raycastTarget = false;
+        RectTransform rect = image.rectTransform;
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = rect.offsetMax = Vector2.zero;
+        return image;
     }
 
     /// <summary>One line after another, with a short pause between them.</summary>

@@ -21,8 +21,9 @@ namespace UltimateAscent.Features;
 /// or anyone within 4.5 m of the Torch is pushed back until it is out of blast range of them, and cannot arm while
 /// it is pushed. Below ascent 17 the push also burns it, as the bell towers do in the game (from 17 they no longer
 /// burn it, see <see cref="A17_GloomGhost"/>).</item>
-/// <item>It turns up in suitcases wherever the Lantern does, at half the Lantern's weight (10 to its 20): from
-/// ascent 9 with the config's "New Items" on; in custom runs it has its own switch, after the Lantern's.</item>
+/// <item>It turns up in suitcases wherever the Lantern does and nowhere else, equally often in each (weight 10, half
+/// the Lantern's full weight; set with the Lantern's, see <see cref="MoreLanterns"/>): on every ascent with the config's
+/// "New Items" on; in custom runs it has its own switch, after the Lantern's.</item>
 /// </list>
 /// </summary>
 internal static class TorchItem
@@ -96,27 +97,6 @@ internal static class TorchItem
             loot.Rarity = lanternLoot.Rarity;
         }
         template = torch;
-    }
-
-    /// <summary>In every suitcase pool that holds the Torch: half the Lantern's weight there (10 to its 20).</summary>
-    [HarmonyPatch(typeof(LootData), nameof(LootData.PopulateLootData))]
-    private static class HalfTheLantern
-    {
-        private static void Postfix()
-        {
-            if (template == null || !ItemDatabase.TryGetItem(MoreLanterns.LanternPrefab, out Item lantern) || lantern == null || !lantern.TryGetComponent(out LootData lanternLoot))
-            {
-                return;
-            }
-            foreach (Dictionary<ushort, int> weights in LootData.AllSpawnWeightData.Values)
-            {
-                if (weights.ContainsKey(template.itemID))
-                {
-                    int lanternWeight = weights.TryGetValue(lantern.itemID, out int weight) ? weight : LootData.RarityWeights[lanternLoot.Rarity];
-                    weights[template.itemID] = Mathf.Max(1, lanternWeight / 2);
-                }
-            }
-        }
     }
 
     /// <summary>Regular runs: suitcases hold it only with "New Items" on (on every ascent) (the Tomb's three are the game's own and always there).</summary>

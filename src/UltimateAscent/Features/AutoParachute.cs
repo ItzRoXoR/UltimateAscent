@@ -107,6 +107,9 @@ internal static class AutoParachute
 
         Backpack parachute = (Backpack)ModItems.Copy(jetpack, PrefabName);
         Object.DestroyImmediate(parachute.GetComponent<JetpackItem>());
+        // It sounds like the Backpack (its pick-up and drop sounds), never like metal: without the Jetpack's metal
+        // knocks, which the game plays when one lands, or when a held one bumps as the scout jumps.
+        Object.DestroyImmediate(parachute.GetComponent<ItemImpactSFX>());
         foreach (Transform child in parachute.transform.Cast<Transform>().Where(c => c.name.StartsWith("vfx", StringComparison.OrdinalIgnoreCase)).ToList())
         {
             Object.DestroyImmediate(child.gameObject);
@@ -123,6 +126,7 @@ internal static class AutoParachute
         parachute.groundMesh = CopyPack(pack, parachute.transform, "Pack_Ground");
         parachute.heldMesh = CopyPack(pack, parachute.transform, "Pack_Held");
         parachute.heldMesh.SetActive(false);
+        HoldByItsSides(parachute);
         parachute.colliders = parachute.GetComponentsInChildren<Collider>(true);
         parachute.mainRenderer = parachute.groundMesh.GetComponent<Renderer>();
         parachute.addtlRenderers = new[] { parachute.heldMesh.GetComponent<Renderer>() };
@@ -154,6 +158,35 @@ internal static class AutoParachute
             collider.convex = true;
         }
         return copy;
+    }
+
+    /// <summary>
+    /// In the hands the pack sits where the scout holds the Jetpack (between its grip), and the hands hold it by its
+    /// sides: the cut parachute carries its pack half a metre ahead of the hands, so they held nothing.
+    /// </summary>
+    private static void HoldByItsSides(Backpack parachute)
+    {
+        Transform left = parachute.transform.Find("Hand_L");
+        Transform right = parachute.transform.Find("Hand_R");
+        Mesh mesh = parachute.heldMesh.GetComponent<MeshFilter>()?.sharedMesh;
+        if (left == null || right == null || mesh == null)
+        {
+            Plugin.Log.LogWarning("The Auto-Parachute has no grip or no pack model; it is held as the Jetpack is.");
+            return;
+        }
+        Transform held = parachute.heldMesh.transform;
+        Bounds bounds = new Bounds(parachute.transform.InverseTransformPoint(held.TransformPoint(mesh.bounds.center)), Vector3.zero);
+        for (int corner = 0; corner < 8; corner++)
+        {
+            Vector3 sign = new Vector3((corner & 1) == 0 ? -1f : 1f, (corner & 2) == 0 ? -1f : 1f, (corner & 4) == 0 ? -1f : 1f);
+            bounds.Encapsulate(parachute.transform.InverseTransformPoint(held.TransformPoint(mesh.bounds.center + Vector3.Scale(mesh.bounds.extents, sign))));
+        }
+        Vector3 grip = (left.localPosition + right.localPosition) / 2f;
+        Vector3 across = (right.localPosition - left.localPosition).normalized;
+        held.localPosition += grip - bounds.center;
+        float half = Vector3.Dot(bounds.extents, new Vector3(Mathf.Abs(across.x), Mathf.Abs(across.y), Mathf.Abs(across.z)));
+        left.localPosition = grip - across * half;
+        right.localPosition = grip + across * half;
     }
 
     /// <summary>Dropping it, or a backpack wheel showing it, asks for the prefab of its kind by name.</summary>

@@ -1,5 +1,253 @@
 # Changelog
 
+## 1.6.4
+
+* The Lantern turns up in the suitcases of the Shore, the Tropics, the Roots, the Alpine and the Mesa, on every ascent
+  (before: from ascent 9, and in the Caldera's and the Gloom's too; the game: only the Tropics' and the Alpine's). In
+  the Alpine's it is as common as in the game (3.1% of a suitcase's picks there); in the Shore's, the Tropics' and the
+  Roots' half as common, in the Mesa's a third. The Torch comes wherever the Lantern does and nowhere else, equally
+  often in each of those suitcases (as often as before: half the game's Lantern weight).
+* Config **More Wild Food in Multiplayer** counts only for a run that starts with more than one player in the lobby
+  (before, any lobby, a host alone in theirs too). It is decided as the run starts: players joining later do not bring
+  it, players leaving do not end it.
+* Builder maps (an optional download, with True Final Ascent): 300 maps built with TFA's Builder, each with the
+  original maps' layout: the Shore; the Tropics or the Roots; the Alpine or the Mesa; the Caldera and the Kiln or the
+  Gloom and the Citadel; then the Peak, and the Nadir through the gem statue. The eight layouts come 37 or 38 times
+  each, and each biome's variants (the Shore's Black Sand, Blue Beach, Jelly Hell, Red Beach and Snake Beach, the
+  Tropics' Bombs, Ivy, Lava, Pillars, Sky Jungle and Thorny, and so on) as often as one another. With the pack
+  installed the map picker lists them after the original maps, "Builder: MAP 1" on (not in custom runs); a picked one
+  plays as TFA's FINAL ASCENT on that map, on the ascent the pass shows, with that ascent's rules. Only the host needs
+  the pack: TFA sends the map to the others (they need TFA). The pack is its own zip on the release page.
+* Multiplayer: snakes and mountain goats now appear on every player's game. Only the host's game knew how to make
+  them, so on everyone else's there were none (their bites and rams did not happen either). The crabs were not
+  affected.
+* Ground snakes are yellow (were olive, which the game showed orange-brown), with the same dark markings.
+* Ascent 18: the Roots wind carries debris. While a wind storm blows on you, spruce needles, sticks, the new Spruce
+  Branches and rocks come from 25-35 m upwind. Each gust brings 200-250 needles, 7-10 sticks, 13-17 branches and
+  4-6 rocks: nothing in its first 1.5 s, then each kind spread evenly over the rest of it. 65% of the needles and half the sticks, branches and rocks fly
+  past you (overhead or off to a side); the rest fly at you, each at its own point over your silhouette (the needles
+  stick in all over you, and a few graze past). The needles are 24 cm long and 1.5 cm thick, thick as a
+  cactus needle, so you see them fly and stick in. A needle sticks in by its tip like a cactus needle (a thorn on
+  the bar, its sound, pulled out as thorns are) and shows as a spruce needle; a stick or a branch knocks you down for
+  4 s like a stick's swing; a rock hits like a thrown Stone that shatters on you (down 2 s, 20 injury). Everything
+  flies in where you can see it, aimed at where you stood as it set off, so you can step aside; a stick, branch or
+  rock whooshes as it comes near. Anything solid stops it (nothing sets off from inside a rock or a hill to come out
+  of it at you), and nothing reaches you in shelter from the wind. An item you hold shields you: the needles stick in
+  it, sticks, branches and rocks bounce off it and fall (a backpack you wear is no shield). What lands fades away. Each player's
+  game makes the debris near its own scout only; farther out the wind shows flying needles too. Outside the Roots,
+  ascent 25's wind storms carry needles only. With True Final Ascent: nothing comes at a scout its Builder's rest
+  stops spare, debris flies on through the Builder's invisible walls between blocks, and on a scout TFA has made
+  bigger or smaller a needle hits and sticks in to their size (TFA's Mini scouts take no needles, as no cactus
+  needles).
+* The Spruce Branch: the Stick in the Roots. Sticks no longer lie on the Roots' ground; Spruce Branches lie there in
+  their place, and they swing and knock down exactly as the Stick does, with a look of their own (a scaly twig with
+  long needles) and their own icon.
+* Ascent 21: a clown chest's fly-trap trick now brings the fly trap. On maps with the Gloom, the Gloom's own plant
+  springs up under you and holds you in its jaws (the grip of 45 as before, and no poison) until you break free, then
+  spits you out and sinks back into the ground. Before, you were held with no plant there, floating a little above
+  the ground. Maps without the Gloom have no fly trap to bring, so there the trick paralyses you for 12 s instead.
+* Mountain goats get about more instead of grazing round one spot: they graze 2-5 s where they stop (was 6-15 s) and
+  look about 1-2.5 s (was 1.5-4 s), then set off again nine times in ten (was seven in ten), and half the time a goat
+  walks straight on from where it stopped without grazing. Each walk goes about the way the last one went (within
+  40°; was any way), so a goat crosses its range instead of milling round; stopped by a wall or a drop it cannot
+  take, it turns aside. Left alone, a goat now sets off every 7-9 s (was about every 24 s), is on the move two thirds
+  of the time (was a third), and in 3 minutes gets about 55 m from its spot (any way: about 35 m).
+* Snakes: 25 ground snakes (was 30) and 9 tree snakes (was 10). A tree snake that notices a scout hisses for 2 s
+  without moving (it is on the hunt already), then uncoils and strikes as before; on its way home after a chase it
+  stops and hisses the same before going after a scout. Snakes give up a chase at 15 m (was 20 m), still only after
+  their first 10 s; ground snakes chase at 3.4 m/s (was 3.6), a third slower below ascent 17 as before.
+* Ascent 15: food restores 75% of its hunger (was half); the extra stamina from food stays half. The bar moves in
+  steps of 2.5 hunger, and what falls between them is now carried to your next food instead of being lost, so 5
+  hunger lands as 2.5 one time and 5 the next.
+* Ascent 18: rain no longer pulls you down harder while you are in the air, so jumps in the rain are as high as dry
+  ones. It works on climbing instead, both ways of it. A grab taken while you are already on a wall holds no higher
+  than where your hands let go, so letting go and grabbing again higher (dry about four times as fast as climbing on,
+  and the game's rain hardly slows it) is slower than climbing on in the rain. Grabbing a wall from the ground, or
+  catching hold lower down, works as before, and climbing on in the rain is as in the game's rain (half a dry climb);
+  at ascent 25, outside the Tropics (the rain's own biome) it gains 60% of a dry climb.
+  Vines (in the Tropics and the Gloom) get slippery in the rain: unless you climb up one, you slide down it toward its
+  lowest point (in the Tropics, where it hangs straight down, at 60% of a full-speed climb; elsewhere half as fast),
+  and it takes twice the
+  stamina in the Tropics, 1.5 times elsewhere, climbing or hanging on. Climbing up a vine keeps its pace.
+* Ascent 18: the Citadel's rising gloom makes you 5 drowsy a second (the game: 0.9; it was 1.17 with ascent 14's
+  boost), the Nadir's rising ghosts petrify you 10 a second (the game: 5), still a tick a second.
+* True Final Ascent 3.0's Builder: every block plays by its own biome's rules, wherever it stands in the chain and
+  however often it repeats. Before, the mod took a block for whatever biome its place in the regular mountain
+  meant, and missed the Nadir blocks altogether:
+  * A Nadir block is the Nadir: ailments wear off half as fast (17), gravity is doubled (18), its ghosts rise
+    2.5 times as fast (9), and ascent 25's storms and extra tornadoes leave it alone.
+  * Shore, Tropics, Roots and Alpine blocks are what they are (TFA 3.0 renamed its places), so the sun, the Alpine's
+    nights and storms, the rain and the wind follow them.
+  * Ascent 9: a Kiln or Citadel anywhere in the chain gets its 30 s start and fast rise, at the same pace when the
+    Builder made it taller (it rose several times too fast); the fast fog goes wherever TFA's fog goes.
+  * Every Kiln has its ash (18) and its eruptions (17), a Kiln that does not follow its Caldera too. Every Caldera has
+    its own last stretch ablaze (17) and its lava tide in its own basin (18); a second Caldera's river was moved far
+    from its basin. TFA's rest island in a larger Caldera stands clear of the higher tide's heat.
+  * Every Shore, Tropics and Alpine block has its own crabs, snakes or goats, and every Shore, Tropics and Roots block
+    its stones and sticks; before, copies had none, and the first block's mobs came again with each copy.
+  * Ascent 25: one storm of each kind blows, where copies of a biome each brought their own and blew together.
+  * Ascent 17: the peak TFA puts after the chain's last block has its hill's zombies and bees; the mod looked for
+    them at the regular mountain's peak, which the Builder leaves where it was.
+  * TFA's rest stops spare the resting scouts from this mod's storms, the Mesa's sun, ascent 23's sun and the extra
+    tornadoes, as they do from the game's; TFA's invisible walls between blocks no longer shade this mod's suns.
+* The mod's cosmetics unlock in TFA's FINAL ASCENT only where TFA lets the climb earn achievements (not in a Builder
+  chain lower than the regular mountain or of too few biomes).
+* True Final Ascent 3.0: a TFA weather another mod starts through TFA is handled like TFA's Apocalypse weather, in
+  any climb: what it does lands as TFA gives it (no ascent 14 boost, its faints stay faints at 24), the sun rules
+  rest (ascent 23's heat and roasting, the leaky sunscreen), ascent 11's Scoutmaster hunt steps aside for its
+  Blackout and Watch, and ascent 25's storms keep calm while it runs. Before, the mod did not see such a weather.
+* Ascent 23: the sun outside the Mesa heats 2 a second in direct sunlight (was 0.5; through sunscreen from ascent
+  15, 0.5). The Mesa keeps its midday sun, the Alpine none. Hot Mode keeps its own heat (about 0.33 a second).
+* Ascent 25: the weather goes on past the Caldera and the Gloom: the Kiln, the Citadel and the Peak have its rain,
+  wind, snowstorms and extra tornadoes too, under the Caldera's and the Gloom's rules (storms neither chill nor heat,
+  the wind and the snowstorm never blow together); only the Nadir keeps its normal weather. The wind pushes there as
+  it does in the Caldera.
+* Ascent 17: the peak has fifteen zombies (was ten): seven at its very top, on level ground with room round it around
+  the summit with the flares (the highest first), three by the statue the gems go in and five on the ledges of the
+  rocks around the peak, only where a ledge has room round it. Before, all ten stood on the rocks, most on narrow
+  ledges they fell off.
+* Ascent 17: Lookers show up on 70% of their hiding spots (was 90%). Looking into a Looker's eyes while it peeks
+  out now curses you 2.5 a second, and the sugar rush comes once that curse lands on your bar; until now nothing
+  happened, because the check that nothing stood in between always met the rock it hides behind. Only its eyes
+  count: looking at its rock costs nothing. The curse that sends the Scoutmaster adds up across all Lookers: once
+  they have given you 12.5 (5 s of eye contact, one Looker or several; curse from anything else does not count),
+  the one you are looking at leaves and the Scoutmaster comes after you for 70 s, and the count starts over.
+* Stone: only a flying stone hits. A scout landing on a stone lying on the ground was knocked down and
+  injured for 20 as if hit by one (and could shatter it); now that does nothing. A stone knocks a scout down when
+  it flies at 10 m/s or more, as before, and shatters only when it hits something at more than 18 m/s (was
+  10 m/s on any impact), so a hard throw still breaks it and a fall onto a scout from a few metres does not. It
+  injures a scout (10, or 20 from ascent 17) only when it shatters on them; one that stays whole only knocks
+  them down. The injury lands 0.25 s after the hit, so the rock smash is heard before the damage sound instead
+  of drowning under it.
+* Ascent 17: the Citadel's arrow traps show their green warning line again, 1 m out of the opening. It was cut
+  to half a metre from where it starts, inside the trap's housing, so little or none of it showed.
+* An arrow trap set inside a platform (the level sometimes puts one over a trap) no longer shoots straight through
+  it at the scouts on top: a trap whose line starts inside anything but its own housing holds its fire and shows
+  no line, on every ascent (a game bug).
+* Ascent 17: the Citadel's ladders are 1.5× as fast as climbing rock (was 1.2×; the game: 3×) and cost 75% of its
+  stamina (was 90%; the game: 25%).
+* The Energy Drink and the Toxic Drink override each other: drinking one while the other's boost runs ends that
+  boost and only the new drink's boost runs (before, the running boost kept its speed and only its time grew). The
+  ended boost's after-effect comes at once: the Energy Drink's drowsiness, the Toxic Drink's poison. The same
+  drink twice still only lengthens the boost, as in the game.
+* Ascent 15: the Toxic Drink makes you climb 3.5× as fast (was 3×); walking stays 3×.
+* Six-Slot Backpack: its wheel is laid out as the backpack is. Slots 4 and 6 were the wrong way round, so items
+  set out evenly in the wheel hung lopsided on the backpack: now on each side the bag's slot is at the top, the
+  upper pouch's in the middle and the lower pouch's at the bottom, as they hang seen from behind.
+* Revive statues revive as in the game again (from ascent 15): every status cleared, then the game's revive curse
+  and hunger. On the host's game (in single-player, always) a statue's revive was taken for another revive and
+  kept 25% of your statuses (drowsiness, poison...); only the checkpoint flag puts statuses back.
+* Starting curse: a joining player's scout could start without it while the host's always had it. The game gives it
+  once as a scout wakes up, and a joiner's game could lose it while setting the scout up; now every scout's curse is
+  checked once it is up after starting a climb or arriving in one, and what is missing is added.
+* Ascent 17: mimic gas puts 2.5 poison and 2.5 spores on you every 0.5 s (was 5 each); its drowsiness stays 5.
+* Ascent 11: a teammate leaving the lobby alive no longer curses everyone as a death would. A death curses the
+  survivors 1.5 s after it, if the dead scout's player is still in the lobby then; every death counts, a second or
+  later one after a revive too, and so does a scout turning into a mushroom zombie (it cursed nobody).
+* Ascent 15: a cactus ball is thrown 1.5× weaker (the throw's own push; your hand's movement still adds).
+* Crabs leave a scout who is down alone (knocked down, out, waking up on the beach), and for their first 5 s back on
+  their feet, so nobody is pinched before they are up.
+* Ascent 17: the Gloom ghost's burst throws you 1.5× as hard as in the game (was 3–4×, as every explosion still
+  does); the rest of its burst stays (knocked down 12 s and out, 60 cold, 50 s blind).
+* Boarding pass: the map picker no longer covers the game's reward line (on the highest unlocked of the game's own
+  ascents, before you have climbed it): the reward now sits under the ascent's text, "And all previous modifiers.",
+  in one row. "And all previous modifiers." sits closer to the ascent's text (the game's empty line between them is
+  about half as tall), so the reward fits there on every ascent. Ascent 25 shows its reward, the Pain Sash, until you
+  have unlocked it.
+* Boarding pass: the notice naming the players who miss this version of the mod is a line over the pass, at its top
+  left, instead of under the ascent's text, where it ran into the map picker.
+* Boarding pass: the ticket's details are the ascent's. **GATE** is its number (Tenderfoot and Peak 0),
+  **ATTEMPTS** (was FROM: ACG) the runs you have started on that ascent, on any map, and **COMPLETIONS** (was TO: LFG)
+  the runs on it someone won. Each player counts their own, from this version on; a campfire save resumed is the same
+  attempt. Custom runs count nothing and show dashes; TFA's FINAL ASCENT counts on its ascent's ticket, unless TFA
+  keeps that chain of its Builder from earning achievements. The three sit a little further left,
+  evenly apart; a passenger's name too long for the room before them is made smaller, then cut short.
+* New cosmetic: the **Pain Sash**, after the game's sashes in the passport, for reaching the peak on ascent 25 with all
+  modifiers on for the whole climb (not in custom runs). A dark sash soaked in blood, its stains and brightest spots slowly drifting. Whoever wears it
+  leaves bloody boot prints at every step on the ground (not while climbing or in water), seen by every player with
+  the mod; each print fades away within 10 s. Like the mod's other cosmetics it is kept in the mod's save, not in
+  Steam; players without the mod see the game's last sash in its place.
+* New cosmetic: the **Burnt Skin**, after the game's skins in the passport, for reaching the peak on ascent 23 or
+  higher with all modifiers on for the whole climb (not in custom runs). A charred maroon skin in the Pain Sash's
+  colours, the arms, legs and body spotted with char and small glowing embers; the face stays clean. Kept in the
+  mod's save, not in Steam; players without the mod see the game's last skin in its place.
+* The VR Headset and the Orange Spacesuit and Helmet also unlock when the climb is won in the Nadir. Before, only a
+  win at the peak counted, so from ascent 8 (where the game's ascent 8 rule makes the Nadir the only way to win) they
+  could not be earned unless the Ascent 8 switch was off.
+* Stone: it knocks down another scout or a zombie, and stuns a snake, only when it shatters on them (thrown at
+  more than 18 m/s); a stone that stays whole does nothing to them (before, 10 m/s was enough). A stone flying that
+  fast into a snake now shatters on it. A whole stone still knocks down the scout who threw it when it comes back
+  down on them (thrown straight up), at 10 m/s or more.
+* New config option **Map Biomes** (Boarding Pass, off by default): the map picker shows each map's biomes after
+  its number, by the first letters of their names, e.g. **MAP 90 (STMC)** for Shore, Tropics, Mesa and Caldera
+  (R: Roots, A: Alpine, G: the Gloom); today's map shows its number only.
+* Ascent 20: a neglected Bing Bong's crab comes with a red screen instead of the game's status effects (its glow over
+  the scout every half second, with the injury flash and shake). From the crab's first step on your bar your screen
+  turns red, from a faint tint to a dark red that closes in from the edges over nearly all of it in 10 s, under the
+  HUD, on every scout's screen; it clears within a second once someone holds Bing Bong.
+* Auto-Parachute: it never knocks like metal. It kept the Jetpack's metal knocks (it is built from the Jetpack),
+  heard when one landed or when you jumped with it in your hands; now it sounds like the Backpack.
+* Auto-Parachute: held in the hands, the scout holds the pack by its sides. The hands gripped where the Jetpack's
+  sides are while the pack sat half a metre in front of them.
+* Fixes for the game's own bugs, on every ascent:
+  * Warp Fungus: warped onto a jumping mushroom in the middle of a fall, you bounced as if you had fallen all the
+    way onto it (up to 7.5 times as high); now you bounce as from a standstill. A warp could put you inside the rock,
+    or past it out of the map, at a corner; it now goes only where there is room for you (moving off the surface, or
+    up, to find it) and fizzles if there is none. An explosion threw a Warp Fungus far too hard (once for each of its
+    colliders, and the harder the lighter it is); it is now thrown once, as hard as a scout there. No warp goes
+    through the Nadir's black wall while it stands (it got you past the freeing of the Scoutmaster's soul); the
+    Teleportation Compass keeps to that wall too.
+  * A dropped or thrown item could end up inside the rock: held in a corner, dropped out of another slot (the
+    item-dropping rules, passing out) or the backpack, or the backpack you drop to carry someone. It now lands there
+    only if nothing solid lies between you and there, otherwise just short of it.
+  * Jetpack: knocked limp by an explosion or pulled by a Rescue Claw, its push shot you sky high (a limp scout has
+    no air drag). It now gives nothing while you are knocked down, and as much as you have your body back after.
+    Its push also grew with the frame rate (2.4 times as strong at 144 fps); it now pushes as at 60 fps at any.
+  * The fog walls between the segments could be climbed and stood on: you held the rock behind the fog, and two of
+    them lie flat enough to stand on and get stamina back. Now they are neither.
+  * Lava gave stamina: a lava pillar's lava has 10 stamina back for a scout it bounces off, like a mushroom. No lava
+    gives stamina now; it stays climbable.
+  * Dynamite could explode twice (its fuse and its cooking set it off separately, and a cooked stick taken out of a
+    backpack blew up anew). Each stick explodes once.
+  * A cooked Anti-Zooka's bubble with another under you lifted you enormously high: every bubble lifted you, and
+    every limb at a bubble's edge started another push up out of it. Now one bubble lifts you at a time, and you
+    leave a bubble only once your middle is out of it.
+  * Carried by a condor, you could still grab a rope (the game stopped walls) and were pulled back to it when the
+    flight ended. Now you cannot grab a rope or a vine while carried, and let go of one you still hold.
+  * A checkpoint flag brought you back with none of the statuses it keeps if you died invincible (Fortified Milk, a
+    Shroomberry, a gem, Bing Bong's shield). They now come back with you; the invincibility goes on after.
+  * Stuck on a cactus, stamina came back the whole time (20 a second), so a cactus beside a wall let you break free
+    and climb on forever. Stuck, stamina now comes back only as it would unstuck.
+  * Going limp on a jumping mushroom's bounce (the Chain Launcher's chain run out of stamina, then playing dead) kept
+    the long fall's bounce with no drag to slow you (a limp scout has no air drag). A limp scout now gets the game's own
+    limp bounce, and keeps their drag while rising from a bounce, however late they go limp.
+  * A backpack fired from the Scout Cannon went through the scout in the tube and threw them across the mountain;
+    it now flies off without them.
+  * Balloons pop when they touch lava (a lava river, a lava pillar's lava, under the lava's surface) and in an
+    explosion that reaches them.
+  * The Scoutmaster could not pull a scout off a piton, a rope or a vine: he shook them for good, with no throw and
+    no harm. Now his grab makes them let go (as a frog's tongue does), they cannot take hold again while he holds
+    them, and his throw goes as on a wall. His throw could also break off for good, every grab after it holding a
+    scout with no throw; it now ends cleanly. Looking up at a scout right above him, he no longer turns round and
+    round.
+  * Ropes: when the host left, every rope vanished on the screen of the scout who put it up (and for anyone joining
+    after); now only that scout leaving does it. A scout who left took their ropes (a Rope Shooter's, a spool's tied
+    off), anchors and Chain Launcher chains away from everyone; now these stay for those still there, a rope hanging
+    as it last was, still to climb (players who join later do not see them). The airport's training rope came back
+    no more after a run; the host now puts it up again whenever it is missing.
+  * A scout could stay tied to the scout who carried them for good (both knocked out at once: they wake, even climb,
+    and are pulled back to them). Such a scout is now set free.
+* Ascent 15: the Scout Cannon thrown with Q, like any item, goes with half the force (12.5 m/s; game: 25). A tied
+  balloon pops 30 s after it is tied however high it rises (game: after 120 s, or 100 m up).
+* Ascent 17: the Scoutmaster finds a way up to a scout he cannot reach straight. In the game he only walks and climbs
+  straight at his target, so under a scout on a ledge he could not climb to (an overhang, a rock with no wall up to
+  it) he stood turning round until, out of sight, he teleported. Now, stuck below the scout (no nearer for 6 s, or
+  right under them for 1.5 s), he takes the shortest way up: a rope tied to an anchor (the map's or one a scout put
+  up), a vine or a chain (the jungle's, a Chain Launcher's) whose low end he can reach from the ground and whose top
+  comes near the scout (he walks up to it, climbs it and reaches up onto their ledge from its top), or higher ground
+  near the scout with an open way down to them (he climbs up there and drops down to them). A way that gets him no
+  nearer for 6 s is given up for 45 s and the next one tried; with none left he goes on as in the game.
+
 ## 1.6.3
 
 * Ascent 20 in a custom run's **Mini Run**: one that starts past the beach (in the Tropics, the Alpine or the Caldera,

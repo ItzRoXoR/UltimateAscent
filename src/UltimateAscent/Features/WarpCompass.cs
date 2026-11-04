@@ -20,6 +20,7 @@ namespace UltimateAscent.Features;
 /// that they can see. The game warped you into the teammate's body: into the wall they climbed, or into
 /// the air with them. With no such teammate, or no free ground beside one, nothing happens and the use is
 /// kept; a line in the middle of the screen says why (<see cref="Notice"/>).</item>
+/// <item>Never past the Nadir's black wall while it stands (as the Warp Fungus, see <see cref="Fixes.WarpFixes"/>).</item>
 /// </list>
 /// </summary>
 internal static class WarpCompass
@@ -254,7 +255,8 @@ internal static class WarpCompass
             List<Character> mates = Character.AllCharacters.Where(c => CanWarpTo(user, c, __instance.minimumDistance)).OrderBy(_ => Random.value).ToList();
             foreach (Character mate in mates)
             {
-                if (TryFindLanding(mate, user.Center, out Vector3 landing))
+                // Not past the Nadir's black wall while it stands (no way past the soul's freeing; see Fixes.WarpFixes).
+                if (TryFindLanding(mate, user.Center, out Vector3 landing) && !Fixes.WarpFixes.ThroughSoulWall(user.Center, landing))
                 {
                     user.photonView.RPC("WarpPlayerRPC", RpcTarget.All, landing, true);
                     Spend(item);

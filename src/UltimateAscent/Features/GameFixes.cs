@@ -1,6 +1,8 @@
+using System.Collections.Generic;
 using HarmonyLib;
 using Peak.Afflictions;
 using UltimateAscent.Core;
+using UnityEngine;
 
 namespace UltimateAscent.Features;
 
@@ -18,6 +20,10 @@ namespace UltimateAscent.Features;
 /// <item>An arrow trap fired at the Citadel's swinging spike balls: it shoots at any loose body crossing its
 /// line, and a spike ball swinging through it is one. A spike ball crossing it no longer sets it off, on every
 /// ascent.</item>
+/// <item>An arrow trap set inside something solid (a platform the level put over it) shot through it: its look
+/// along its line starts inside, and a look that starts inside something does not see it. A trap whose line
+/// starts inside anything but its own housing now holds its fire and shows no warning line, on every ascent
+/// (<see cref="Bore"/>).</item>
 /// <item>A campfire save put back the petrification the fire had taken when it was loaded, on every ascent
 /// (<see cref="CampfireSavePetrify"/>).</item>
 /// </list>
@@ -38,6 +44,87 @@ internal static class GameFixes
                 return true;
             }
             return hit.rigidbody == null || hit.rigidbody.GetComponentInParent<SwingingAxe>() == null;
+        }
+    }
+
+    /// <summary>How far past the trap's muzzle something else may begin and still count as the wall it is set in.</summary>
+    private const float SetInWall = 0.05f;
+
+    /// <summary>How often a trap's line is looked along again.</summary>
+    private const float BoreSeconds = 1f;
+
+    /// <summary>Each arrow trap's line as last looked along: until when it holds, its mouth, and whether it starts inside something.</summary>
+    private static readonly Dictionary<ArrowShooter, (float until, float mouth, bool buried)> bores = new Dictionary<ArrowShooter, (float, float, bool)>();
+
+    /// <summary>The traps whose warning line this fix hid.</summary>
+    private static readonly HashSet<ArrowShooter> hidden = new HashSet<ArrowShooter>();
+
+    /// <summary>For the tests: buried traps shoot, as in the game.</summary>
+    internal static bool LetBuriedTrapsShoot;
+
+    /// <summary>
+    /// Along an arrow trap's line, looked at once a second: how far its mouth is from the muzzle (where the line leaves
+    /// the trap's own housing), and whether the line starts inside something else. A look that starts inside something
+    /// does not see it, so the line is looked along from where it first meets the map, back to the muzzle: every face it
+    /// leaves before that belongs to something the muzzle is inside.
+    /// </summary>
+    internal static (float mouth, bool buried) Bore(ArrowShooter trap)
+    {
+        if (bores.TryGetValue(trap, out (float until, float mouth, bool buried) known) && Time.time < known.until)
+        {
+            return (known.mouth, known.buried);
+        }
+        float entry = Physics.Raycast(trap.pos, trap.forward, out RaycastHit ahead, trap.range, HelperFunctions.terrainMapMask, QueryTriggerInteraction.Ignore) ? ahead.distance : trap.range;
+        float mouth = 0f;
+        bool buried = false;
+        foreach (RaycastHit back in Physics.RaycastAll(trap.pos + trap.forward * entry, -trap.forward, entry, HelperFunctions.terrainMapMask, QueryTriggerInteraction.Ignore))
+        {
+            float along = entry - back.distance;
+            if (along <= 0f || along >= entry - 0.001f)
+            {
+                continue;
+            }
+            if (back.collider.GetComponentInParent<ArrowShooter>() == trap)
+            {
+                mouth = Mathf.Max(mouth, along);
+            }
+            else if (along > SetInWall)
+            {
+                buried = true;
+            }
+        }
+        if (bores.Count > 256)
+        {
+            bores.Clear();
+        }
+        bores[trap] = (Time.time + BoreSeconds, mouth, buried);
+        return (mouth, buried);
+    }
+
+    /// <summary>A trap whose line starts inside something holds its fire and hides its warning line (shown again once it does not).</summary>
+    [HarmonyPatch(typeof(ArrowShooter), nameof(ArrowShooter.FixedUpdate))]
+    private static class BuriedTrapsHold
+    {
+        private static bool Prefix(ArrowShooter __instance)
+        {
+            if (!(Plugin.Ready && Rules.InRun) || LetBuriedTrapsShoot)
+            {
+                return true;
+            }
+            if (Bore(__instance).buried)
+            {
+                if (__instance.lineRenderer != null)
+                {
+                    __instance.lineRenderer.enabled = false;
+                    hidden.Add(__instance);
+                }
+                return false;
+            }
+            if (hidden.Remove(__instance) && __instance.lineRenderer != null)
+            {
+                __instance.lineRenderer.enabled = !__instance.empty;
+            }
+            return true;
         }
     }
 

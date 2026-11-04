@@ -11,11 +11,12 @@ namespace UltimateAscent.Features;
 
 /// <summary>
 /// Ascent 15 (13DDA): items are worse.
-/// Food and stamina items give half, healing gives 60% (the Green Clusterberry's poison cure half), cure-alls only partly cure, consumables
+/// Food restores 75% of its hunger, extra stamina from items is half, healing gives 60% (the Green Clusterberry's poison cure half), cure-alls only partly cure, consumables
 /// lose two uses at a time, ropes are shorter, chain/balloons weaker, energy drinks slower,
 /// the lollipop's crash is 85 drowsiness, cooking no longer removes poison or spores, eating a scorpion
 /// poisons you, the Parasol wears out after 20 s of gliding, gliders drain more stamina, letting go of a rescue
-/// hook makes you fall, the cannon burns, skeletons are fragile and invincibility only blocks 75%. The gems
+/// hook makes you fall, the cannon burns and is thrown with half the force, tied balloons pop 30 s after they are
+/// tied however high they rise, skeletons are fragile and invincibility only blocks 75%. The gems
 /// (<see cref="A14_Gems"/>) and Shroomberries (<see cref="A14_Shroomberries"/>) are worse too;
 /// poisonous food gets far worse from ascent 14 on (<see cref="A15_FoodPoison"/>).
 /// </summary>
@@ -23,8 +24,8 @@ internal static class A14_WorseItems
 {
     private static bool On => Rules.Enabled(Lvl.WorseItems);
 
-    /// <summary>The share of hunger food restores, and of the extra stamina items give.</summary>
-    internal const float FoodShare = 0.5f;
+    /// <summary>The share of hunger food restores (however the item restores it), and of the extra stamina items give.</summary>
+    internal const float FoodShare = 0.75f;
     internal const float ExtraStaminaShare = 0.5f;
 
     /// <summary>The share of a status an item cures; the Gloom's Early Worm wakes you only half as much.</summary>
@@ -40,7 +41,10 @@ internal static class A14_WorseItems
         return type <= CharacterAfflictions.STATUSTYPE.Web ? CureAllCap : 5f;
     }
 
-    /// <summary>How much of what an item's status change takes off lands, from ascent 15 (1 for what it adds, and for petrification).</summary>
+    /// <summary>
+    /// How much of what an item's status change takes off lands, from ascent 15 (1 for what it adds, and for
+    /// petrification); hunger taken off is food, restored at food's share.
+    /// </summary>
     internal static float CureScale(Action_ModifyStatus action)
     {
         if (!On || action == null || action.changeAmount >= 0f || action.statusType == CharacterAfflictions.STATUSTYPE.Petrify)
@@ -59,11 +63,46 @@ internal static class A14_WorseItems
             // The Green Clusterberry takes off 15 poison (the game: 30).
             return Mathf.Min(1f, WildFoods.GreenClusterberryCureWorse / -action.changeAmount);
         }
+        if (action.statusType == CharacterAfflictions.STATUSTYPE.Hunger)
+        {
+            return FoodShare;
+        }
         return earlyWorm ? EarlyWormShare : CureShare;
     }
 
+    /// <summary>
+    /// What the scout's food has restored below the bar's step (2.5 hunger, which the game drops), carried to their next
+    /// food: 75% of 5 is 2.5 one time and 5 the next, so every food restores 75% in the end.
+    /// </summary>
+    private static float foodOwed;
+
+    /// <summary>For the tests: what is carried to the next food.</summary>
+    internal static float FoodOwed => foodOwed;
+
+    internal static void Reset()
+    {
+        foodOwed = 0f;
+    }
+
+    /// <summary>Restores this much hunger on the bar's steps, carrying the rest to the next food.</summary>
+    private static void Feed(Character character, float amount)
+    {
+        if (!character.IsLocal)
+        {
+            // Another scout's game: only their own game changes their bar.
+            return;
+        }
+        float total = foodOwed + amount;
+        int steps = Mathf.FloorToInt(total / CharacterAfflictions.STATUS_INCREMENT + 0.0001f);
+        if (steps > 0)
+        {
+            character.refs.afflictions.SubtractStatus(CharacterAfflictions.STATUSTYPE.Hunger, steps * CharacterAfflictions.STATUS_INCREMENT);
+        }
+        foodOwed = Mathf.Max(0f, total - steps * CharacterAfflictions.STATUS_INCREMENT);
+    }
+
     [HarmonyPatch(typeof(Action_RestoreHunger), nameof(Action_RestoreHunger.RunAction))]
-    private static class HalfFood
+    private static class LessFood
     {
         private static bool Prefix(Action_RestoreHunger __instance, bool __runOriginal)
         {
@@ -77,9 +116,9 @@ internal static class A14_WorseItems
                 return true;
             }
             // Ticks are no food any more.
-            if (!Ticks.IsTick(__instance.item))
+            if (!Ticks.IsTick(__instance.item) && __instance.character != null)
             {
-                __instance.character.refs.afflictions.SubtractStatus(CharacterAfflictions.STATUSTYPE.Hunger, __instance.restorationAmount * FoodShare);
+                Feed(__instance.character, __instance.restorationAmount * FoodShare);
             }
             return false;
         }
@@ -131,7 +170,7 @@ internal static class A14_WorseItems
     }
 
     [HarmonyPatch(typeof(Action_GiveExtraStamina), nameof(Action_GiveExtraStamina.RunAction))]
-    private static class HalfExtraStamina
+    private static class LessExtraStamina
     {
         private static bool Prefix(Action_GiveExtraStamina __instance)
         {
@@ -293,6 +332,9 @@ internal static class A14_WorseItems
         }
     }
 
+    /// <summary>A tied balloon pops this long after it is tied, however high it rises (the user's; the game: 120 s, or 100 m above where it was tied).</summary>
+    internal const float BalloonSeconds = 30f;
+
     [HarmonyPatch(typeof(TiedBalloon), nameof(TiedBalloon.FixedUpdate))]
     private static class WeakerBalloon
     {
@@ -301,6 +343,8 @@ internal static class A14_WorseItems
             if (On)
             {
                 Overrides.Set(__instance, nameof(TiedBalloon.floatForce), 5f);
+                Overrides.Set(__instance, nameof(TiedBalloon.popHeight), float.PositiveInfinity);
+                Overrides.Set(__instance, nameof(TiedBalloon.popTime), BalloonSeconds);
             }
         }
     }
@@ -521,6 +565,56 @@ internal static class A14_WorseItems
         }
     }
 
+    /// <summary>How much weaker a cactus ball is thrown (the throw's own push; the hand's movement stays).</summary>
+    internal const float CactusThrowWeaker = 1.5f;
+
+    /// <summary>How much of a throw's force the Scout Cannon gets (the hand's own movement stays; the user's).</summary>
+    internal const float CannonThrowShare = 0.5f;
+
+    /// <summary>The Scout Cannon is thrown (Q) with half the force: the host launches a thrown item by the thrower's throw force.</summary>
+    [HarmonyPatch(typeof(CharacterItems), nameof(CharacterItems.DropItemRpc))]
+    private static class HalfCannonThrow
+    {
+        private static void Prefix(CharacterItems __instance, out Vector2? __state)
+        {
+            __state = null;
+            Item held = __instance.character != null ? __instance.character.data.currentItem : null;
+            if (!On || held == null || held.GetComponent<Action_ConstructableScoutCannonScroll>() == null)
+            {
+                return;
+            }
+            __state = new Vector2(__instance.minThrowForce, __instance.maxThrowForce);
+            __instance.minThrowForce *= CannonThrowShare;
+            __instance.maxThrowForce *= CannonThrowShare;
+        }
+
+        private static Exception Finalizer(CharacterItems __instance, Vector2? __state, Exception __exception)
+        {
+            if (__state.HasValue)
+            {
+                __instance.minThrowForce = __state.Value.x;
+                __instance.maxThrowForce = __state.Value.y;
+            }
+            return __exception;
+        }
+    }
+
+    /// <summary>
+    /// A cactus ball is thrown 1.5 times weaker: a throw spawns the ball anew on the host's game, which gives it the
+    /// throw by its throw-force multiplier as it appears.
+    /// </summary>
+    [HarmonyPatch(typeof(StickyItemComponent), nameof(StickyItemComponent.Awake))]
+    private static class WeakerCactusThrow
+    {
+        private static void Postfix(StickyItemComponent __instance)
+        {
+            if (On && __instance is CactusBall && __instance.TryGetComponent(out Item item))
+            {
+                Overrides.Set(item, nameof(Item.throwForceMultiplier), Overrides.Original(item, "throw", item.throwForceMultiplier) / CactusThrowWeaker);
+            }
+        }
+    }
+
     /// <summary>The "cannon glitch" (an item launched in the same shot as a scout) knocks every scout out.</summary>
     [HarmonyPatch(typeof(ScoutCannon), nameof(ScoutCannon.RPCA_LaunchItem))]
     private static class CannonGlitch
@@ -633,11 +727,15 @@ internal static class A14_WorseItems
             return __exception;
         }
 
+        /// <summary>
+        /// The statues themselves are looked for: the host's game takes an opened statue out of its luggage list before it
+        /// revives anyone (a guest's keeps it), so on the host's game (always, solo) a statue's revive was not seen as one.
+        /// </summary>
         private static bool NearAStatue(Vector3 position)
         {
-            foreach (Luggage luggage in Luggage.ALL_LUGGAGE)
+            foreach (RespawnChest statue in UnityEngine.Object.FindObjectsByType<RespawnChest>(FindObjectsSortMode.None))
             {
-                if (luggage is RespawnChest statue && statue != null && Vector3.Distance(statue.transform.position, position) < StatueReach)
+                if (statue != null && Vector3.Distance(statue.transform.position, position) < StatueReach)
                 {
                     return true;
                 }

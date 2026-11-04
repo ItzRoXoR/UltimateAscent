@@ -61,6 +61,7 @@ internal static class KilnAsh
     internal static bool Sheltered { get; private set; }
 
     private static LavaRising lava;
+    private static float lavaLooked = float.NegativeInfinity;
     private static Bounds kiln;
     private static bool kilnKnown;
     private static FogSphere sphere;
@@ -93,6 +94,7 @@ internal static class KilnAsh
         smoke = null;
         flakes = null;
         lava = null;
+        lavaLooked = float.NegativeInfinity;
         kilnKnown = false;
         sphere = null;
         weActivated = false;
@@ -106,13 +108,26 @@ internal static class KilnAsh
         Sheltered = false;
     }
 
-    /// <summary>The Kiln's rising lava (on a volcano map), whose plane covers the Kiln.</summary>
+    /// <summary>
+    /// The rising lava of the Kiln the scouts are in, whose plane covers that Kiln: the lava of their part of the map (with
+    /// True Final Ascent's Builder, which can have several Kilns, the one whose plane is over the local scout). Looked for
+    /// again once a second.
+    /// </summary>
     private static LavaRising KilnLava()
     {
-        if (lava == null)
+        if (lava == null || lava.requiredSegment != Map.CurrentSegment || Time.time - lavaLooked >= 1f)
         {
-            lava = LavaRising.ALL_LAVA.FirstOrDefault(l => l != null && l.requiredSegment == Segment.TheKiln && l.risingFieldType == LavaRising.RisingFieldType.Lava);
-            kilnKnown = false;
+            lavaLooked = Time.time;
+            Segment here = Map.CurrentSegment;
+            List<LavaRising> kilns = LavaRising.ALL_LAVA.Where(l => l != null && l.lava != null && l.requiredSegment == here && l.risingFieldType == LavaRising.RisingFieldType.Lava).ToList();
+            Character local = Character.localCharacter;
+            LavaRising found = kilns.Count > 1 && local != null ? kilns.FirstOrDefault(l => Over(l, local.Center)) ?? kilns.FirstOrDefault(l => l.started && !l.ended) : null;
+            found = found ?? kilns.FirstOrDefault();
+            if (found != lava)
+            {
+                lava = found;
+                kilnKnown = false;
+            }
         }
         if (lava != null && !kilnKnown && lava.lava != null)
         {
@@ -124,6 +139,21 @@ internal static class KilnAsh
             }
         }
         return lava;
+    }
+
+    /// <summary>The rising lava of the scouts' Kiln, as found (for the tests).</summary>
+    internal static LavaRising Lava => KilnLava();
+
+    /// <summary>A point is over a rising lava's plane.</summary>
+    private static bool Over(LavaRising rising, Vector3 point)
+    {
+        Renderer plane = rising.lava.GetComponentsInChildren<Renderer>(true).FirstOrDefault();
+        if (plane == null)
+        {
+            return false;
+        }
+        Bounds area = plane.bounds;
+        return point.x >= area.min.x && point.x <= area.max.x && point.z >= area.min.z && point.z <= area.max.z;
     }
 
     /// <summary>Inside the Kiln: over its lava's plane, and not below the lava.</summary>

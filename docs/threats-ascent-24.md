@@ -1,7 +1,7 @@
 # Threats at ascent 24
 
 Every value below is from PEAK 3.0.0 (read from the game code and the game data) and from
-Ultimate Ascent 1.6.3's rules. Status amounts use the stamina bar's scale: **100 = the whole bar**. A rule
+Ultimate Ascent 1.6.4's rules. Status amounts use the stamina bar's scale: **100 = the whole bar**. A rule
 marked *(17)* comes from that ascent; ascent 24 contains every ascent up to 24. Ultimate Ascent's
 numbers are what lands on the bar, ascent 14's boost included; below ascent 14 the same rules land
 them without that boost, so they are always lower there. Distances are the game's own units,
@@ -15,9 +15,9 @@ called metres here as in the mod; the game's altitude display counts one unit as
 | Passing out | When statuses fill more than 99% of the bar for **5 s** (the faint timer; it runs back at the same speed when the bar drops below 99%). | Same timer, but passing out is **instant death** *(24)*. A checkpoint flag still saves you, for **10 curse** *(15)*; it puts back exactly the statuses you had when you planted it, but leaves you the petrification you have if that is more *(15)* (the game puts back that too). |
 | Fall damage | ×2 from ascent 1. | Fall damage also makes you **60 drowsy** *(12)*; with your 20 curse *(19)* that is 80, so a fall that hurts for **20 or more** (less with other statuses on the bar) fills it → **fatal** *(24)* unless you cure it within the faint timer. Fall damage drops all your items, backpack included *(13)*. |
 | Status strength | — | Cold and drowsiness ×1.3, heat ×1.5, spores ×1.65, poison ×1.75 *(14)*, on everything. The exact numbers below are tuned so that they land as given, this boost included. |
-| Explosions | Knockback, a knock-down and the explosion's own status. | Every explosion: status ×2, knockback ×3–4, knock-down ×3 *(17)*. Only a cooked Lantern's or Faerie Lantern's burst and the Gloom ghost's burst also bring **drowsiness up to passing out** → at 24 being knocked down by one of them kills. (Mines and the Gloom ghost land exact amounts instead of ×2; a Shroomberry's spore burst and a cooked Toxic Drink's are not treated as explosions.) |
+| Explosions | Knockback, a knock-down and the explosion's own status. | Every explosion: status ×2, knockback ×3–4 (the Gloom ghost's ×1.5), knock-down ×3 *(17)*. Only a cooked Lantern's or Faerie Lantern's burst and the Gloom ghost's burst also bring **drowsiness up to passing out** → at 24 being knocked down by one of them kills. (Mines and the Gloom ghost land exact amounts instead of ×2; a Shroomberry's spore burst and a cooked Toxic Drink's are not treated as explosions.) |
 | Cooking | Campfires (the portable stove too), lava and explosions cook items; cooking takes a food's poison away. | Campfires, lava and explosions char what they cook **to ruin** on the first cooking *(17; the config's Hot Campfires switch can turn this off)*; cooking no longer removes poison *(15)*. |
-| Food and items | As listed per item. | Hunger and extra stamina from food ×0.5, what status items cure ×0.6 *(15)*; what they cost you (a Napberry's sleep, a Scorchberry's heat) stays the game's, except the exact amounts in **Food** below *(14)*. |
+| Food and items | As listed per item. | Hunger from food ×0.75 (the bar moves in steps of 2.5: what falls between them is carried to your next food), extra stamina from food ×0.5, what status items cure ×0.6 *(15)*; what they cost you (a Napberry's sleep, a Scorchberry's heat) stays the game's, except the exact amounts in **Food** below *(14)*. |
 | Touch hazards (anything that hurts on contact) | Own values. | Damage ×2, at least 2 cold/heat *(17)*; urchins, thorny vines, spiked fences, lava streams and petrifying stones have exact values (below). Climbing ice rock ×2; magma rock burns and petrifying stones petrify while you climb them. Status emitters that add a status (spore clouds, heat fields) ×4. |
 | Recovery | Statuses heal over time after a short pause. | Heat heals 2.6× slower in the Caldera/Kiln (0.5 a second), drowsiness 2.5× slower in the Gloom/Citadel (1 a second) *(16)*; injuries **worsen** by 2 per minute, drowsiness does not heal at night (there is no night from the Caldera and the Gloom on), poison/spores make you stumble, heat drains stamina, cold slows you *(22)*; poison does not heal for 10 s after a tick bite *(17)*. |
 | Revives | Scout statues at the end of each part of the climb revive the dead (or hand out an artifact if nobody died); a revive adds 15 curse *(game ascent 7)* and takes 75 petrification off. | **No revive statues** *(19)*; every other revive (scout effigy, skeleton, the Nadir) adds **15 curse**, also the ones that give the game's no status, and **keeps petrification** *(19)*. |
@@ -47,10 +47,10 @@ nothing below the minimum factor. "Knocked down" is ragdoll time.
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
 | Where | none | the beach, **25** small red crabs (about a scorpion's size) spread along it from where the scouts wake up to its campfire, **seven in ten on the climb itself** (the cliff up to the campfire, spread all the way up it), the rest on the sand; never leaving the beach, not replaced once taken *(every ascent; below 17 half as strong)* |
-| Getting about | — | crawl around the beach at **1 m/s** from spot to spot, resting a moment at each, scuttling sideways; a scout within **2 m** is chased at the same 1 m/s (a scout walks 2.5 m/s and sprints 5.2 m/s), one at random if more are that near, for at least **6 s**, then for as long as they stay within 2 m *(17)* |
+| Getting about | — | crawl around the beach at **1 m/s** from spot to spot, resting a moment at each, scuttling sideways; a scout within **2 m** is chased at the same 1 m/s (a scout walks 2.5 m/s and sprints 5.2 m/s), one at random if more are that near, for at least **6 s**, then for as long as they stay within 2 m; a scout who is down (knocked down, out, waking up on the beach) is left alone, and for their first **5 s** back on their feet *(17)* |
 | Pinch | — | facing the scout, the big claw rises and opens for 1 s, then snaps shut (the scorpion's glint and sparks), and 0.15 s after the snap, within 1.5 m, it lands: **10 injury**, and whatever you hold falls out of your hands; again after 2 s *(17)* |
 | Picked up | — | like a scorpion, into your hands only (put away, it is dropped): held, it pinches you (10 injury) and falls out of your hands *(17)* |
-| Eating one | — | only once cooked, as a cooked crab leg (darker than the live crab; it goes in a pocket or a backpack, like any food): 10 hunger and 10 extra stamina, 5 and 5 *(15)*; every way to cook it burns it *(17)*, and burnt it can still be eaten: no hunger or stamina, **35 poison** (the game's 20 for burnt food, with ascent 14's boost) |
+| Eating one | — | only once cooked, as a cooked crab leg (darker than the live crab; it goes in a pocket or a backpack, like any food): 10 hunger and 10 extra stamina, 7.5 and 5 *(15)*; every way to cook it burns it *(17)*, and burnt it can still be eaten: no hunger or stamina, **35 poison** (the game's 20 for burnt food, with ascent 14's boost) |
 | Sounds | — | a claw click now and then while someone is about (none while it goes for a scout or is held), a scuttle while it moves, one snap as it pinches *(17)* |
 
 ## Tropics
@@ -82,10 +82,10 @@ nothing below the minimum factor. "Knocked down" is ragdoll time.
 ### Snakes (Tropics)
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
-| Where | none | the Tropics, whatever the map *(every ascent; below 17 half as strong and chasing a third slower)*: **30 ground snakes**, **seven in ten of them on the climb itself** (the cliff up to the Tropics' campfire, spread all the way up it), the rest on the jungle floor, each where a scout can stand, on the ground or a rock of the cliff (never a tree or its crown) with plants near (a bush, weed, monstera, ivy, palm or small tree within 6 m) or among the game's grass blades, and **10 tree snakes** (a third as many) in the giant trees; they never leave the Tropics (a snake stops where their ground ends and gives up a scout who goes beyond it) |
-| Tree snake (about 3.6 m, 28 cm thick) | — | sleeps curled up in a ball on a branch; when a scout comes within **5 m** it uncoils (0.8 s), strikes and chases at **3.2 m/s**; once the scout is **20 m** away it climbs back up its tree, winding round the trunk; a bite: **30 injury**, then for **2 minutes** a **4 s** collapse every **15–30 s** (the first 5–15 s after the bite; another bite starts the 2 minutes over, it does not stack); a poison drop above the stamina bar drains over those 2 minutes, and a First Aid Kit, Cure-All, Blowgun dart, Napberry, Medicinal Root or Remedy Fungus cloud ends it *(17)* |
-| Ground snake (about 1.4 m, 11 cm thick) | — | never sleeps, slithers around within **40 m** of its spot (and 10 m above or below it) at **0.5 m/s**, up and down the cliffs too, winding along the rock (at most **1.5 m/s** there; it strikes only once off the rock, and a hit knocks it off); chases a scout it sees (as near as a scorpion notices one) at **3.6 m/s**, up to 20 m (a scout walks 2.5 m/s and sprints 5.2 m/s); a bite: **10 injury**, then **40 poison over 10 s** *(17)* |
-| Attack | — | once it goes for a scout it keeps after them for at least **10 s**, however far they run (only then does 20 m make it give up); from 2.5 m it rears up (0.3 s) and jumps at the scout's legs, mouth open (bites within 1.5 m); then for **3 s** it slithers round the scout 3.5 m out, then goes for another scout within its noticing range if there is one, or the same scout again *(17)* |
+| Where | none | the Tropics, whatever the map *(every ascent; below 17 half as strong and chasing a third slower)*: **25 ground snakes**, **seven in ten of them on the climb itself** (the cliff up to the Tropics' campfire, spread all the way up it), the rest on the jungle floor, each where a scout can stand, on the ground or a rock of the cliff (never a tree or its crown) with plants near (a bush, weed, monstera, ivy, palm or small tree within 6 m) or among the game's grass blades, and **9 tree snakes** in the giant trees; they never leave the Tropics (a snake stops where their ground ends and gives up a scout who goes beyond it) |
+| Tree snake (about 3.6 m, 28 cm thick) | — | sleeps curled up in a ball on a branch; when a scout comes within **5 m** it hisses for **2 s** without moving (on its way home too), then uncoils (0.8 s), strikes and chases at **3.2 m/s**; once the scout is **15 m** away it climbs back up its tree, winding round the trunk; a bite: **30 injury**, then for **2 minutes** a **4 s** collapse every **15–30 s** (the first 5–15 s after the bite; another bite starts the 2 minutes over, it does not stack); a poison drop above the stamina bar drains over those 2 minutes, and a First Aid Kit, Cure-All, Blowgun dart, Napberry, Medicinal Root or Remedy Fungus cloud ends it *(17)* |
+| Ground snake (about 1.4 m, 11 cm thick) | — | never sleeps, slithers around within **40 m** of its spot (and 10 m above or below it) at **0.5 m/s**, up and down the cliffs too, winding along the rock (at most **1.5 m/s** there; it strikes only once off the rock, and a hit knocks it off); chases a scout it sees (as near as a scorpion notices one) at **3.4 m/s**, up to 15 m (a scout walks 2.5 m/s and sprints 5.2 m/s); a bite: **10 injury**, then **40 poison over 10 s** *(17)* |
+| Attack | — | once it goes for a scout it keeps after them for at least **10 s**, however far they run (only then does 15 m make it give up); from 2.5 m it rears up (0.3 s) and jumps at the scout's legs, mouth open (bites within 1.5 m); then for **3 s** it slithers round the scout 3.5 m out, then goes for another scout within its noticing range if there is one, or the same scout again *(17)* |
 | Fending off | — | cannot be picked up; a Stick (4 s), a Torch (2 s), a Stone thrown at 10 m/s or more (2 s) or a kick (1 s) knocks it back 1.5 m, and it curls up for that long; then it goes for the scout who stunned it (the first, if more did), when within its noticing range *(17)* |
 
 ### Waterfalls
@@ -129,7 +129,7 @@ leave a cloud that bursts again every 0.5 s for 11 s, with the same falloff.
 | Bite | 10 injury, 10 spores + 0.5/s for 60 s (30), stunned 3 s | spores ×1.65 (bite 15 on the bar, then ≈0.8/s), stunned **4 s** |
 | Lifetime | dies after 120 s awake | **300 s** |
 | Ritual Dagger | can't be used on a zombie | stabbed in the back (as a teammate must be), a zombie dies after **8** stabs *(15)* (5 below 15, on every ascent) and leaves a skeleton; nobody gets anything, and the dagger is kept |
-| At the peak | none | **10 zombies dressed as scouts** on the level ground of the peak's grassy hill (not the summit with the flares), each appearing asleep as a scout comes near, with the same rules *(17)*; one the game took away with nobody near comes back, a dead one does not |
+| At the peak | none | **15 zombies dressed as scouts**, all on level ground with room round it: seven at the top of the peak, the highest first (within 30 m of the summit with the flares, up to 30 m below it, 4 m apart or closer, not on the flare boxes), **three by the statue the gems go in** (the nearest it, 4 m apart) and **five on the ledges of the rocks around the peak** (off its top, 6 m apart), each appearing asleep as a scout comes near, with the same rules *(17)*; one the game took away with nobody near comes back, a dead one does not |
 
 ### Beetles (root bugs)
 | | Game | Ultimate Ascent at 24 |
@@ -153,7 +153,7 @@ amount of extra stamina; most effects start 3 s after eating.
 
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
-| Eating one | 10 hunger, 5 spores, the colour's extra stamina and effect | **5 hunger** *(15)*, **15 spores** *(14)*; the extra stamina and the pick of effects are the game's |
+| Eating one | 10 hunger, 5 spores, the colour's extra stamina and effect | **7.5 hunger** *(15)*, **15 spores** *(14)*; the extra stamina and the pick of effects are the game's |
 | Good: infinite stamina | 4 s | same |
 | Good: faster | walking +50%, climbing +150% for 5 s | walking +50%, climbing **+70%** (ascent 15's energy-drink rule) |
 | Good: low gravity | 15 s | **8 s** *(15)* |
@@ -165,13 +165,33 @@ amount of extra stamina; most effects start 3 s after eating.
 | Bad: numb | 60 s | **120 s** *(15)* |
 | Bad: spore burst | the other scouts within 4.8 m are thrown back (1,300 × falloff) and knocked down 1 s × falloff; the eater only floats up | within **10 m**, knocked down **4 s** × falloff *(15)*; not an explosion, so no knock-out at 17 |
 
+### Wind debris (the Roots wind)
+While a wind storm blows on you, it brings debris at you from 25–35 m upwind: nothing in the gust's first 1.5 s
+(the far needles neither), then each kind spread evenly over the rest of it, to its last moment. Each piece flies in along the wind. 65% of the needles and half the sticks,
+branches and rocks fly past you (2–8 m overhead, or 1.5–8 m off to a side); the rest fly at you, each at its own
+point over your silhouette as the wind sees it, where you stand as it sets off (the needles over the whole of you
+and a little past your edge, so they stick in all over and a few graze by). You can see it coming and step aside; a
+stick, branch or rock whooshes as it comes near. Anything solid stops it (the land, rocks, trees, props), and nothing
+sets off from inside a rock or a hill; an item you hold shields you (the needles stick in it, sticks, branches and
+rocks bounce off it and fall; a worn backpack is no shield); shelter from the wind (a roof, or a hill, rock or wall upwind) keeps all of it
+off. What lands lies a moment and fades. Each player's game makes the debris round its own scout, within 35 m;
+farther out only flying needles show. A scout who stands still in the open through a whole gust takes needle after
+needle and is knocked down again and again. The needles are 24 cm long and 1.5 cm thick, thick as a cactus needle.
+
+| | Game | Ultimate Ascent at 24 |
+|---|---|---|
+| Spruce needles (**200–250** a gust, 35% at you) | — | stick in like a cactus needle (a thorn, with its sound), only by the tip *(18)* |
+| Sticks (**7–10** a gust) and Spruce Branches (**13–17** a gust), half at you | — | knock you down for **4 s**, as a stick's swing does, no injury *(18)* |
+| Rocks (**4–6** a gust), half at you | — | hit like a thrown Stone that shatters on you: down **2 s**, **20 injury**, the rock smash *(18)* |
+| Outside the Roots | — | ascent 25's wind storms carry needles only *(18, 25)* |
+
 ## Alpine
 
 ### Mountain goats
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
 | Where | none | the Alps, up to **15**, alone or in pairs, along the whole way up (from where the Alps begin to the top of their climb), **seven in ten on the climb itself** (the Alps' cliffs up to their campfire, spread all the way up them), the rest on the snowfield *(every ascent; below 17 half as strong)* |
-| Getting about | — | graze, look about and roam within **150 m** of their spot, up and down the cliffs (a ledge above or below, the foot of the cliff), never leaving the Alps (a goat stops where their ground ends, and does not charge a scout beyond it); walk slopes up to **80°** (climbing, the whole body along the cliff, the hooves on the rock) and leap from foothold to foothold, up to **3.5 m** up, **6 m** down and **8 m** forward, across gaps (the Roots' beetles crawl on surfaces up to 70°, but never leap); solid: scouts bump into them *(17)* |
+| Getting about | — | graze, look about and roam within **150 m** of their spot, on the move most of the time (**2–5 s** of grazing where they stop, and half the time they walk straight on), keeping about the way they go from one walk to the next (within **40°** of it; turning aside at a wall or a drop they cannot take), up and down the cliffs (a ledge above or below, the foot of the cliff), never leaving the Alps (a goat stops where their ground ends, and does not charge a scout beyond it); walk slopes up to **80°** (climbing, the whole body along the cliff, the hooves on the rock) and leap from foothold to foothold, up to **3.5 m** up, **6 m** down and **8 m** forward, across gaps (the Roots' beetles crawl on surfaces up to 70°, but never leap); solid: scouts bump into them *(17)* |
 | Charge | — | a scout within **20 m** and in sight: the goat decides at once, then every **20 s** while one is; three times in four it goes on grazing, the fourth it bleats, lowers its head and paws the ground for **1 s**, then charges at **7 m/s** (a scout walks 2.5 m/s and sprints 5.2 m/s), turning after the scout, but straight on in its last **5 m**: step aside then and it misses, skids on and shakes its head; it never runs off an edge, and gives up after 4 s or 30 m *(17)* |
 | Ram | — | knocked down **2 s**, thrown **6–8 m** along the charge, **20 injury** *(17)* |
 | Sounds | — | a bleat every 25–70 s (while a scout is within 60 m) and always right before a charge; hooves while they move; a ram lands with the Roots' beetles' hit, heavier and louder *(17)* |
@@ -214,14 +234,14 @@ amount of extra stamina; most effects start 3 s after eating.
 |---|---|---|
 | Cactus | sticks an arm or leg (not head/torso) for up to 4 s, **1 thorn** = 5 on the bar | sticks **any body part**, **2 thorns** = 10 |
 | Thorns | pop out after 30 s solo / 120 s in multiplayer, or pull them out | thorns **in the face** pop out as in the game; thorns **on the body never pop out**, solo too: pull them out *(17)* |
-| Cactus ball | +20 on the bar while one is stuck to you or in your hand | **+40**, held too |
+| Cactus ball | +20 on the bar while one is stuck to you or in your hand | **+40**, held too; thrown **1.5× weaker** *(15)* |
 
 ### Scorpions
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
 | Sting | within 1.5 m, every 3 s (a 2 s rest, then a 1 s wind-up), knockback 500 | within **1.7 m**, **every second** (the wind-up only) |
 | Poison | 2.5, then poison over **15 s** adding enough to fill your bar (at least 50) | over **7.5 s** *(17)*, ×1.75 *(14)* → **bar full ≈4 s after a sting** → dead ≈9 s after it unless cured; more stings stack |
-| Eating one | only once cooked: 20 hunger and 10 extra stamina, no poison | 10 hunger and 5 stamina *(15)*, **15 poison** *(15)*; but every way to cook it (campfire, portable stove, lava, explosion) chars it to ruin *(17)*, so at 24 a scorpion cannot be eaten |
+| Eating one | only once cooked: 20 hunger and 10 extra stamina, no poison | 15 hunger and 5 stamina *(15)*, **15 poison** *(15)*; but every way to cook it (campfire, portable stove, lava, explosion) chars it to ruin *(17)*, so at 24 a scorpion cannot be eaten |
 
 ### Dynamite
 | | Game | Ultimate Ascent at 24 |
@@ -290,7 +310,7 @@ amount of extra stamina; most effects start 3 s after eating.
 | Spawn | every 60–180 s (counted while no ghost is out) near a scout who is alone (nobody within 15 m), 30 m ahead (±10) | **every 30 s**, for the leading scout **alone or in a group** |
 | Attack | rolls toward the nearest scout; arms within 1 m, explodes 2.1 s later (get 1.3 m away within 1.5 s to stop it); lives 30 s | explodes **1.5 s** after arming (no way back after ≈1.1 s); lives **50 s** |
 | Defence | lit bell towers (11 m) repel it and burn it (3 s); a lit Faerie Lantern (7 m) the same; the Lantern and the Torch do nothing | lit bell towers and Faerie Lanterns push it back until it is out of blast range of the scouts they protect (their reach + 10 m), and **do not burn it**; it cannot arm while pushed. A **burning Torch** in a scout's hands does the same within 4.5 m of it *(9)* |
-| Explosion (within 10 m) | **blind 20 s**, cold 35, knockback 1600 (tilted up), knocked down 4 s, landing damage capped at 7.5 for 8 s | **blind 50 s**, **60 cold**, knockback ×3–4, knocked down 12 s **and drowsiness up to passing out** → **fatal** *(24)* |
+| Explosion (within 10 m) | **blind 20 s**, cold 35, knockback 1600 (tilted up), knocked down 4 s, landing damage capped at 7.5 for 8 s | **blind 50 s**, **60 cold**, knockback **×1.5**, knocked down 12 s **and drowsiness up to passing out** → **fatal** *(24)* |
 
 ### Carnivorous plants (Venus fly traps)
 | | Game | Ultimate Ascent at 24 |
@@ -304,7 +324,7 @@ amount of extra stamina; most effects start 3 s after eating.
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
 | Gloom fog | 0.9 drowsiness/s (lit bell towers protect, and so does a lit Portable Stove within 7 m — but because of a game bug, for the scouts present when it was placed only after it burned out, and then for good) | **2.5 drowsiness/s** *(18)* (×1.3 *(14)* below 18); drowsiness heals at 1 a second in the Gloom (game: 2.5) *(16)*, at night too (there is no night here); the stove bug is fixed: a stove protects while it burns, **30 s** *(15)*, and not after |
-| Early Worm (eaten) | removes 100 drowsiness, 5 hunger | removes **50** *(15)*, 2.5 hunger *(15)* |
+| Early Worm (eaten) | removes 100 drowsiness, 5 hunger | removes **50** *(15)*, 3.75 hunger *(15)* |
 | Early Worm (lying about) | stays where it lies | seen lying close by (within 15 m, in view), it brings a **raven** three times in four: it flies in, lands beside it and eats it *(17)* |
 
 ### Frogs
@@ -317,7 +337,9 @@ amount of extra stamina; most effects start 3 s after eating.
 ### Arrow traps (also in the Gloom temple)
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
-| Shot | fires along its line up to 80 m at the first scout in it; 3 shots, 8 s apart, then empty for good; a swinging spike ball crossing its line sets it off too | **never runs out**, fires every **0.5 s**; spike balls no longer set it off *(9)* |
+| Shot | fires along its line up to 80 m at the first scout in it; 3 shots, 8 s apart, then empty for good; a swinging spike ball crossing its line sets it off too; a loose thing in its line (a dropped backpack) takes the shot instead of the scout behind it | **never runs out**, fires every **0.5 s**; spike balls no longer set it off *(9)*; a loose thing still shields the scout behind it |
+| Warning line | green dust from the opening to where the arrow would land | only **1 m** out of the opening |
+| A trap inside a platform | shoots straight through the platform it is set in (a look along its line starts inside it and does not see it) | holds its fire and shows no line, on every ascent |
 | Hit | 1 arrow = **7.5** on the bar (Arrow), knockback 30 | 1 arrow = **15**, knockback **60** |
 | Pulling an arrow out | 12.5 injury | **25 injury** |
 
@@ -330,15 +352,15 @@ amount of extra stamina; most effects start 3 s after eating.
 | Wall saws (180) | run back and forth along their wall; first touch 15 injury (after 2 s without a hit), then 2.5 every 0.25 s while touching (10/s) | run **1.5× as fast**; first touch **30**, then the same |
 | Central Tower saw | nothing: its damage is left empty in the game data | **7.5 per second** |
 | Spike rollers (32) | sweep round at 15, 30 or 35° a second, their rollers turning on their axles; 5 injury per contact (up to 4/s), pushed away | sweep round **1.5× as fast** (the rollers keep the game's pace); **10** per contact |
-| Ladders (69) | 3× as fast as climbing rock, 25% of its stamina | **1.2×** as fast, **90%** of its stamina |
+| Ladders (69) | 3× as fast as climbing rock, 25% of its stamina | **1.5×** as fast, **75%** of its stamina |
 | Swinging spike balls (156) | swing back and forth every 4.2 s; up to 25 injury (by swing speed), knockback up to 500, knocked down up to 0.2 s, 1 s cooldown | swing **1.5× as fast**; up to **60** |
 
 ### Mimic chests (trick luggage)
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
 | Where | about one per Citadel map (Central Tower), with a chest of its own (it shows) | the same, looking like an **ordinary chest**, plus **35% of the ordinary chests in the Citadel**, picked anew each climb (they keep their loot, like the game's mimics) |
-| Opening | releases sleeping gas for 10 s within 10 m: 5 drowsiness every 0.5 s (10/s) → 100 in 10 s | gas with **5 drowsiness + 5 poison + 5 spores every 0.5 s** (30/s in all) for 10 s; opening any suitcase also hurts for **10 injury** *(21)*; staying in the gas = passing out = **death** *(24)* |
-| Rising gloom | starts after 150 s, rises in 1,200 s | starts after **30 s**, reaches the top in **700 s**, as the Kiln's lava *(9)* |
+| Opening | releases sleeping gas for 10 s within 10 m: 5 drowsiness every 0.5 s (10/s) → 100 in 10 s | gas with **5 drowsiness + 2.5 poison + 2.5 spores every 0.5 s** (20/s in all) for 10 s; opening any suitcase also hurts for **10 injury** *(21)*; staying in the gas = passing out = **death** *(24)* |
+| Rising gloom | 0.9 drowsiness/s with your head in it (lit bell towers, campfires, stoves, candles and Faerie Lanterns keep it off); starts after 150 s, rises in 1,200 s | **5 drowsiness/s** *(18)* (×1.3 *(14)* below 18); starts after **30 s**, reaches the top in **700 s**, as the Kiln's lava *(9)* |
 
 ## Nadir
 
@@ -346,6 +368,7 @@ amount of extra stamina; most effects start 3 s after eating.
 |---|---|---|
 | Healing | drowsiness, poison, heat and spores heal at their usual rates; blindness and numbness wear off as usual | all of them **half as fast** *(17)* |
 | Gravity | as anywhere | **twice as strong** for the scouts, in the air and lying limp *(18)* |
+| Rising ghosts | rise once the soul is freed, in 620 s; with your head in them 5 petrification a second (a tick a second), and full petrification turns you to stone (death); touching the kill plane inside them kills at once | rise **2.5× as fast** (248 s) *(9)*; **10 petrification a second** *(18)* |
 
 ## Anywhere
 
@@ -355,26 +378,27 @@ amount of extra stamina; most effects start 3 s after eating.
 | Needs | at least 2 scouts | same; a Looker can send him after anyone, solo too |
 | Picking a target | every 30 s a 10% chance: the highest scout, if more than 100 m above the next one and below 825 m | **also**: the host checks every 5 s and makes him hunt a scout who is 150 m ahead of someone with nobody within **35 m**, for **70 s** (a scout coming within 35 m calls him off) *(11, 17)* |
 | Giving up | when another scout is within 15 m of his target, or the target is no longer the highest by 80 m | another scout within **35 m**, on every ascent |
-| Chase | teleports to 50–70 m from the target when farther than 80 m (unseen, every 5 s+); grabs within 3 m | same |
+| Chase | teleports to 50–70 m from the target when farther than 80 m (unseen, every 5 s+); grabs within 3 m; under a scout he cannot reach straight he turns round until, out of sight for 30 s, he teleports | same, but stuck below the scout (no nearer for 6 s, or right under them for 1.5 s) he finds a **way up**: a rope (the map's or a scout's), a vine or a chain whose top comes near them, or higher ground nearby to drop down to them from *(17)* |
+| Grab | a scout on a piton, a rope or a vine stays on it: he shakes them for good, with no throw and no harm | his grab takes them off it and they cannot take hold again while he holds them (on every ascent) |
 | Throw | holds you 3.2 s, throws you toward the biggest drop (force 1500 × 0.7–1.0), knocked down 1 s, **30 injury** | same, plus **4 curse** per throw *(11)*; the fall damage after the throw makes you 60 drowsy *(12)*: with the throw's 30 injury and your 20 curse → **fatal** *(24)*; a death curses the survivors *(11)*: **10 / 7.5 / 2.5** with ≤2 / ≤4 / ≤6 scouts (the rule asks for 12/8/4; the bar drops the rest), and in bigger lobbies the 2 it asks for only lands, as 2.5, with that scout's next curse |
 
 ### The Looker
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
-| Where | 20 hiding spots per map; in 5% of runs one of them shows a Looker | **every spot** shows one with **90%** (≈18 per map) |
-| Watching it | it peeks out now and then and ducks away 6× sooner while watched; harmless | while it peeks out in the middle of your view within 40 m (nothing in between): **2.5 curse a second**, and a lollipop's **sugar rush** (infinite stamina) for 5 s, then not again for 10 s; not looking costs nothing |
-| Leaving | for good, once the host has watched it for 3 s or anyone comes within 5 m | after **5 s** of your watching it leaves and **sends the Scoutmaster after you for 70 s**; within 5 m it just leaves |
+| Where | 20 hiding spots per map; in 5% of runs one of them shows a Looker | **every spot** shows one with **70%** (≈14 per map) |
+| Watching it | it peeks out now and then and ducks away 6× sooner while watched; harmless | **looking into its eyes** while it peeks out (your line of sight within 0.5 m of them, within 40 m, nothing in between, not even its rock): **2.5 curse a second**, and once it lands on your bar a lollipop's **sugar rush** (infinite stamina) for 5 s, then not again for 10 s; looking at its rock or anywhere else costs nothing |
+| Leaving | for good, once the host has watched it for 3 s or anyone comes within 5 m | once the Lookers have given you **12.5 curse** together (5 s of eye contact, one Looker or several; other curse does not count), the one you are looking at leaves and **sends the Scoutmaster after you for 70 s**, and your count starts over; within 5 m a Looker just leaves |
 
 ### Clown chests
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
-| Opening | clown loot | a trick instead of the 10 injury other suitcases deal *(21)*: **45 drowsiness, poison, spores, web or fly-trap grip, or 20 petrification** (each 2 in 13), or **100 s of blindness** (1 in 13); web and grip come off by jumping or a friend's help, as in the game |
+| Opening | clown loot | a trick instead of the 10 injury other suitcases deal *(21)*: **45 drowsiness, poison, spores or web, a fly trap, or 20 petrification** (each 2 in 13), or **100 s of blindness** (1 in 13). The fly trap: on maps with the Gloom, the Gloom's plant springs up under you and holds you in its jaws with a **grip of 45** (no poison), then sinks away once you are free; on other maps a **12 s paralysis** instead. Web and grip come off by jumping or a friend's help, as in the game |
 
 ### Bing Bong's evil force
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
 | Warning | — | 10 s without anyone holding Bing Bong: he talks, line after line, in the voice he has once burned, heard by every scout; silent as soon as someone holds him, or when the crab comes *(20)* |
-| Neglect | — | 15 s without anyone holding Bing Bong: 5 crab a second *(20)*, which only the **Cursed Skull** cures *(15)*; it leaves 10%, like everything else it clears. Cure-alls don't touch crab, and Pandora's Lunchbox can even add some *(15)* |
+| Neglect | — | 15 s without anyone holding Bing Bong: 5 crab a second *(20)*, and every scout's screen turns red, from a faint tint to dark red over nearly all of it in 10 s (from the crab's first step on the bar; it clears within a second once he is held). Only the **Cursed Skull** cures the crab *(15)*; it leaves 10%, like everything else it clears. Cure-alls don't touch crab, and Pandora's Lunchbox can even add some *(15)* |
 | Mini Run | — | A custom run's Mini Run that starts past the beach (where the game's Bing Bong lies) hands the host a Bing Bong to hold, 3 s after they are up on the ground *(20)* |
 
 ### Banana peels
@@ -389,16 +413,16 @@ The poisonous Button, Cluster and Bugle Shrooms look like the safe ones of the s
 
 | Food | Game | Ultimate Ascent at 24 |
 |---|---|---|
-| Button Shroom (poisonous) | 10 hunger; after 10 s, 30 poison over 12 s | 5 hunger *(15)*; after 10 s, **150 poison** over 12 s *(14)* |
-| Cluster Shroom (poisonous) | 5 hunger; after 10 s, 40 poison over 16 s | 2.5 hunger; after 10 s, **75** over 16 s |
-| Bugle Shroom (poisonous) | 15 hunger; after 10 s, 20 poison over 8 s | 7.5 hunger; after 10 s, **120** over 8 s |
-| Green Crispberry | 5 hunger; after 2 s, 10 poison over 4 s | 2.5 hunger; after 2 s, **40** over 4 s |
-| Yellow Kingberry | 30 hunger; after 3 s, 25 poison over 10 s | 15 hunger; after 3 s, **150** over 10 s |
-| Pink Berrynana | 15 hunger; after 2 s, 15 poison over 6 s | 7.5 hunger; after 2 s, **100** over 6 s |
-| Green Kingberry | 30 hunger, 5 poison at once | 15 hunger, **35 poison at once** *(14)* |
-| Scorchberry | 10 hunger, 25 heat at once | 5 hunger, **80 heat at once** *(14)* |
-| Egg (Caldera, from a Big Egg in a nest) | 15 hunger raw, 30 cooked; no poison | 7.5 hunger *(15)*; eaten raw **5 poison** at once *(15)*; any cooking chars it to ruin *(17)*, so at 24 it is always eaten raw |
-| Egg (Gloom, from a raven's Small Egg) | 7.5 hunger raw, 15 cooked; no poison | 2.5 hunger (half is 3.75; the bar drops the rest) *(15)*; raw **5 poison** *(15)*; same cooking as above |
+| Button Shroom (poisonous) | 10 hunger; after 10 s, 30 poison over 12 s | 7.5 hunger *(15)*; after 10 s, **150 poison** over 12 s *(14)* |
+| Cluster Shroom (poisonous) | 5 hunger; after 10 s, 40 poison over 16 s | 3.75 hunger; after 10 s, **75** over 16 s |
+| Bugle Shroom (poisonous) | 15 hunger; after 10 s, 20 poison over 8 s | 11.25 hunger; after 10 s, **120** over 8 s |
+| Green Crispberry | 5 hunger; after 2 s, 10 poison over 4 s | 3.75 hunger; after 2 s, **40** over 4 s |
+| Yellow Kingberry | 30 hunger; after 3 s, 25 poison over 10 s | 22.5 hunger; after 3 s, **150** over 10 s |
+| Pink Berrynana | 15 hunger; after 2 s, 15 poison over 6 s | 11.25 hunger; after 2 s, **100** over 6 s |
+| Green Kingberry | 30 hunger, 5 poison at once | 22.5 hunger, **35 poison at once** *(14)* |
+| Scorchberry | 10 hunger, 25 heat at once | 7.5 hunger, **80 heat at once** *(14)* |
+| Egg (Caldera, from a Big Egg in a nest) | 15 hunger raw, 30 cooked; no poison | 11.25 hunger *(15)*; eaten raw **5 poison** at once *(15)*; any cooking chars it to ruin *(17)*, so at 24 it is always eaten raw |
+| Egg (Gloom, from a raven's Small Egg) | 7.5 hunger raw, 15 cooked; no poison | 5.625 hunger *(15)*; raw **5 poison** *(15)*; same cooking as above |
 | Several meals | one poison effect at a time: a second meal only adds time at the first one's rate; natural poison or spore recovery also cancels it | every meal runs on its own and lands its whole total *(14)*; only a cure (an antidote, the healing Shroomberry, a small poison or spore cure) or death stops it |
 | Result | — | with 80 of the bar left after the starting curse, the four with 100 or more fill it alone → pass out → **death** *(24)* unless cured in time |
 
@@ -420,8 +444,8 @@ Petrification heals only 10 per campfire lighting *(17)*, and revives keep it *(
 | Poison ivy (Tropics) | 3.5 poison per touch (2.5 on the bar), at most 1/s | at least 15 *(17)* × 1.75 → **25 per touch** |
 | Mandrake (pulled out of the ground) | while anyone awake is within 10 m it screams for 3 s every 0.75–2 s: 5 drowsiness × falloff 8 times per scream (40 up close), only for players whose own sound is on; eaten raw: 10 hunger, numb 60 s; cooked: no scream, −25 curse | up to **75 per scream** *(17)* (the game's 40 at 14–16); players whose own sound is off get half, up to **37.5** *(17)* (none at 14–16, as in the game); eaten raw: 5 hunger, numb 60 s and **30 spores** *(15)*; cooked: −15 curse, but every way to cook it chars it to ruin *(17)* |
 | Snowballs (Alpine) | holding one does nothing; thrown (or rolled) into a scout fast enough, it bonks them: knocked down 1 s and pushed | holding one chills **2.5/s** and it melts after **20 s** in the hands *(15)*; a bonk gives **30 cold** and knocks down **2 s** *(15)* |
-| A teammate's Stone (beach, Tropics, Roots) | cut from the game | lies on the ground from ascent 9; hitting a scout at **10 m/s** or more (a throw charged a third of the way, or a fall from 5 m) knocks them down **2 s** and injures **20** *(17)*; it shatters on any impact that hard |
+| A teammate's Stone (beach, Tropics, Roots) | cut from the game | lies on the ground from ascent 9; flying into a scout at **10 m/s** or more of its own speed (a throw charged a third of the way, or a fall from 5 m) knocks them down **2 s**; it shatters when it hits anything at more than **18 m/s** (a throw charged most of the way), and only one that shatters on a scout injures them, **20** *(17)*, 0.25 s after the hit; landing on one does nothing |
 | A teammate's Stick (beach, Tropics, Roots) | cut from the game | lies on the ground from ascent 9; a swing (33% of the swinger's stamina) knocks down every scout and zombie a kick would reach (**2.5 m**, 55° ahead) for **4 s**, without injury |
 | A teammate's Torch (the Mesa's Tomb; suitcases wherever the Lantern is) | a light: 2.5 cold a second off the scouts within 4.5 m while lit, no attack | lit, a swing (right mouse, 33% of the swinger's stamina, 4 s of the Torch's fuel) knocks down every scout and zombie a kick would reach (**2.5 m**, 55° ahead) for **2 s** and burns the scouts for **20** *(15)*; it warms **2 cold a second** *(15)* |
 | A teammate's Blowgun | the dart clears your statuses (except curse), then +120 drowsiness: with the starting 10 curse you fall asleep | the clear keeps 25% of each status ("Nerfed Revives"; not a revive statue's) *(15)*, then **155 drowsiness** (120 × 1.3 *(14)*): with 20 curse that is 175 → pass out → **death** *(24)* |
-| The sun | only the Mesa's sun is hot; sunscreen, an open parasol or a glider held overhead keep it off | hot everywhere except the Alpine, up to the Caldera and the Gloom *(23)*: outside the Mesa **0.5 heat/s** in direct sunlight (ascent 14's boost leaves the sun alone), the Mesa's midday sun burns **6 heat/s** *(18)* (the game's ×1.5 *(14)* below 18); whatever you shield yourself with roasts: clean for 5 s, heavy smoke for 15 s, then burned, and a burned item crumbles away after 5 s more (parasols 1.5× as long, the Mesa's sun twice as fast) — in the Mesa's midday sun from *(18)*, everywhere *(23)*; **sunscreen lets a quarter of the heat through** *(15)* |
+| The sun | only the Mesa's sun is hot; sunscreen, an open parasol or a glider held overhead keep it off | hot everywhere except the Alpine, up to the Caldera and the Gloom *(23)*: outside the Mesa **2 heat/s** in direct sunlight (ascent 14's boost leaves the sun alone), the Mesa's midday sun burns **6 heat/s** *(18)* (the game's ×1.5 *(14)* below 18); whatever you shield yourself with roasts: clean for 5 s, heavy smoke for 15 s, then burned, and a burned item crumbles away after 5 s more (parasols 1.5× as long, the Mesa's sun twice as fast) — in the Mesa's midday sun from *(18)*, everywhere *(23)*; **sunscreen lets a quarter of the heat through** *(15)* |

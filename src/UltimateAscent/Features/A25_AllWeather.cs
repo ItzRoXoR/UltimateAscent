@@ -19,13 +19,16 @@ namespace UltimateAscent.Features;
 /// their biome so they run everywhere; storms a map lacks are rebuilt (see <see cref="StormFactory"/>).</item>
 /// <item>Every storm covers the whole mountain and makes the ground slippery; wind and snow pause
 /// 30-90 s between storms. Outside the Alpine the snowstorm is gentler (see A18_ExtremeWeather's storms,
-/// which apply it with or without ascent 18).</item>
+/// which apply it with or without ascent 18). One storm of each kind blows: where True Final Ascent's
+/// Builder repeats a biome, its copies' own storms stay calm.</item>
 /// <item>Extra tornadoes roam near the scouts (see <see cref="ExtraTornadoes"/>).</item>
-/// <item>The Kiln/Citadel and everything after it keep their normal weather.</item>
+/// <item>From the Caldera and the Gloom up to the Peak (the Kiln and the Citadel too) the storms bring neither cold nor
+/// heat, and the wind and the snowstorm never blow together; only the Nadir keeps its normal weather.</item>
 /// <item>Weather stays calm for 30 s after waking up (see <see cref="WeatherGrace"/>).</item>
 /// <item>With True Final Ascent's Apocalypse mode, TFA's weather events run as TFA runs them; between
 /// them this ascent's rain, wind and snowstorms run as above (TFA would keep the game's storms quiet the
-/// whole time, so its hush steps aside then). The extra tornadoes roam throughout.</item>
+/// whole time, so its hush steps aside then). The extra tornadoes roam throughout. A weather another mod
+/// starts through TFA (TFA 3.0 on) runs the same way, in any climb: this ascent's storms keep calm meanwhile.</item>
 /// </list>
 /// </summary>
 internal static class A25_AllWeather
@@ -46,34 +49,65 @@ internal static class A25_AllWeather
     private static ConditionalWeakTable<WindChillZone, Marker> covered = new ConditionalWeakTable<WindChillZone, Marker>();
     private static readonly List<Detached> detached = new List<Detached>();
     private static readonly List<WindChillZone> created = new List<WindChillZone>();
+
+    /// <summary>The storms this ascent runs, one of each kind (woken or rebuilt).</summary>
+    private static readonly HashSet<WindChillZone> chosen = new HashSet<WindChillZone>();
     private static MapHandler inspectedMap;
     private static float nextEnsure;
 
     private static bool On => Rules.Enabled(Lvl.AllWeather);
 
-    /// <summary>The Kiln/Citadel, the Peak and the Nadir keep their normal weather.</summary>
-    internal static bool Excluded => On && Map.Ready && !Map.InLowerMountain;
+    /// <summary>The Nadir keeps its normal weather.</summary>
+    internal static bool Excluded => On && Map.Ready && Map.InNadir;
+
+    /// <summary>
+    /// From the Caldera and the Gloom on, up to the Peak (no day or night there): storms bring neither cold nor heat, and the
+    /// wind and the snowstorm never blow together.
+    /// </summary>
+    internal static bool UpperMountain(Place place) =>
+        place == Place.Caldera || place == Place.Gloom || place == Place.Kiln || place == Place.Citadel || place == Place.Peak;
 
     /// <summary>True while this mod drives the vanilla storm zones (with TFA's Apocalypse: between its weather events).</summary>
     internal static bool DrivesVanillaWeather => On && !Excluded && !TfaWeather;
 
-    /// <summary>TFA's Apocalypse is running one of its weather events: the weather is TFA's alone.</summary>
-    private static bool TfaWeather => Compat.Tfa.ApocalypseActive && Compat.Tfa.WeatherRunning;
+    /// <summary>
+    /// TFA is running one of its weathers (an Apocalypse event, or another mod's through TFA): the weather is TFA's alone.
+    /// </summary>
+    private static bool TfaWeather => Compat.Tfa.WeatherRunning;
 
     /// <summary>With TFA's Apocalypse, between its weather events: this ascent's storms run, and TFA's hush of the game's storms stands aside.</summary>
     internal static bool RunsInApocalypseBreak => DrivesVanillaWeather && Compat.Tfa.ApocalypseActive;
 
     internal static bool IsCreated(WindChillZone zone) => zone != null && created.Contains(zone);
 
+    /// <summary>A storm of a kind this ascent already runs (another copy of a biome's storm, with True Final Ascent's Builder).</summary>
+    private static bool Double(WindChillZone zone) => inspectedMap != null && WeatherPhases.Handles(zone) && !chosen.Contains(zone);
+
     /// <summary>Returns true when the zone must stay calm right now (grace period or excluded segment).</summary>
     internal static bool SuppressZone(WindChillZone zone)
     {
-        if (zone == null || !On || TfaWeather)
+        if (zone == null || !On)
         {
             return false;
         }
+        if (TfaWeather)
+        {
+            // With its Apocalypse TFA keeps the game's storms quiet itself; while another mod's weather runs through
+            // TFA, this ascent's storms keep calm.
+            if (Compat.Tfa.ApocalypseActive || !A18_ExtremeWeather.IsStorm(zone))
+            {
+                return false;
+            }
+            WeatherGrace.Calm(zone);
+            return true;
+        }
         if (WeatherGrace.Suppress(zone))
         {
+            return true;
+        }
+        if (Double(zone))
+        {
+            WeatherGrace.Calm(zone);
             return true;
         }
         if (!Excluded)
@@ -86,7 +120,7 @@ internal static class A25_AllWeather
 
     private static void Cover(WindChillZone zone)
     {
-        if (!DrivesVanillaWeather || zone == null || covered.TryGetValue(zone, out _))
+        if (!DrivesVanillaWeather || zone == null || Double(zone) || covered.TryGetValue(zone, out _))
         {
             return;
         }
@@ -125,6 +159,7 @@ internal static class A25_AllWeather
             }
         }
         detached.Clear();
+        chosen.Clear();
         inspectedMap = null;
         nextEnsure = 0f;
         covered = new ConditionalWeakTable<WindChillZone, Marker>();
@@ -161,6 +196,7 @@ internal static class A25_AllWeather
             WindChillZone native = Array.Find(zones, z => z != null && z.name == name);
             if (native != null)
             {
+                chosen.Add(native);
                 Wake(map, native);
                 continue;
             }
@@ -170,6 +206,7 @@ internal static class A25_AllWeather
                 if (zone != null)
                 {
                     created.Add(zone);
+                    chosen.Add(zone);
                     zone.gameObject.SetActive(true);
                     Cover(zone);
                     Plugin.Log.LogInfo($"Ascent 25: this map has no {name}, so one was added.");

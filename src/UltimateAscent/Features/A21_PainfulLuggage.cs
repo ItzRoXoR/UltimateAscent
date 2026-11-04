@@ -11,13 +11,18 @@ namespace UltimateAscent.Features;
 /// Clown chests play a trick instead of hurting: 45 drowsiness, poison, spores, web or fly-trap
 /// grip, or 20 petrification (all equally likely), or, half as often, 100 s of blindness. Web and
 /// fly-trap grip come off the way they do in the game: by struggling (jumping) or a friend's help.
+/// The grip is a fly trap's that springs up and holds the scout (<see cref="ClownFlyTrap"/>); on a
+/// map without the Gloom, where no fly trap grows, the scout is paralysed once instead.
 /// </summary>
 [HarmonyPatch(typeof(Luggage), nameof(Luggage.Interact_CastFinished))]
 internal static class A21_PainfulLuggage
 {
-    private const float TrickAmount = 0.45f;
-    private const int TrickPetrify = 20;
-    private const float TrickBlindSeconds = 100f;
+    internal const float TrickAmount = 0.45f;
+    internal const int TrickPetrify = 20;
+    internal const float TrickBlindSeconds = 100f;
+
+    /// <summary>For the tests: the next clown chest's trick (see <see cref="PickTrick"/>), once.</summary>
+    internal static int? NextTrick;
 
     private static void Prefix(Luggage __instance, Character interactor)
     {
@@ -74,11 +79,24 @@ internal static class A21_PainfulLuggage
         return true;
     }
 
-    /// <summary>Six tricks with weight 2 each, blindness with weight 1.</summary>
+    /// <summary>
+    /// A clown chest's trick: drowsiness, poison, spores, web, fly-trap grip or petrification (0-5) with weight 2 each,
+    /// blindness (6) with weight 1.
+    /// </summary>
+    internal static int PickTrick()
+    {
+        if (NextTrick is int told)
+        {
+            NextTrick = null;
+            return told;
+        }
+        return Random.Range(0, 13) / 2;
+    }
+
     internal static void ClownTrick(CharacterAfflictions afflictions)
     {
-        int roll = Random.Range(0, 13);
-        switch (roll / 2)
+        int trick = PickTrick();
+        switch (trick)
         {
             case 0:
                 Add(afflictions, CharacterAfflictions.STATUSTYPE.Drowsy);
@@ -93,7 +111,7 @@ internal static class A21_PainfulLuggage
                 Add(afflictions, CharacterAfflictions.STATUSTYPE.Web);
                 break;
             case 4:
-                Add(afflictions, CharacterAfflictions.STATUSTYPE.FlyTrap);
+                ClownFlyTrap.Play(afflictions.character, A15_StrongerAilments.Raw(CharacterAfflictions.STATUSTYPE.FlyTrap, TrickAmount));
                 break;
             case 5:
                 afflictions.AddPetrify(TrickPetrify);
@@ -102,7 +120,7 @@ internal static class A21_PainfulLuggage
                 afflictions.AddAffliction(new Affliction_Blind { totalTime = TrickBlindSeconds });
                 break;
         }
-        Plugin.Debug($"Ascent 21: the clown chest's trick was #{roll / 2}.");
+        Plugin.Debug($"Ascent 21: the clown chest's trick was #{trick}.");
     }
 
     private static void Add(CharacterAfflictions afflictions, CharacterAfflictions.STATUSTYPE type)

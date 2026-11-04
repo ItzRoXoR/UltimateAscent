@@ -19,7 +19,8 @@ namespace UltimateAscent.Features;
 /// up and back over the head, then a chop forward and down, played on every client. (The Ritual Dagger's
 /// animation turns its blade in the hand into a stab grip, which held a stick wrongly.) The hit uses the
 /// kick's reach, aim and push, checked by the swinger when the chop lands.</para>
-/// <para>A lit Torch swings the same way (<see cref="TorchItem"/>).</para>
+/// <para>A lit Torch swings the same way (<see cref="TorchItem"/>), and in the Roots the Spruce Branch takes the
+/// Stick's place (<see cref="SpruceBranch"/>).</para>
 /// </summary>
 internal static class StickItem
 {
@@ -70,7 +71,8 @@ internal static class StickItem
     internal static readonly List<Character> LastHits = new List<Character>();
     internal static int Swings;
 
-    internal static bool IsStick(Item item) => item != null && template != null && item.itemID == template.itemID;
+    /// <summary>The Stick, or the Spruce Branch, which is the Stick in the Roots (<see cref="SpruceBranch"/>).</summary>
+    internal static bool IsStick(Item item) => item != null && template != null && (item.itemID == template.itemID || SpruceBranch.IsBranch(item));
 
     /// <summary>The game's cut stick, given a use: the swing (and the game's message that plays an item's animation for everyone, to swing it there too).</summary>
     internal static void Build()
@@ -284,7 +286,7 @@ internal static class StickItem
         facing = flat * Mathf.Cos(tip) + Vector3.up * Mathf.Sin(tip);
     }
 
-    private static SFX_Instance SwingSound()
+    internal static SFX_Instance SwingSound()
     {
         if (!soundLooked || swingSound == null)
         {

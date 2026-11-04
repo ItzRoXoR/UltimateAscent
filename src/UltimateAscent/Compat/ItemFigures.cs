@@ -187,7 +187,7 @@ internal static class ItemFigures
             case Affliction_FasterBoi toxic when worse && name == ToxicDrink.ItemName:
                 Set(toxic.totalTime, ToxicDrink.SecondsWorse, v => toxic.totalTime = v);
                 Set(toxic.moveSpeedMod, ToxicDrink.SpeedWorse - 1f, v => toxic.moveSpeedMod = v);
-                Set(toxic.climbSpeedMod, ToxicDrink.SpeedWorse - 1f, v => toxic.climbSpeedMod = v);
+                Set(toxic.climbSpeedMod, ToxicDrink.ClimbSpeedWorse - 1f, v => toxic.climbSpeedMod = v);
                 break;
             case Affliction_FasterBoi rush when stronger:
                 float crash = name == A14_Items.EnergyDrinkName ? A14_Items.EnergyDrinkCrash : rush.drowsyOnEnd * A15_StrongerAilments.Factor(drowsy);

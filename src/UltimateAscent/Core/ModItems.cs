@@ -24,7 +24,10 @@ internal static class ModItems
     private static GameObject root;
     private static bool registered;
 
-    /// <summary>The items this mod builds and registers (each builds and registers its own template), and the game's items it changes.</summary>
+    /// <summary>
+    /// The items this mod builds and registers (each builds and registers its own template), the game's items it changes,
+    /// and the new creatures made from network templates of their own (every game needs them to make the host's).
+    /// </summary>
     private static readonly Action[] Builders =
     {
         Features.A17_Hazards.OwnEnergyDrinkBurst,
@@ -33,6 +36,7 @@ internal static class ModItems
         Features.VanillaWafers.Build,
         Features.StoneItem.Build,
         Features.StickItem.Build,
+        Features.SpruceBranch.Build,
         Features.WarpCompass.Build,
         Features.CherryLollipop.Build,
         Features.ToxicDrink.Build,
@@ -40,6 +44,8 @@ internal static class ModItems
         Features.SixSlotBackpack.Build,
         Features.Crabs.Build,
         Features.A14_Items.BuildPlacedPiton,
+        Features.Snakes.Build,
+        Features.Goats.Build,
     };
 
     /// <summary>The templates' parent: inactive and kept across scenes, so no template ever runs.</summary>

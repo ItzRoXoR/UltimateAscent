@@ -4,7 +4,7 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>UltimateAscent</AssemblyName>
     <RootNamespace>UltimateAscent</RootNamespace>
-    <Version>1.6.3</Version>
+    <Version>1.6.4</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -49,6 +49,8 @@
          (from the game files) with every vertex marked by its stripe. -->
     <EmbeddedResource Include="Resources\LightweightParasol_icon.png" LogicalName="UltimateAscent.LightweightParasol_icon.png" />
     <EmbeddedResource Include="Resources\LightweightParasol_canopy.bin" LogicalName="UltimateAscent.LightweightParasol_canopy.bin" />
+    <!-- The Spruce Branch's icon, drawn from the branch's own mesh (tools: the harness's branchicon step and a script). -->
+    <EmbeddedResource Include="Resources\SpruceBranch_icon.png" LogicalName="UltimateAscent.SpruceBranch_icon.png" />
     <!-- The six-slot Backpack (single-player): its worn and ground meshes and pouch anchors (tools/SixSlotBackpack/build_mesh.py). -->
     <EmbeddedResource Include="Resources\SixSlotBackpack.bin" LogicalName="UltimateAscent.SixSlotBackpack.bin" />
     <EmbeddedResource Include="Resources\SixSlotBackpack_icon.png" LogicalName="UltimateAscent.SixSlotBackpack_icon.png" />
@@ -56,6 +58,9 @@
     <EmbeddedResource Include="Resources\OrangeHelmet_icon.png" LogicalName="UltimateAscent.OrangeHelmet_icon.png" />
     <EmbeddedResource Include="Resources\OrangeSpacesuit_icon.png" LogicalName="UltimateAscent.OrangeSpacesuit_icon.png" />
     <EmbeddedResource Include="Resources\VRHeadset_icon.png" LogicalName="UltimateAscent.VRHeadset_icon.png" />
+    <!-- The Pain Sash's icon (the game's ascent 5 sash ring repainted with its pattern) and its boot print's shape. -->
+    <EmbeddedResource Include="Resources\PainSash_icon.png" LogicalName="UltimateAscent.PainSash_icon.png" />
+    <EmbeddedResource Include="Resources\PainSash_footprint.png" LogicalName="UltimateAscent.PainSash_footprint.png" />
     <!-- The Stone's break: the smash at 4 s of the user's rock-smash clip (mono, 16-bit PCM). -->
     <EmbeddedResource Include="Resources\Stone_break.wav" LogicalName="UltimateAscent.Stone_break.wav" />
     <EmbeddedResource Include="Resources\Nausea_stomach.wav" LogicalName="UltimateAscent.Nausea_stomach.wav" />

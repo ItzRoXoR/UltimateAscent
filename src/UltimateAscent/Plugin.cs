@@ -23,7 +23,7 @@ public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "UltimateAscent";
     public const string Name = "Ultimate Ascent";
-    public const string Version = "1.6.3";
+    public const string Version = "1.6.4";
 
     internal static ManualLogSource Log;
     internal static Plugin Instance;
@@ -35,6 +35,9 @@ public sealed class Plugin : BaseUnityPlugin
     internal static ConfigEntry<bool> WrapAround;
     internal static ConfigEntry<bool> BoardingPassExtras;
     internal static ConfigEntry<bool> VerboseLogging;
+
+    /// <summary>On: the map picker shows every map's biomes but today's by their first letters (off by default).</summary>
+    internal static ConfigEntry<bool> MapBiomes;
 
     /// <summary>One switch per ascent 9-25 (indexed by the ascent): off leaves that ascent's own rule out.</summary>
     internal static ConfigEntry<bool>[] AscentSwitches;
@@ -110,6 +113,10 @@ public sealed class Plugin : BaseUnityPlugin
         Features.GloomCrows.Listen();
         Features.A22_Episodes.Listen();
         Features.SnakeParalysis.Listen();
+        Features.A17_Hazards.Listen();
+        Features.ClownFlyTrap.Listen();
+        Features.WindDebris.Listen();
+        Features.SpruceNeedles.Listen();
 
         SceneManager.activeSceneChanged += OnActiveSceneChanged;
         Rules.OnActiveSceneChanged(SceneManager.GetActiveScene());
@@ -117,6 +124,23 @@ public sealed class Plugin : BaseUnityPlugin
         Ready = true;
         Log.LogInfo($"{Name} {Version} loaded: ascents {Lvl.First}-{Lvl.Last} added, {applied} patch classes applied" + (failed > 0 ? $", {failed} failed." : ".") +
                     (Compat.Tfa.Present ? " True Final Ascent detected." : ""));
+    }
+
+    /// <summary>An open boarding pass shows a change of its settings at once.</summary>
+    private static void RefreshOpenPass(string setting)
+    {
+        try
+        {
+            BoardingPass pass = GUIManager.instance != null ? GUIManager.instance.boardingPass : null;
+            if (pass != null && pass.isOpen)
+            {
+                pass.UpdateAscent();
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Log.LogWarning(setting + ": the open boarding pass could not be refreshed: " + ex.Message);
+        }
     }
 
     private void BindConfig()
@@ -128,22 +152,10 @@ public sealed class Plugin : BaseUnityPlugin
             "The ascent arrows wrap around: left from Tenderfoot jumps to the end of the list (True Final Ascent's FINAL ASCENT if installed, otherwise your highest unlocked ascent), right from the end of the list goes back to Tenderfoot.");
         BoardingPassExtras = Config.Bind("Boarding Pass", "Boarding Pass Extras", true,
             "The mod's additions to the boarding pass: the Blind Mode and Hot Mode boxes in its header and the map picker on its ascent card. Off: none of them shows, Blind Mode and Hot Mode stay off (your ticks are kept for when this is on again) and every climb is on today's map. Each player's own.");
-        BoardingPassExtras.SettingChanged += (_, _) =>
-        {
-            // An open boarding pass shows the change at once.
-            try
-            {
-                BoardingPass pass = GUIManager.instance != null ? GUIManager.instance.boardingPass : null;
-                if (pass != null && pass.isOpen)
-                {
-                    pass.UpdateAscent();
-                }
-            }
-            catch (System.Exception ex)
-            {
-                Log.LogWarning("Boarding Pass Extras: the open boarding pass could not be refreshed: " + ex.Message);
-            }
-        };
+        BoardingPassExtras.SettingChanged += (_, _) => RefreshOpenPass("Boarding Pass Extras");
+        MapBiomes = Config.Bind("Boarding Pass", "Map Biomes", false,
+            "The map picker shows each map's biomes after its number, by the first letters of their names: MAP 90 (STMC) is Shore, Tropics, Mesa and Caldera (R: Roots, A: Alpine, G: the Gloom). Today's map shows its number only. Each player's own.");
+        MapBiomes.SettingChanged += (_, _) => RefreshOpenPass("Map Biomes");
         UnlockAll = Config.Bind("Unlocks", "Unlock All Ascents", false,
             "Makes ascents 9-25 selectable on the boarding pass without beating them in order. Turning it off again brings back your normal progress.");
         ExtendedProgress = Config.Bind("Unlocks", "Highest Unlocked Ascent", 0,
@@ -174,7 +186,7 @@ public sealed class Plugin : BaseUnityPlugin
         SixSlotBackpackMultiplayer = Config.Bind("Items", "Six-Slot Backpack in Multiplayer", false,
             "Multiplayer only, on every ascent: the Backpack lying by the crashed plane at the start of the beach is a Six-Slot Backpack (six items, four pouches on its sides, its own icon); every other backpack stays the game's four-slot one. Scout's Generosity clones it only for 100 petrification, which is death. Only the host's settings count.");
         MoreWildFood = Config.Bind("Items", "More Wild Food in Multiplayer", false,
-            "Multiplayer only, on every ascent: every berry bush, palm, vine and mushroom patch grows half as much food again as the game gives it (the extra food lies beside the game's own). Off: the game's amounts. Only the host's settings count.");
+            "Only in a run that starts with more than one player in the lobby, on every ascent: every berry bush, palm, vine and mushroom patch grows half as much food again as the game gives it (the extra food lies beside the game's own). It is decided as the run starts: players joining later do not bring it, players leaving do not end it; alone in your lobby, or solo, the game's amounts. Off: the game's amounts. Only the host's settings count.");
         NewMobs = Config.Bind("Mobs", "New Mobs", true,
             "The mod's new creatures live in regular runs on every ascent: crabs on the beach, snakes in the Tropics and mountain goats in the Alps. Below ascent 17 all they do to you is half as strong (half the injury, poison and knockback; knocked down or paralysed half as long) and snakes chase a third slower. Off: none of them appears (a change mid-climb leaves those already out). Custom runs have a switch for each among the Custom Run screen's threats instead (on by default), and there they are half as strong. Only the host's settings count.");
         NewMobs.SettingChanged += (_, _) => HostOptions.Invalidate();

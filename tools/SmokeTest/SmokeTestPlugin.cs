@@ -30,6 +30,7 @@ namespace UltimateAscent.SmokeTest;
 /// runs only the run steps whose names contain one of the words (for quick checks of one rule);
 /// "--ua-smoketest-biome=V" plays the next map whose biomes include that letter (the game's own map
 /// codes: S shore, T tropics or R roots, A alpine or M mesa, V the Caldera and the Kiln) instead of today's.
+/// "--ua-smoketest-chain=S,A,K*200" climbs True Final Ascent's FINAL ASCENT as that chain of its Builder (set in memory).
 /// Results go to the BepInEx log and to BepInEx/UltimateAscent.SmokeTest.txt; the game quits at the end.
 /// </summary>
 [BepInPlugin(Guid, "Ultimate Ascent Smoke Test", "1.0.0")]
@@ -43,6 +44,7 @@ public sealed class SmokeTestPlugin : BaseUnityPlugin
     private const string ApocalypseSwitch = Switch + "-apocalypse";
     private const string OnlySwitch = Switch + "-only=";
     private const string BiomeSwitch = Switch + "-biome=";
+    private const string ChainSwitch = Switch + "-chain=";
 
     private void Awake()
     {
@@ -55,11 +57,16 @@ public sealed class SmokeTestPlugin : BaseUnityPlugin
         int ascent = Lvl.Last;
         string[] only = null;
         string biome = null;
+        string chain = null;
         foreach (string arg in args)
         {
             if (arg.StartsWith(BiomeSwitch))
             {
                 biome = arg.Substring(BiomeSwitch.Length);
+            }
+            if (arg.StartsWith(ChainSwitch))
+            {
+                chain = arg.Substring(ChainSwitch.Length);
             }
             if (arg.StartsWith(AscentSwitch) && int.TryParse(arg.Substring(AscentSwitch.Length), out int parsed))
             {
@@ -73,7 +80,9 @@ public sealed class SmokeTestPlugin : BaseUnityPlugin
         GameObject host = new GameObject("UltimateAscentSmokeTest");
         DontDestroyOnLoad(host);
         host.hideFlags = HideFlags.HideAndDontSave;
-        host.AddComponent<Runner>().Begin(Logger, ascent, args.Contains(NoApocalypseSwitch), args.Contains(ApocalypseSwitch), only, biome);
+        Runner runner = host.AddComponent<Runner>();
+        runner.Chain = chain;
+        runner.Begin(Logger, ascent, args.Contains(NoApocalypseSwitch), args.Contains(ApocalypseSwitch), only, biome);
     }
 }
 
@@ -158,6 +167,14 @@ internal sealed partial class Runner : MonoBehaviour
         harmony.CreateClassProcessor(typeof(HeatSources)).Patch();
         harmony.CreateClassProcessor(typeof(ShowOwnBackpack)).Patch();
         harmony.CreateClassProcessor(typeof(FogCalls)).Patch();
+        harmony.CreateClassProcessor(typeof(TfaAmounts)).Patch();
+        harmony.CreateClassProcessor(typeof(TfaAmountsLanded)).Patch();
+        harmony.CreateClassProcessor(typeof(NoEruptions)).Patch();
+        harmony.CreateClassProcessor(typeof(SoundsTimed)).Patch();
+        foreach (Type patch in HeldWeather.Patches)
+        {
+            harmony.CreateClassProcessor(patch).Patch();
+        }
         harmony.CreateClassProcessor(typeof(CustomRunSpawn)).Patch();
         harmony.CreateClassProcessor(typeof(ForceRecorder)).Patch();
         harmony.CreateClassProcessor(typeof(FallRecorder)).Patch();
@@ -671,6 +688,22 @@ internal sealed partial class Runner : MonoBehaviour
         {
             yield return Guard("challenges and cosmetics in the airport", AirportCosmetics());
         }
+        if (Selected("the airport's training rope (airportrope, airport)"))
+        {
+            yield return Guard("the airport's training rope (airportrope, airport)", AirportRope());
+        }
+        if (Selected("the boarding pass: the reward line, the version notice and the maps' biomes (passlayout, airport)"))
+        {
+            yield return Guard("the boarding pass: the reward line, the version notice and the maps' biomes (passlayout, airport)", PassLayoutCheck());
+        }
+        if (Selected("the Pain Sash in the passport (painsash, airport)"))
+        {
+            yield return Guard("the Pain Sash in the passport (painsash, airport)", PainSashPassport());
+        }
+        if (Selected("the Burnt Skin in the passport (burntskin, airport)"))
+        {
+            yield return Guard("the Burnt Skin in the passport (burntskin, airport)", BurntSkinPassport());
+        }
         if (only != null && only.Contains("cosmeticslist"))
         {
             Step("the scouts' cosmetics, listed", DumpCosmetics);
@@ -683,6 +716,10 @@ internal sealed partial class Runner : MonoBehaviour
         if (Selected("the custom run's Ascent setting in the airport (customascent)"))
         {
             yield return Guard("the custom run's Ascent setting in the airport (customascent)", CustomRunAscentScreen());
+        }
+        if (Selected("the new creatures' network templates before any climb (mpmobs, airport)"))
+        {
+            yield return Guard("the new creatures' network templates before any climb (mpmobs, airport)", MobTemplatesCheck());
         }
         if (MiniRunAsked(only))
         {
@@ -701,12 +738,19 @@ internal sealed partial class Runner : MonoBehaviour
         {
             yield break;
         }
+        // A moment as the game has it before the checks: the mod looks at the scout's starting curse as they get up.
+        yield return new WaitForSeconds(1f);
         float wake = Time.time;
         Protect(true);
         // Bing Bong's evil force (20) brings every scout crab while nobody holds him: at 24 a check that lets statuses
         // through could end in death. Off for the whole climb (in memory), on again for Bing Bong's own check; on in the
-        // Mini Run, whose Bing Bong the host is handed.
-        if (!miniRunClimb)
+        // Mini Run, whose Bing Bong the host is handed, and for the Pain Sash's checks (its unlock takes every modifier on
+        // for the whole climb; the scout is kept safe meanwhile).
+        if (only != null && only.Any(word => word.StartsWith("painsash", StringComparison.OrdinalIgnoreCase)))
+        {
+            Info("Bing Bong's rule (20) stays on for the climb", "the Pain Sash's unlock takes every modifier on for the whole climb");
+        }
+        else if (!miniRunClimb)
         {
             HoldBingBongRule(true);
         }
@@ -714,6 +758,8 @@ internal sealed partial class Runner : MonoBehaviour
 
         (string name, Func<IEnumerator> run)[] steps =
         {
+            // First: on the open beach where the climb starts (its stage needs open ground; it puts the scout back there).
+            ("the Scoutmaster pulls scouts off holds, and finds a way up to one (smroutes, 17)", ScoutmasterRouteChecks),
             ("storms (25)", () => Now(CheckStorms)),
             ("extra tornadoes (25)", () => Tornadoes(wake)),
             ("no revive statues (19)", () => Now(CheckRevives)),
@@ -723,11 +769,11 @@ internal sealed partial class Runner : MonoBehaviour
             ("the crabs' icons (crabicons, only when asked)", () => OnlyWhenAsked("crabicons", CrabIcons)),
             ("the new mobs below ascent 17: half as strong (mobs)", NewMobsBelow17),
             ("a placed piton keeps its yellow look (pitons, 15)", PitonChecks),
-            ("sun on the beach (23)", () => SunHeat(true, "on the beach")),
+            ("sun on the beach (sunheat, 23)", () => SunHeat(true, "on the beach")),
             ("roasting (23)", Roasting),
             ("stronger ailments (14)", () => Now(CheckAilments)),
             ("painful luggage (21)", () => Now(CheckLuggage)),
-            ("half food (15)", HalfFood),
+            ("less food (15)", LessFood),
             ("ticks (17)", TickBites),
             ("eating ticks (15)", EatTick),
             ("campfire save petrification (17)", () => Now(CampfireSavePetrify)),
@@ -745,6 +791,8 @@ internal sealed partial class Runner : MonoBehaviour
             ("the modifiers line under the ascent (modifiers, config)", ModifiersLineCheck),
             ("a custom run on a picked ascent (customascent)", CustomAscentClimb),
             ("Bing Bong in the host's hands in a custom Mini Run (minirun, 20)", MiniRunBingBongCheck),
+            ("a ground snake up close: yellow (snakecolour, 17)", SnakeColourCheck),
+            ("ascent 25's weather in the Kiln and at the Peak (upperweather, 25)", UpperWeatherCheck),
             ("new items switch (config)", NewItemsSwitch),
             ("Magic Bean vine length (15)", BeanVineLength),
             ("Magic Bean thorns (15)", BeanThorns),
@@ -753,6 +801,7 @@ internal sealed partial class Runner : MonoBehaviour
             ("Mandrake heard (17)", MandrakeHeard),
             ("held snowball (15)", HeldSnowball),
             ("Auto-Parachute (9, 15)", AutoParachuteCheck),
+            ("Auto-Parachute in the hands: held by its sides, no metal sounds (parachutesound, 9)", ParachuteSounds),
             ("six-slot backpack (single-player)", SixSlotBackpackCheck),
             ("six-slot backpack in multiplayer", SixSlotMultiplayerCheck),
             ("Vanilla Wafers (9)", VanillaCookies),
@@ -766,14 +815,18 @@ internal sealed partial class Runner : MonoBehaviour
             ("Cherry Lollipop (9)", CherryLollipopCheck),
             ("custom run: the variants' own switches", VariantSwitchesCheck),
             ("Toxic Drink (9, 15)", ToxicDrinkCheck),
+            ("the Energy Drink and the Toxic Drink override each other (speeddrinks, 9)", SpeedDrinksOverride),
+            ("the starting curse made up once the scout is up (startingcurse, 7)", StartingCurseMadeUp),
             ("Torch (9, 15)", TorchCheck),
             ("Scout's Generosity: the mystical new items (15)", GenerosityCheck),
             ("banana peel (17)", BananaPeelCheck),
+            ("the Lookers: on 70% of their spots, watching one curses (looker, 17)", LookerCheck),
             ("a held cactus ball (17)", HeldCactus),
+            ("a thrown cactus ball (15)", CactusThrow),
             ("Russian names of the new items", () => Now(RussianNames)),
             ("breaking free from webs and fly traps (9)", StrugglingCheck),
             ("Fortified Milk, Scout's Tenacity and the Weird Shroom (15)", MilkTenacityShroom),
-            ("Lanterns in every part (9)", LanternPoolsCheck),
+            ("Lanterns in the suitcases (lanterns)", LanternPoolsCheck),
             ("the new items darken when cooked", NewItemsCooking),
             ("storms between Apocalypse weather (25)", ApocalypseBreaks),
             ("Energy Drink burst knocks nobody out (17)", EnergyDrinkBurstCheck),
@@ -781,15 +834,24 @@ internal sealed partial class Runner : MonoBehaviour
             ("snowstorm and wind shelter (every ascent)", SnowstormShelterCheck),
             ("TFA's Apocalypse events stay TFA's", TfaEvents),
             ("Bing Bong (20)", () => WithBingBongRule(BingBong(wake))),
+            ("a neglected Bing Bong turns the screen red (redscreen, 20)", () => WithBingBongRule(BingBongRedScreen())),
+            ("the climb counts as an attempt on its ascent (passlayout)", RunCountsCheck),
+            ("the Pain Sash's bloody footprints and its unlock (painsash)", PainSashFootprints),
             ("fog (9, 18)", Fog),
             ("weather (25)", () => Weather(wake)),
             ("bee ambush (17)", BeeAmbush),
             ("bee moments (17)", BeeMoments),
             ("jellyfish (17)", Jellyfish),
             ("first campfire and the fog after it (18)", FirstCampfire),
-            ("rain pull (18)", RainPull),
+            ("rain on the walls (18, rainclimb)", RainClimb),
+            ("rain on the vines (18, rainvine)", RainVine),
             ("second segment (17)", SecondSegment),
             ("Stones and Sticks in the Tropics or the Roots (9)", StonesAndSticksSecond),
+            ("the Spruce Branch's icon renders (branchicon, only when asked)", () => OnlyWhenAsked("branchicon", BranchIcon)),
+            ("close looks at the spruce needles and the Spruce Branch (sprucelook, only when asked)", () => OnlyWhenAsked("sprucelook", SpruceLookPictures)),
+            ("the Roots wind's debris and the Spruce Branch (winddebris, 18)", WindDebrisChecks),
+            ("the game's bugs, fixed on every ascent (gamebugs)", GameBugChecks),
+            ("the game's lava bugs, fixed on every ascent (gamebugslava)", GameBugLavaChecks),
             ("Alpine (18, 23)", Alpine),
             ("ascent 18 weather: Gloom fog, tornado grip, Mesa sun (18, 25)", Weather18),
             ("Alpine snowfall", AlpineSnow),
@@ -805,12 +867,18 @@ internal sealed partial class Runner : MonoBehaviour
             ("ladders in the Citadel (17)", LaddersCheck),
             ("mimic chests in the Citadel (17)", MimicChestsCheck),
             ("arrow traps and spike balls in the Citadel (9)", ArrowTrapCheck),
+            ("the mimic gas (mimicgas, 17)", MimicGasCheck),
+            ("the Citadel's arrow traps, measured (arrowprobe, only when asked)", () => OnlyWhenAsked("arrowprobe", ArrowTrapProbe)),
+            ("arrow traps: what stops their arrows, a Backpack and a platform (arrowshield, 9)", ArrowTrapShieldCheck),
             ("Kiln: ash and eruptions (17, 18)", KilnCheck),
             ("the Parasol wears out (15)", ParasolWearsOut),
             ("the clown chest's Lightweight Parasol", () => Now(ClownChestParasolShare)),
             ("blindness cured by the First Aid Kit and the Cure-All", BlindnessCuresCheck),
             ("new items on every ascent", () => Now(NewItemsOnEveryAscent)),
-            ("zombies on the peak's hill (17)", PeakZombiesCheck),
+            ("the peak's hill, mapped (peakprobe, only when asked)", () => OnlyWhenAsked("peakprobe", PeakHillProbe)),
+            ("the rising hazards' settings, read from the map (risingprobe, only when asked)", () => OnlyWhenAsked("risingprobe", RisingProbe)),
+            ("every lava on the map (lavaprobe, only when asked)", () => OnlyWhenAsked("lavaprobe", LavaProbe)),
+            ("zombies at the peak: its top, its statue, its rocks (peakzombies, 17)", PeakZombiesCheck),
             ("waiting bee swarms on the peak's hill (17)", WaitingBeesCheck),
             ("a parasol under lowgravity", ParasolLowGravityCheck),
             ("ascent 22's episodes (22)", Ascent22Episodes),
@@ -822,24 +890,35 @@ internal sealed partial class Runner : MonoBehaviour
             ("shorter reach of the rope cannons and the rescue claw (15)", ShorterReachCheck),
             ("what the drinks take off (15)", DrinkNumbers),
             ("the map picker's map (picker)", () => Now(PickedMapCheck)),
+            ("the Builder map picked on the pass: TFA's FINAL ASCENT on it, its Peak and its Nadir (buildermap)", BuilderMapClimbCheck),
             ("multiplayer round: ascent 8, Scoutmaster, PlayersInfo, thorns, wild food, revive statue (8, 9, 15, 17)", MultiplayerRoundChecks),
             ("Warp Fungus thrown, jellyfish slip before it lands (warpslip, only when asked)", () => OnlyWhenAsked("warpslip", WarpSlipRepro)),
-            ("snakes in the Tropics (17)", SnakeChecks),
+            ("a Stone thrown at a snake (stones, snakestone, 17)", StoneAtSnake),
+            ("snakes in the Tropics (snakebites, 17)", SnakeChecks),
             ("how fast a scout walks and runs, against the snakes (speeds, only when asked)", () => OnlyWhenAsked("speeds", SpeedProbe)),
             ("a slow look at the snakes' attack (snakeview, only when asked)", () => OnlyWhenAsked("snakeview", SnakeAttackPreview)),
             ("mountain goats in the Alps (17)", GoatChecks),
             ("the new mobs' placement: seven in ten on the climb itself (17)", NewMobPlacement),
             ("snakes crawl up and down the Tropics' cliffs (snakeclimb, 17)", SnakeClimbChecks),
             ("goats roam far, come down cliffs and leap across gaps (17)", GoatCliffChecks),
+            ("how often the goats set off, left alone, and how far they get (goatroam, 17)", GoatRoamChecks),
             ("the borders: goats keep to the Alps, snakes to the Tropics (17)", BorderChecks),
             ("a close look at the mountain goats (goatview, only when asked)", () => OnlyWhenAsked("goatview", GoatPreview)),
+            ("the game's fly traps, part by part (flytrapprobe, only when asked)", () => OnlyWhenAsked("flytrapprobe", FlyTrapProbe)),
+            ("what the Roots wind's debris is built from (debrisprobe, only when asked)", () => OnlyWhenAsked("debrisprobe", WindDebrisProbe)),
+            ("the clown chests' tricks, on the map's own clown chests (clown, 21)", ClownChestChecks),
             ("the sounds of the Roots' beetles (beetleprobe, only when asked)", () => OnlyWhenAsked("beetleprobe", BeetleSoundProbe)),
             ("waterfalls: their hitboxes, a stream and a splash ours against the game's (every ascent; waterfalls, only when asked)", () => OnlyWhenAsked("waterfalls", WaterfallLook)),
             ("what makes the scorpion's tail shimmer (scorpionprobe, only when asked)", () => OnlyWhenAsked("scorpionprobe", ScorpionProbe)),
             ("the Tropics' giant trees and burning sounds (treeprobe, only when asked)", () => OnlyWhenAsked("treeprobe", TropicsProbe)),
             ("bees knock a scout out (17, 24)", BeeKnockout),
+            // The Nadir is one way: these jump there last.
+            ("the Citadel's rising gloom and the Nadir's rising ghosts (18, risinghazards)", RisingHazards),
             ("Nadir (17, 18)", NadirCheck),
-            // Last: it ends the climb.
+            ("a weather another mod starts through True Final Ascent (tfaweather)", ModWeatherChecks),
+            ("True Final Ascent's Builder, block by block (tfabuilder; with -Chain)", BuilderChecks),
+            // These end the climb: last.
+            ("the Pain Sash unlocked by the Nadir's ending (25; painsashnadir, only when asked)", () => OnlyWhenAsked("painsashnadir", PainSashNadirEnding)),
             ("challenges and cosmetics in the climb", ChallengesInClimb),
         };
         foreach ((string name, Func<IEnumerator> run) in steps)
@@ -854,7 +933,29 @@ internal sealed partial class Runner : MonoBehaviour
                 break;
             }
             stepUnderWay = name;
-            yield return Guard(name, run());
+            // The beach's crabs go for a scout within 2 m and pinch what they hold out of their hands: in the checks not
+            // about the new mobs they leave the scout alone (food would be knocked away before it is eaten).
+            bool aboutMobs = new[] { "crab", "mob", "snake", "goat", "border", "placement" }.Any(word => name.IndexOf(word, StringComparison.OrdinalIgnoreCase) >= 0);
+            List<BeachCrab> calmed = aboutMobs ? new List<BeachCrab>() : BeachCrabs().Where(c => !c.Unaware).ToList();
+            foreach (BeachCrab crab in calmed)
+            {
+                crab.Unaware = true;
+            }
+            // The weather pushes the scout off ledges and cliffs: in the checks not about it, it stays calm.
+            bool aboutWeather = new[] { "storm", "weather", "tornado", "wind", "rain on", "snowfall" }.Any(word => name.IndexOf(word, StringComparison.OrdinalIgnoreCase) >= 0);
+            HeldWeather.Hold(!aboutWeather);
+            try
+            {
+                yield return Guard(name, run());
+            }
+            finally
+            {
+                HeldWeather.Hold(false);
+                foreach (BeachCrab crab in calmed.Where(c => c != null))
+                {
+                    crab.Unaware = false;
+                }
+            }
         }
         Finish();
     }
@@ -1432,8 +1533,8 @@ internal sealed partial class Runner : MonoBehaviour
                         Protect(true);
                     }
                     // The sun's heat lands as it comes (no ascent 14 boost).
-                    float share = A23_HotSun.HeatPerSecond * 0.65f * bare.Seconds;
-                    Check($"Hot Mode on ascent {Rules.Level}: the sun heats at 65% of ascent 23's strength",
+                    float share = ChallengeModes.HotModeHeatPerSecond * bare.Seconds;
+                    Check($"Hot Mode on ascent {Rules.Level}: the sun heats {ChallengeModes.HotModeHeatPerSecond * 100f:0.###} a second",
                         Mathf.Abs(bare.Total - share) <= share * 0.15f, $"{bare.Total * 100f:0.###} heat in {bare.Seconds:F1} s (expected {share * 100f:0.###})");
                 }
                 else
@@ -2278,62 +2379,6 @@ internal sealed partial class Runner : MonoBehaviour
         return hit.collider != null;
     }
 
-    /// <summary>
-    /// Rain (18): a scout in the air under open sky in a rainstorm is pulled down an extra 40 m/s², 60 in
-    /// the Tropics. One tick of a rainstorm (the game's per-frame storm effect, on a rain zone made for
-    /// the check) on the scout falling over the sea behind the spawn point, then in the Tropics, is
-    /// measured on the hips: the upward speed it takes off within that frame.
-    /// </summary>
-    private IEnumerator RainPull()
-    {
-        if (!Rules.Enabled(Lvl.ExtremeWeather))
-        {
-            Info("the rain checks are skipped", $"testing ascent {target}");
-            yield break;
-        }
-        GameObject storm = new GameObject("RainStorm");
-        storm.SetActive(false);
-        WindChillZone rain = storm.AddComponent<WindChillZone>();
-        try
-        {
-            SpawnPoint spawn = SpawnPoint.allSpawnPoints.FirstOrDefault(p => p != null);
-            Vector3 sea = spawn != null ? spawn.transform.position - Vector3.ProjectOnPlane(spawn.transform.forward, Vector3.up).normalized * 40f : Local.Center;
-            yield return RainTick(rain, sea, A18_ExtremeWeather.RainPull, "over the sea at the beach");
-            MapHandler.JumpToSegment(Segment.Tropics);
-            yield return new WaitForSeconds(4f);
-            Vector3? open = OpenSky(Local.Center);
-            if (open == null)
-            {
-                Info("the Tropics rain check is skipped", "no open sky near the scout");
-            }
-            else
-            {
-                yield return RainTick(rain, open.Value, A18_ExtremeWeather.TropicsRainPull, "in the Tropics");
-            }
-        }
-        finally
-        {
-            Destroy(storm);
-        }
-    }
-
-    /// <summary>One rain tick on the scout falling 12 m above this spot, measured on the hips.</summary>
-    private IEnumerator RainTick(WindChillZone rain, Vector3 spot, float expected, string where)
-    {
-        Character local = Local;
-        Vector3 ground = Ground(spot, out RaycastHit hit) ? hit.point : spot;
-        local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, ground + Vector3.up * 12f, false);
-        yield return new WaitForSeconds(0.4f);
-        bool airborne = local.data.groundedFor <= 0.5f && !local.data.isClimbing;
-        Rigidbody hip = local.GetBodypart(BodypartType.Hip).rig;
-        float before = hip.linearVelocity.y;
-        rain.ApplyStatus(local);
-        float pull = (before - hip.linearVelocity.y) / Time.deltaTime;
-        Check($"rain pulls a scout in the air {where} down an extra {expected:0} m/s² (18)",
-            airborne && Mathf.Abs(pull - expected) < 0.05f, $"{pull:0.##} m/s² on the hips (in the air {airborne}, segment {Map.CurrentSegment})");
-        yield return new WaitForSeconds(2.5f);
-    }
-
     /// <summary>A spot near this point with nothing above it (open sky over the ground), if there is one.</summary>
     private static Vector3? OpenSky(Vector3 near)
     {
@@ -2950,8 +2995,10 @@ internal sealed partial class Runner : MonoBehaviour
         string shownToday = MapPicker.Label != null ? Plain(MapPicker.Label.text) : "";
         Check("the boarding pass has the map picker at the bottom right of its card, on today's map", line != null && line.activeInHierarchy && shownToday == Plain(MapPicker.Name(today)) && shownToday.Contains("(" + MapPicker.Number(today) + ")"),
             $"shown {(line != null && line.activeInHierarchy)}, '{shownToday}'; {count} maps in the rotation, today's {MapPicker.Number(today)} (day {MapPicker.Day})");
+        // Every map to pick from: the rotation's, then the Builder maps when installed (see BuilderMapPickerChecks).
+        int total = MapPicker.Total;
         List<string> names = new List<string>();
-        for (int i = 0; i < count; i++)
+        for (int i = 0; i < total; i++)
         {
             names.Add(Plain(MapPicker.Label.text));
             MapPicker.Step(1);
@@ -2959,17 +3006,17 @@ internal sealed partial class Runner : MonoBehaviour
         string back = Plain(MapPicker.Label.text);
         List<string> others = names.Skip(1).ToList();
         int number = MapPicker.Number(today);
-        List<int> numbers = MapPicker.Order().Select(MapPicker.Number).ToList();
-        string Expected(int n) => n == number ? shownToday : "MAP " + n;
-        int at = numbers.IndexOf(number);
-        string right = Expected(numbers[(at + 1) % numbers.Count]);
-        string left = Expected(numbers[(at - 1 + numbers.Count) % numbers.Count]);
-        bool byNumber = others.All(n => n.StartsWith("MAP ", StringComparison.Ordinal)) && !others.Contains("MAP " + number) && others.Distinct().Count() == others.Count && names.Count > 1 && names[1] == right;
+        List<int> order = MapPicker.Order();
+        string Expected(int m) => m == today ? shownToday : MapPicker.Builder(m) != null ? Plain(MapPicker.Name(m)) : "MAP " + MapPicker.Number(m);
+        int at = order.IndexOf(today);
+        string right = Expected(order[(at + 1) % order.Count]);
+        string left = Expected(order[(at - 1 + order.Count) % order.Count]);
+        bool byNumber = others.All(n => n.StartsWith("MAP ", StringComparison.Ordinal) || n.StartsWith("Builder: MAP ", StringComparison.Ordinal)) && !others.Contains("MAP " + number) && others.Distinct().Count() == others.Count && names.Count > 1 && names[1] == right;
         MapPicker.Step(-1);
         string leftShown = Plain(MapPicker.Label.text);
         MapPicker.Step(1);
         Check($"its arrows go by number: from today's map (here {number}) right to {right}, left to {left}, through every map once, today's under its own name, and round again",
-            names.Count == count && byNumber && leftShown == left && back == shownToday,
+            names.Count == total && byNumber && leftShown == left && back == shownToday,
             $"{string.Join(", ", names)}; after them '{back}'; one to the left of today's '{leftShown}'");
         MapPicker.Step(1);
         int picked = MapPicker.Picked;
@@ -2992,6 +3039,7 @@ internal sealed partial class Runner : MonoBehaviour
             Info("map for the climb", $"{MapPicker.Name(pickedForClimb)}: {SingletonAsset<MapBaker>.Instance.GetLevel(pickedForClimb)}");
             Screenshot("map-picker-picked");
         }
+        BuilderMapPickerChecks(pass);
     }
 
     private int pickedForClimb = -1;
@@ -3025,12 +3073,15 @@ internal sealed partial class Runner : MonoBehaviour
         {
             MapBaker baker = SingletonAsset<MapBaker>.Instance;
             int today = GameHandler.GetService<NextLevelService>().NextLevelIndexOrFallback;
-            // A number is a map's number (Level_N): PEAK 3.0.0's biome codes no longer match its 208 maps, so a map known
-            // to have the biomes wanted is named directly.
-            int offset = int.TryParse(biome, out int level) && level >= 0 && level < baker.ScenePaths.Length
-                ? ((level - today) % baker.ScenePaths.Length + baker.ScenePaths.Length) % baker.ScenePaths.Length
-                : Enumerable.Range(0, baker.ScenePaths.Length).Select(i => (int?)i).FirstOrDefault(i => baker.GetBiomeID(today + i.Value).Contains(biome)) ?? -1;
-            Info("the maps' biome codes", string.Join(", ", Enumerable.Range(0, baker.ScenePaths.Length).Select(i => $"{baker.GetLevel(i)} {baker.GetBiomeID(i)}")));
+            // A number is a map's number (Level_N); a letter, the next map whose biome code has it. A map's code is the
+            // game's list's entry at the map's number (the game's own day lookup is off since PEAK 3.0.0, as the map
+            // picker's biomes found).
+            int maps = baker.ScenePaths.Length;
+            string CodeOf(int day) => baker.BiomeIDs[(day % maps + maps) % maps];
+            int offset = int.TryParse(biome, out int level) && level >= 0 && level < maps
+                ? ((level - today) % maps + maps) % maps
+                : Enumerable.Range(0, maps).Select(i => (int?)i).FirstOrDefault(i => CodeOf(today + i.Value).Contains(biome)) ?? -1;
+            Info("the maps' biome codes", string.Join(", ", Enumerable.Range(0, maps).Select(i => $"{baker.GetLevel(i)} {CodeOf(i)}")));
             if (offset < 0)
             {
                 Fail("a map with the biome " + biome, "none of the maps has it; today's map is played");
@@ -3038,7 +3089,7 @@ internal sealed partial class Runner : MonoBehaviour
             else
             {
                 NextLevelService.debugLevelIndexOffset = offset;
-                Info("map for the test", $"{offset} after today's: {baker.GetLevel(today + offset)}, biomes {baker.GetBiomeID(today + offset)} (today's: {baker.GetBiomeID(today)})");
+                Info("map for the test", $"{offset} after today's: {baker.GetLevel(today + offset)}, biomes {CodeOf(today + offset)} (today's: {CodeOf(today)})");
             }
         }
         if (noApocalypse)
@@ -3049,8 +3100,23 @@ internal sealed partial class Runner : MonoBehaviour
         {
             Step("switch TFA's Apocalypse on", () => SetApocalypse(true));
         }
-        pass.StartGame();
-        Info("departure", $"ascent {target} started from the boarding pass" + (RunSettings.IsCustomRun ? $" as a custom run (its Ascent setting: {CustomRunAscent.Chosen})" : ""));
+        if (!string.IsNullOrEmpty(Chain))
+        {
+            Step("TFA's Builder: " + Chain, () => SetBuilderChain(pass));
+        }
+        try
+        {
+            pass.StartGame();
+        }
+        finally
+        {
+            if (!string.IsNullOrEmpty(Chain) && Compat.Tfa.Present)
+            {
+                BuilderConfirmed(false);
+            }
+        }
+        Info("departure", $"ascent {target} started from the boarding pass" + (RunSettings.IsCustomRun ? $" as a custom run (its Ascent setting: {CustomRunAscent.Chosen})" : "")
+            + (string.IsNullOrEmpty(Chain) ? "" : $" as FINAL ASCENT, the Builder's chain {Chain}"));
     }
 
     /// <summary>
@@ -3226,8 +3292,8 @@ internal sealed partial class Runner : MonoBehaviour
             heat.Stop();
             Protect(true);
         }
-        // Ascent 23's sun heat (0.005/s), as it comes: ascent 14's boost leaves the sun alone.
-        float expected = 0.005f * heat.Seconds;
+        // Ascent 23's sun heat (2 a second), as it comes: ascent 14's boost leaves the sun alone.
+        float expected = A23_HotSun.HeatPerSecond * heat.Seconds;
         if (expectHeat)
         {
             Check($"the sun heats {where} (23)", heat.Total > expected * 0.75f && heat.Total < expected * 1.25f, $"{heat.Total:0.0000} heat in {heat.Seconds:F1} s (expected {expected:0.0000})");
@@ -3862,12 +3928,21 @@ internal sealed partial class Runner : MonoBehaviour
         local.data.lookValues = look;
         yield return FrontPicture(backpack, 0f, "six-slot-backpack-pouches-front");
         yield return FrontPicture(backpack, 40f, "six-slot-backpack-pouches-side");
+        // Where each slot's item shows in the wheel (on the screen, from its middle: x right, y up).
+        Vector2[] onWheel = new Vector2[6];
         Step("the full backpack's wheel", () =>
         {
             backpack.Interact(local);
             BackpackWheel wheel = GUIManager.instance.backpackWheel;
             int icons = Enumerable.Range(1, 6).Count(i => wheel.slices[i].image != null && wheel.slices[i].image.enabled && wheel.slices[i].image.texture == things[i - 1].UIData.GetIcon());
             Check("its wheel shows each slot's item", icons == 6, $"{icons} of 6 slices show their item");
+            Canvas canvas = wheel.GetComponentInParent<Canvas>().rootCanvas;
+            Camera eye = canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : canvas.worldCamera;
+            Vector2 centre = RectTransformUtility.WorldToScreenPoint(eye, wheel.transform.position);
+            for (int i = 0; i < 6; i++)
+            {
+                onWheel[i] = RectTransformUtility.WorldToScreenPoint(eye, wheel.slices[i + 1].transform.GetChild(0).GetChild(0).position) - centre;
+            }
             Screenshot("six-slot-backpack-wheel-full");
         });
         yield return null;
@@ -3907,6 +3982,34 @@ internal sealed partial class Runner : MonoBehaviour
             worn != null && worn.itemSlots.Length == 6 && worn.itemSlots.All(s => !s.IsEmpty()) && backFilter != null && onBack == 6 && local.player.backpackSlot.prefab.UIData.icon == SixSlotBackpack.icon,
             $"worn {worn != null}, {(worn != null ? worn.itemSlots.Count(s => !s.IsEmpty()) : 0)} of {(worn != null ? worn.itemSlots.Length : 0)} slots full, back model six-slot {backFilter != null}, {onBack} of 6 items shown on the back, slot 4's icon six-slot {local.player.backpackSlot.prefab.UIData.icon == SixSlotBackpack.icon}");
         yield return BackPicture(local, "six-slot-backpack-back");
+        // The wheel laid out as the backpack is: seen from behind its wearer, each slot's item on the same side as in the
+        // wheel, and the higher an item hangs, the higher its slice.
+        if (back != null && back.backpackSlots.Length >= 6)
+        {
+            Vector3 forward = local.data.lookDirection_Flat.sqrMagnitude > 0.01f ? local.data.lookDirection_Flat.normalized : local.transform.forward;
+            Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
+            Vector3 hip = local.GetBodypart(BodypartType.Hip).transform.position;
+            Vector2[] onBackAt = Enumerable.Range(0, 6).Select(i => new Vector2(Vector3.Dot(back.backpackSlots[i].position - hip, right), back.backpackSlots[i].position.y - hip.y)).ToArray();
+            List<string> wrong = new List<string>();
+            for (int i = 0; i < 6; i++)
+            {
+                if (Mathf.Abs(onBackAt[i].x) > 0.05f && Mathf.Abs(onWheel[i].x) > 5f && Mathf.Sign(onBackAt[i].x) != Mathf.Sign(onWheel[i].x))
+                {
+                    wrong.Add($"slot {i + 1} on the other side");
+                }
+                for (int j = i + 1; j < 6; j++)
+                {
+                    if (Mathf.Abs(onBackAt[i].y - onBackAt[j].y) > 0.05f && Mathf.Abs(onWheel[i].y - onWheel[j].y) > 5f && Mathf.Sign(onBackAt[i].y - onBackAt[j].y) != Mathf.Sign(onWheel[i].y - onWheel[j].y))
+                    {
+                        wrong.Add($"slots {i + 1} and {j + 1} the other way up");
+                    }
+                }
+            }
+            Check("the wheel is laid out as the backpack is: each slot's slice on the side its item hangs on (seen from behind), the higher an item the higher its slice",
+                wrong.Count == 0,
+                string.Join("; ", Enumerable.Range(0, 6).Select(i => $"slot {i + 1}: wheel ({onWheel[i].x:+0;-0}, {onWheel[i].y:+0;-0}), back ({onBackAt[i].x:+0.00;-0.00} m right, {onBackAt[i].y:+0.00;-0.00} m up)"))
+                + (wrong.Count > 0 ? " | " + string.Join(", ", wrong) : ""));
+        }
         // Off the back again: dropped the game's way and taken away, with what it holds.
         local.refs.items.lastEquippedSlotTime = 0f;
         local.refs.items.EquipSlot(Optionable<byte>.Some(3));
@@ -4504,10 +4607,11 @@ internal sealed partial class Runner : MonoBehaviour
                 {
                     Afflictions.RemoveAffliction(Peak.Afflictions.Affliction.AfflictionType.InfiniteStamina);
                     Afflictions.SetStatus(Status.Hunger, 0.5f);
+                    A14_WorseItems.Reset();
                     yield return EatHeld();
                     Peak.Afflictions.Affliction_InfiniteStamina rush = Afflictions.afflictionList.OfType<Peak.Afflictions.Affliction_InfiniteStamina>().FirstOrDefault();
                     float food = 0.5f - Afflictions.GetCurrentStatus(Status.Hunger);
-                    float expectedFood = worse ? 0.1f : 0.2f;
+                    float expectedFood = worse ? 0.2f * A14_WorseItems.FoodShare : 0.2f;
                     float expectedRush = worse ? WildFoods.WonderberryRushWorse : WildFoods.WonderberryRush;
                     Check($"a Wonderberry eaten restores {expectedFood * 100f:0} hunger and gives {expectedRush:0} s of infinite stamina with no crash ({level})",
                         Mathf.Abs(food - expectedFood) < 0.006f && rush != null && Mathf.Abs(rush.totalTime - expectedRush) < 0.01f && rush.drowsyAffliction == null && local.infiniteStam,
@@ -4521,12 +4625,13 @@ internal sealed partial class Runner : MonoBehaviour
                     // Room left on the bar (weight and the weather's cold come on top): a full bar would pass the scout out.
                     Afflictions.SetStatus(Status.Hunger, 0.3f);
                     Afflictions.SetStatus(Status.Poison, 0.4f);
+                    A14_WorseItems.Reset();
                     string beforeEating = StatusesAndEffects();
                     yield return EatHeld();
                     float food = 0.3f - Afflictions.GetCurrentStatus(Status.Hunger);
                     float cured = 0.4f - Afflictions.GetCurrentStatus(Status.Poison);
                     Info($"the Green Clusterberry ({level})", $"its actions [{string.Join(", ", cluster.GetComponents<ItemActionBase>().Select(Describe))}]; before eating: {beforeEating}; after: {StatusesAndEffects()}");
-                    float expectedFood = worse ? 0.05f : 0.1f;
+                    float expectedFood = worse ? 0.1f * A14_WorseItems.FoodShare : 0.1f;
                     float expectedCure = worse ? WildFoods.GreenClusterberryCureWorse : 0.3f;
                     Check($"a Green Clusterberry eaten restores {expectedFood * 100f:0} hunger and removes {expectedCure * 100f:0} poison ({level})",
                         Mathf.Abs(food - expectedFood) < 0.006f && Mathf.Abs(cured - expectedCure) < 0.006f,
@@ -4562,9 +4667,12 @@ internal sealed partial class Runner : MonoBehaviour
     /// <summary>
     /// Stones and Sticks (9, 17). On the beach the host laid out 20 of each near the game's mushroom and berry
     /// spots, on the ground, out of the water, 4 m apart; the nearest of each is pictured where it lies. A
-    /// Stone dropped on the scout from 7 m (the game's own fall and bonk) knocks them down for 2 s, injures
-    /// them for 10 (20 with ascent 17's rule on; both switched in memory) and shatters with the rock smash and
-    /// the gray dust; one thrown hard at the ground shatters, one dropped gently stays whole. A Stick is held
+    /// Stone dropped on the scout from 7 m (the game's own fall and bonk) knocks them down for 2 s without
+    /// injuring them and stays whole (under 18 m/s); one flung onto the scout at 25 m/s shatters on them and
+    /// injures them for 10 (20 with ascent 17's rule on; both switched in memory), with the rock smash and the
+    /// gray dust and nothing else;
+    /// a scout landing on Stones lying still takes nothing; one thrown hard at the ground shatters, one dropped
+    /// gently stays whole. A Stick is held
     /// in both hands; its use is "swing"; a swing costs 33% stamina, raises it over the head and chops
     /// (pictured from the side) and knocks a zombie in front of the scout down for 4 s without hurting it;
     /// out of stamina it does not swing. With the config's New Items off they are not laid out, in a custom
@@ -4641,6 +4749,9 @@ internal sealed partial class Runner : MonoBehaviour
         yield return SideBySide(new[] { stone, stick }, "stone-and-stick");
 
         yield return StoneOnTheScout(stone);
+        yield return StoneStraightUp(stone);
+        yield return StoneShattersOnTheScout(stone);
+        yield return LandingOnAStone(stone);
         yield return StoneThrows(stone);
         yield return StoneAtZombie(stone);
         yield return SmashLoudness();
@@ -4697,12 +4808,15 @@ internal sealed partial class Runner : MonoBehaviour
             List<Item> all = (placed ?? new List<Item>()).Where(i => i != null).ToList();
             int stones = all.Count(StoneItem.IsStone);
             int sticks = all.Count(StickItem.IsStick);
+            // In the Roots the Spruce Branch lies in the Stick's place.
+            int branches = all.Count(SpruceBranch.IsBranch);
+            bool roots = Map.CurrentPlace == Place.Roots;
             int onGround = all.Count(i => Physics.Raycast(i.transform.position + Vector3.up * 0.5f, Vector3.down, out RaycastHit ground, 2f, HelperFunctions.terrainMapMask) && ground.distance - 0.5f < 0.45f);
             int dry = all.Count(i => !GroundItems.InWater(i.transform.position));
             float closest = all.SelectMany(a => all.Where(b => b != a).Select(b => Vector3.Distance(a.transform.position, b.transform.position))).DefaultIfEmpty(0f).Min();
-            Check($"20 Stones and 20 Sticks lie in the {Map.CurrentPlace} too, on the ground, out of the water, apart (9)",
-                stones == GroundItems.PerBiome && sticks == GroundItems.PerBiome && onGround == all.Count && dry == all.Count && closest >= GroundItems.Spacing - 0.6f,
-                $"{stones} Stones and {sticks} Sticks in '{part}'; {onGround} on the ground, {dry} out of the water, the closest two {closest:0.0} m apart");
+            Check($"20 Stones and 20 Sticks (in the Roots Spruce Branches) lie in the {Map.CurrentPlace} too, on the ground, out of the water, apart (9)",
+                stones == GroundItems.PerBiome && sticks == GroundItems.PerBiome && branches == (roots ? sticks : 0) && onGround == all.Count && dry == all.Count && closest >= GroundItems.Spacing - 0.6f,
+                $"{stones} Stones and {sticks} Sticks in '{part}', {branches} of them Spruce Branches; {onGround} on the ground, {dry} out of the water, the closest two {closest:0.0} m apart");
         });
     }
 
@@ -4762,63 +4876,50 @@ internal sealed partial class Runner : MonoBehaviour
     }
 
     /// <summary>
-    /// A Stone dropped from 7 m onto the scout's head (it lands at about 11.7 m/s): the game's own fall and
-    /// bonk, with ascent 17's rule on (20 injury) and off (10), in memory.
+    /// A Stone nobody threw, dropped from 7 m onto the scout's head (it lands at about 11.7 m/s): too slow to shatter, it
+    /// does nothing to them (only a stone that shatters on a scout knocks them down, but for its thrower's own).
     /// </summary>
     private IEnumerator StoneOnTheScout(Item stone)
     {
         Character local = Local;
-        ConfigEntry<bool> hazards = UltimateAscent.Plugin.AscentSwitches[Lvl.Hazards];
-        bool saved = hazards.Value;
         try
         {
-            foreach (bool on in Rules.Level >= Lvl.Hazards ? new[] { true, false } : new[] { false })
+            Protect(false);
+            Afflictions.SetStatus(Status.Injury, 0f);
+            yield return new WaitForSeconds(0.5f);
+            int dustBefore = StoneItem.DustClouds;
+            int hitsBefore = StoneItem.Hits;
+            int injuringBefore = StoneItem.Injuring;
+            float soundBefore = StoneItem.BreakSound() != null ? StoneItem.BreakSound().lastTimePlayed : 0f;
+            Vector3 above = local.Center + Vector3.up * 7.5f;
+            Item dropped = null;
+            Step("drop a Stone from 7 m onto the scout", () =>
             {
-                hazards.Value = on;
-                HostOptions.Invalidate();
-                float expected = on ? StoneItem.InjuryHazards : StoneItem.Injury;
-                Protect(false);
-                Afflictions.SetStatus(Status.Injury, 0f);
-                yield return new WaitForSeconds(0.5f);
-                int dustBefore = StoneItem.DustClouds;
-                float soundBefore = StoneItem.BreakSound() != null ? StoneItem.BreakSound().lastTimePlayed : 0f;
-                Vector3 above = local.Center + Vector3.up * 7.5f;
-                Item dropped = null;
-                Step("drop a Stone from 7 m onto the scout" + (on ? "" : " (ascent 17's rule off)"), () =>
-                {
-                    dropped = PhotonNetwork.InstantiateItemRoom(stone.gameObject.name, above, Quaternion.identity).GetComponent<Item>();
-                });
-                float longest = 0f;
-                for (float until = Time.time + 4f; Time.time < until;)
-                {
-                    longest = Mathf.Max(longest, local.data.fallSeconds);
-                    if (dropped == null && longest > 0f)
-                    {
-                        break;
-                    }
-                    yield return null;
-                }
-                yield return new WaitForSeconds(0.3f);
-                float injury = Afflictions.GetCurrentStatus(Status.Injury);
-                Protect(true);
-                bool heard = StoneItem.BreakSound() != null && StoneItem.BreakSound().lastTimePlayed > soundBefore;
-                Check($"a Stone falling on a scout knocks them down for 2 s and injures them for {expected * 100f:0} ({(on ? "17" : "9; ascent 17's rule off")})",
-                    Mathf.Abs(longest - StoneItem.Knockdown) < 0.1f && Mathf.Abs(injury - expected) < 0.006f,
-                    $"knocked down for {longest:0.00} s, {injury * 100f:0.#} injury");
-                Check("it shatters with the rock smash and a gray dust cloud", dropped == null && StoneItem.DustClouds > dustBefore && heard,
-                    $"stone {(dropped == null ? "gone" : "still there")}, dust clouds left {StoneItem.DustClouds - dustBefore}, smash played {heard}");
-                if (dropped != null && dropped.photonView != null)
-                {
-                    PhotonNetwork.Destroy(dropped.gameObject);
-                }
-                Afflictions.SetStatus(Status.Injury, 0f);
-                yield return new WaitForSeconds(2.5f);
+                dropped = PhotonNetwork.InstantiateItemRoom(stone.gameObject.name, above, Quaternion.identity).GetComponent<Item>();
+            });
+            float longest = 0f;
+            for (float until = Time.time + 4f; Time.time < until;)
+            {
+                longest = Mathf.Max(longest, local.data.fallSeconds);
+                yield return null;
             }
+            float injury = Afflictions.GetCurrentStatus(Status.Injury);
+            Protect(true);
+            bool heard = StoneItem.BreakSound() != null && StoneItem.BreakSound().lastTimePlayed > soundBefore;
+            Check("a Stone nobody threw falling on a scout without shattering does nothing to them: no knock-down, no injury (9)",
+                longest < 0.1f && injury < 0.001f && StoneItem.Hits == hitsBefore && StoneItem.Injuring == injuringBefore,
+                $"knocked down for {longest:0.00} s, {injury * 100f:0.#} injury, hits {StoneItem.Hits - hitsBefore} ({StoneItem.Injuring - injuringBefore} injuring)");
+            Check("it stays whole (it shatters only above 18 m/s)", dropped != null && StoneItem.DustClouds == dustBefore && !heard,
+                $"stone {(dropped == null ? "gone" : "still there")}, dust clouds left {StoneItem.DustClouds - dustBefore}, smash played {heard}");
+            if (dropped != null && dropped.photonView != null)
+            {
+                PhotonNetwork.Destroy(dropped.gameObject);
+            }
+            Afflictions.SetStatus(Status.Injury, 0f);
+            yield return new WaitForSeconds(1f);
         }
         finally
         {
-            hazards.Value = saved;
-            HostOptions.Invalidate();
             Protect(true);
         }
     }
@@ -4873,7 +4974,7 @@ internal sealed partial class Runner : MonoBehaviour
                 }
                 if (charge > 0f)
                 {
-                    Check("a Stone thrown hard at the ground shatters (any hard impact), with the gray dust cloud", flying == null && StoneItem.Breaks > breaksBefore && StoneItem.DustClouds > dustBefore,
+                    Check("a Stone thrown hard at the ground shatters (over 18 m/s), with the gray dust cloud", flying == null && StoneItem.Breaks > breaksBefore && StoneItem.DustClouds > dustBefore,
                         $"stone {(flying == null ? "gone" : "still there")} (flew at up to {fastest:0.#} m/s), breaks {StoneItem.Breaks - breaksBefore}, dust clouds {StoneItem.DustClouds - dustBefore}");
                 }
                 else
@@ -4894,8 +4995,9 @@ internal sealed partial class Runner : MonoBehaviour
     }
 
     /// <summary>
-    /// A Stone thrown hard at a zombie standing in front of the scout (the game's throw, full charge): it knocks the
-    /// zombie down and shatters, with the rock smash and the dust, as on the ground.
+    /// Stones thrown at a zombie standing in front of the scout (the game's throw): half charged, the stone stays whole
+    /// and leaves the zombie standing; full charge, it knocks the zombie down and shatters, with the rock smash and the
+    /// dust, as on the ground.
     /// </summary>
     private IEnumerator StoneAtZombie(Item stone)
     {
@@ -4919,12 +5021,36 @@ internal sealed partial class Runner : MonoBehaviour
             }
             zombie.distanceBeforeWakeup = 0f;
             yield return new WaitForSeconds(4f);
+            Character body = zombie.character;
             yield return SpawnIntoHand(stone);
             if (held == null)
             {
                 yield break;
             }
-            Character body = zombie.character;
+            {
+                local.data.lookValues = HelperFunctions.DirectionToLook(body.Center - MainCamera.instance.transform.position);
+                yield return new WaitForSeconds(0.6f);
+                int wholeBreaks = StoneItem.Breaks;
+                FallRecorder.Clear();
+                FallRecorder.Of = body;
+                StoneContacts.Seen.Clear();
+                Step("throw a Stone half charged at a zombie", () =>
+                {
+                    byte slot = local.refs.items.currentSelectedSlot.Value;
+                    local.refs.items.photonView.RPC("DropItemRpc", RpcTarget.All, HalfThrow, slot, held.transform.position, Vector3.zero, held.transform.rotation, local.player.GetItemSlot(slot).data, false);
+                });
+                yield return new WaitForSeconds(1.5f);
+                FallRecorder.Of = null;
+                List<(float together, float own, bool scout, bool hit)> onIt = StoneContacts.Seen.Where(c => c.scout).ToList();
+                Check("a Stone that stays whole on a zombie (half charged) leaves it standing (9)",
+                    onIt.Count > 0 && FallRecorder.Seconds.Count == 0 && StoneItem.Breaks == wholeBreaks,
+                    $"touched the zombie {onIt.Count} time(s) ({string.Join(", ", onIt.Select(c => $"{c.own:0.#} m/s, hit {c.hit}"))}); zombie knocked down {FallRecorder.Seconds.Count > 0}, breaks {StoneItem.Breaks - wholeBreaks}");
+            }
+            yield return SpawnIntoHand(stone);
+            if (held == null)
+            {
+                yield break;
+            }
             local.data.lookValues = HelperFunctions.DirectionToLook(body.Center - MainCamera.instance.transform.position);
             yield return new WaitForSeconds(0.6f);
             float soundBefore = StoneItem.BreakSound() != null ? StoneItem.BreakSound().lastTimePlayed : 0f;
@@ -5886,9 +6012,10 @@ internal sealed partial class Runner : MonoBehaviour
                 float climbGain = local.refs.climbing.climbSpeedMod - climb;
                 int burstsAfter = FindObjectsByType<Transform>(FindObjectsSortMode.None).Count(t => t.name.StartsWith(ToxicDrink.BurstName, StringComparison.Ordinal));
                 float speed = worse ? ToxicDrink.SpeedWorse : ToxicDrink.Speed;
+                float climbSpeed = worse ? ToxicDrink.ClimbSpeedWorse : ToxicDrink.Speed;
                 float seconds = worse ? ToxicDrink.SecondsWorse : ToxicDrink.Seconds;
-                Check(cooked ? "a cooked Toxic Drink bursts when drunk; its boost is the same (4 times for 10 s)" : $"the Toxic Drink makes walking and climbing {speed:0} times as fast for {seconds:0} s ({level})",
-                    boost != null && Mathf.Abs(boost.totalTime - seconds) < 0.01f && Mathf.Abs(walkGain - (speed - 1f)) < 0.01f && Mathf.Abs(climbGain - (speed - 1f)) < 0.01f && (!cooked || burstsAfter > bursts),
+                Check(cooked ? "a cooked Toxic Drink bursts when drunk; its boost is the same (4 times for 10 s)" : $"the Toxic Drink makes walking {speed:0.#} times and climbing {climbSpeed:0.#} times as fast for {seconds:0} s ({level})",
+                    boost != null && Mathf.Abs(boost.totalTime - seconds) < 0.01f && Mathf.Abs(walkGain - (speed - 1f)) < 0.01f && Mathf.Abs(climbGain - (climbSpeed - 1f)) < 0.01f && (!cooked || burstsAfter > bursts),
                     $"boost {(boost != null ? boost.totalTime.ToString("0.#") + " s" : "none")}, walking +{walkGain:0.##} and climbing +{climbGain:0.##} (times {1f + walkGain:0.##} / {1f + climbGain:0.##}){(cooked ? $", bursts {burstsAfter - bursts}" : "")}");
                 float duringBoost = 0f;
                 float lasted = -1f;
@@ -6072,12 +6199,14 @@ internal sealed partial class Runner : MonoBehaviour
                     yield return new WaitForSeconds(0.5f);
                 }
                 Afflictions.SetStatus(Status.Hunger, 0.5f);
+                A14_WorseItems.Reset();
                 yield return null;
                 yield return EatHeld();
                 float restored = 0.5f - Afflictions.GetCurrentStatus(Status.Hunger);
-                float expected = (cooked ? 2f : 1f) * WildFoods.WeirdShroomHunger * 0.5f;
-                Check(cooked ? "a cooked Weird Shroom restores 5 hunger (15: half of 10)" : "a Weird Shroom restores 2.5 hunger (15: half of its 5; the game: 10)",
-                    Mathf.Abs(restored - expected) < 0.005f, $"{restored * 100f:0.#} hunger restored (expected {expected * 100f:0.#})");
+                float expected = (cooked ? 2f : 1f) * WildFoods.WeirdShroomHunger * A14_WorseItems.FoodShare;
+                float carried = A14_WorseItems.FoodOwed;
+                Check(cooked ? "a cooked Weird Shroom restores 7.5 hunger (15: 75% of 10)" : "a Weird Shroom restores 3.75 hunger (15: 75% of its 5; the game: 10): 2.5 on the bar, 1.25 carried to the next food",
+                    Mathf.Abs(restored + carried - expected) < 0.005f && restored > 0f, $"{restored * 100f:0.##} hunger restored, {carried * 100f:0.##} carried (expected {expected * 100f:0.##} in all)");
                 Afflictions.SetStatus(Status.Hunger, 0f);
             }
         }
@@ -6391,13 +6520,14 @@ internal sealed partial class Runner : MonoBehaviour
                     continue;
                 }
                 pools++;
-                all &= hasLantern && hasTorch && tw * 2 == lw;
+                // The same weight in each of the Lantern's tables (the Mesa's is taken three times over).
+                all &= hasLantern && hasTorch && tw == MoreLanterns.TorchWeight * (pool.Key == SpawnPool.LuggageMesa ? 3 : 1);
                 parts.Add($"{pool.Key}: Lantern {lw}, Torch {tw}");
             }
             int listed = RunSettings.ModifiableItemPrefabs.IndexOf(torch);
             int lanternAt = RunSettings.ModifiableItemPrefabs.IndexOf(lanternItem);
-            Check("the Torch turns up wherever the Lantern does, at half its weight, and spawns in this run (9)",
-                all && pools >= 7 && torch.IsValidToSpawn(), string.Join("; ", parts) + $"; valid to spawn {torch.IsValidToSpawn()}");
+            Check("the Torch turns up wherever the Lantern does and nowhere else, equally often in each (weight 10; the Mesa's table three times over), and spawns in this run",
+                all && pools == 5 && torch.IsValidToSpawn(), string.Join("; ", parts) + $"; valid to spawn {torch.IsValidToSpawn()}");
             Check("on the Custom Run screen the Torch comes right after the Lantern", listed > 0 && listed == lanternAt + 1, $"Torch at {listed}, Lantern at {lanternAt}");
         });
 
@@ -6554,7 +6684,11 @@ internal sealed partial class Runner : MonoBehaviour
         }
     }
 
-    /// <summary>The Lantern in the suitcases of every part of the climb up to the Caldera and the Gloom, at its own rarity (9): picks from each pool.</summary>
+    /// <summary>
+    /// The Lantern in the suitcases of the Shore, the Tropics, the Roots, the Alpine and the Mesa only, on every ascent:
+    /// in the Alpine's at its full Epic weight (the game's), in the Shore's, the Tropics' and the Roots' at half of it, in
+    /// the Mesa's at a third (that table taken three times over, the rest's odds as they were); picks from each pool.
+    /// </summary>
     private IEnumerator LanternPoolsCheck()
     {
         Item lantern = ItemByName(MoreLanterns.LanternPrefab);
@@ -6563,24 +6697,27 @@ internal sealed partial class Runner : MonoBehaviour
             Fail("the Lantern is in the item database");
             yield break;
         }
-        if (!Rules.InExtraAscent)
-        {
-            Info("the Lantern spawn checks are skipped", $"testing ascent {target}");
-            yield break;
-        }
-        Step("Lanterns in every part's suitcases", () =>
+        Step("Lanterns in the suitcases", () =>
         {
             MoreLanterns.Sync();
+            LootData.PopulateLootData();
             int epic = LootData.RarityWeights[Rarity.Epic];
             List<string> parts = new List<string>();
             bool all = true;
-            foreach (SpawnPool pool in new[] { SpawnPool.LuggageBeach, SpawnPool.LuggageJungle, SpawnPool.LuggageRoots, SpawnPool.LuggageTundra, SpawnPool.LuggageMesa, SpawnPool.LuggageCaldera, SpawnPool.LuggageGloom })
+            foreach (SpawnPool pool in new[] { SpawnPool.LuggageBeach, SpawnPool.LuggageJungle, SpawnPool.LuggageRoots, SpawnPool.LuggageTundra, SpawnPool.LuggageMesa })
             {
                 Dictionary<ushort, int> weights = LootData.AllSpawnWeightData.TryGetValue(pool, out Dictionary<ushort, int> found) ? found : null;
                 int lanternWeight = weights != null && weights.TryGetValue(lantern.itemID, out int lw) ? lw : 0;
                 int total = weights != null ? weights.Values.Sum() : 0;
+                // What the share of a pick should be: the Lantern's share of its full weight, against the rest at theirs.
+                float share = pool == SpawnPool.LuggageTundra ? 1f : pool == SpawnPool.LuggageMesa ? 1f / 3f : 0.5f;
+                int scale = pool == SpawnPool.LuggageMesa ? 3 : 1;
+                float expected = epic * share / ((total - lanternWeight) / (float)scale + epic * share);
+                // The rest of the Mesa's table taken three times over: the game's items there at three times their rarity's weight.
+                int scaledRight = weights == null ? 0 : weights.Count(p => p.Key != lantern.itemID && ItemDatabase.TryGetItem(p.Key, out Item it) && it.TryGetComponent(out LootData ld) && p.Value == LootData.RarityWeights[ld.Rarity] * scale);
                 int picks = 0;
-                for (int i = 0; i < 2000; i++)
+                const int Tries = 6000;
+                for (int i = 0; i < Tries; i++)
                 {
                     GameObject pick = LootData.GetRandomItem(pool);
                     if (pick != null && pick.name == MoreLanterns.LanternPrefab)
@@ -6588,12 +6725,15 @@ internal sealed partial class Runner : MonoBehaviour
                         picks++;
                     }
                 }
-                all &= lanternWeight == epic && picks > 0;
-                parts.Add($"{pool}: weight {lanternWeight} of {total}, {picks} of 2000 picks");
+                float got = picks / (float)Tries;
+                bool right = weights != null && lanternWeight == Mathf.RoundToInt(epic * share * scale) && scaledRight >= (weights.Count - 1) * 0.8f
+                    && Mathf.Abs(got - expected) <= Mathf.Max(0.006f, expected * 0.35f);
+                all &= right;
+                parts.Add($"{pool}: weight {lanternWeight} of {total} ({expected:P2} expected a pick), {picks} of {Tries} picks ({got:P2}); {scaledRight} of {(weights?.Count ?? 1) - 1} others at {scale}x their rarity");
             }
-            bool notCitadel = !(LootData.AllSpawnWeightData.TryGetValue(SpawnPool.LuggageCitadel, out Dictionary<ushort, int> citadel) && citadel.ContainsKey(lantern.itemID));
-            Check("the Lantern turns up in the suitcases of every part up to the Caldera and the Gloom, at its own rarity (Epic), and not in the Citadel's (9)",
-                all && notCitadel, string.Join("; ", parts) + $"; in the Citadel's {!notCitadel}");
+            List<SpawnPool> elsewhere = LootData.AllSpawnWeightData.Where(p => p.Value.ContainsKey(lantern.itemID) && (p.Key & MoreLanterns.Places) == 0).Select(p => p.Key).ToList();
+            Check("on every ascent the Lantern turns up in the suitcases of the Shore, the Tropics, the Roots, the Alpine and the Mesa only: the Alpine's as in the game (Epic), half as often in the Shore's, the Tropics' and the Roots', a third in the Mesa's",
+                all && elsewhere.Count == 0, string.Join("; ", parts) + $"; elsewhere: {(elsewhere.Count == 0 ? "none" : string.Join(", ", elsewhere))} (testing ascent {target})");
         });
         yield break;
     }
@@ -7102,13 +7242,22 @@ internal sealed partial class Runner : MonoBehaviour
                 Afflictions.SetStatus(Status.Hot, 0f);
                 Afflictions.SetStatus(Status.Cold, 0f);
                 Meter shaded = new Meter(Status.Hot);
-                yield return new WaitForSeconds(4f);
+                // The storm's reach as it is now (it drifts as the scout moves): its heat measured against that.
+                float exposure = 0f;
+                int looks = 0;
+                for (float until = Time.time + 4f; Time.time < until;)
+                {
+                    exposure += snow.windPlayerFactor;
+                    looks++;
+                    yield return null;
+                }
                 shaded.Stop();
+                float shadedRate = looks > 0 ? exposure / looks * TestStormPerSecond * hotFactor : rate;
                 float roasted = Roasted(parasol);
                 Screenshot("snowstorm-heat-parasol");
                 Check("an open parasol does not keep the snowstorm's heat off (18)" + (sun ? ", and no sun roasts it while the storm blows (23)" : ""),
-                    shade.isOpen && Mathf.Abs(shaded.Total - rate * shaded.Seconds) <= rate * shaded.Seconds * 0.12f && roasted <= 0f,
-                    $"parasol open {shade.isOpen}, {shaded.Total * 100f:0.##} heat in {shaded.Seconds:0.0} s (the storm's {rate * 100f * shaded.Seconds:0.##}), roasted {roasted:0.000}");
+                    shade.isOpen && Mathf.Abs(shaded.Total - shadedRate * shaded.Seconds) <= shadedRate * shaded.Seconds * 0.12f && roasted <= 0f,
+                    $"parasol open {shade.isOpen}, {shaded.Total * 100f:0.##} heat in {shaded.Seconds:0.0} s (the storm's {shadedRate * 100f * shaded.Seconds:0.##} at exposure {(looks > 0 ? exposure / looks : 0f):0.##}), roasted {roasted:0.000}");
             }
             yield return PutAway(parasolPrefab);
 
@@ -7608,7 +7757,11 @@ internal sealed partial class Runner : MonoBehaviour
         return bugfix != null ? bugfix.bugItem : null;
     }
 
-    private IEnumerator HalfFood()
+    /// <summary>
+    /// Ascent 15's food: a plain food restores 75% of its hunger; the Scout Cookies 75% of theirs and half their extra
+    /// stamina; food that restores hunger through a status change 75% too (each listed).
+    /// </summary>
+    private IEnumerator LessFood()
     {
         Item tick = TickItem();
         Item food = SingletonAsset<ItemDatabase>.Instance.itemLookup.Values
@@ -7631,14 +7784,82 @@ internal sealed partial class Runner : MonoBehaviour
         Action_RestoreHunger action = held.GetComponent<Action_RestoreHunger>();
         Unlocked(() =>
         {
-            Afflictions.SetStatus(Status.Hunger, 0.5f);
+            // The bar moves in steps of 2.5: what falls between them is carried to the next food.
+            A14_WorseItems.Reset();
+            Afflictions.SetStatus(Status.Hunger, 0.9f);
             action.RunAction();
-            float restored = 0.5f - Afflictions.GetCurrentStatus(Status.Hunger);
-            float expected = action.restorationAmount * 0.5f;
-            Check("food restores half as much (15)", Mathf.Abs(restored - expected) < 0.002f,
-                $"{held.gameObject.name}: {restored:0.000} of {action.restorationAmount:0.000} (expected {expected:0.000})");
+            float first = 0.9f - Afflictions.GetCurrentStatus(Status.Hunger);
+            float carried = A14_WorseItems.FoodOwed;
+            float four = first;
+            for (int i = 0; i < 3; i++)
+            {
+                // Each meal from the same hunger: four portions together could be more than the bar holds.
+                Afflictions.SetStatus(Status.Hunger, 0.9f);
+                action.RunAction();
+                four += 0.9f - Afflictions.GetCurrentStatus(Status.Hunger);
+            }
+            Check("food restores 75% of its hunger (15): a meal lands on the bar's steps, the rest carried to the next, so four meals restore three portions exactly",
+                Mathf.Abs(first + carried - action.restorationAmount * 0.75f) < 0.002f && Mathf.Abs(four - action.restorationAmount * 3f) < 0.002f && A14_WorseItems.FoodOwed < 0.001f,
+                $"{held.gameObject.name} ({action.restorationAmount * 100f:0.##} hunger): the first {first * 100f:0.##} (+{carried * 100f:0.##} carried), four {four * 100f:0.##} (three portions: {action.restorationAmount * 300f:0.##})");
             Afflictions.SetStatus(Status.Hunger, 0f);
         });
+
+        // Food with extra stamina: the hunger as any food's, the extra stamina still half.
+        Item cookies = ItemByName(VanillaWafers.CookiesPrefab);
+        if (cookies != null)
+        {
+            yield return SpawnIntoHand(cookies);
+        }
+        if (cookies != null && held != null && held.itemID == cookies.itemID)
+        {
+            Action_RestoreHunger cookieFood = held.GetComponent<Action_RestoreHunger>();
+            Action_GiveExtraStamina cookieStamina = held.GetComponent<Action_GiveExtraStamina>();
+            Unlocked(() =>
+            {
+                A14_WorseItems.Reset();
+                Afflictions.SetStatus(Status.Hunger, 0.5f);
+                Local.data.extraStamina = 0f;
+                cookieFood.RunAction();
+                cookieStamina.RunAction();
+                float restored = 0.5f - Afflictions.GetCurrentStatus(Status.Hunger);
+                float stamina = Local.data.extraStamina;
+                Check("the Scout Cookies restore 75% of their hunger, and give half their extra stamina (15)",
+                    Mathf.Abs(restored - cookieFood.restorationAmount * 0.75f) < 0.002f && Mathf.Abs(stamina - cookieStamina.amount * 0.5f) < 0.002f,
+                    $"a bite: {restored * 100f:0.##} of {cookieFood.restorationAmount * 100f:0.##} hunger, {stamina * 100f:0.##} of {cookieStamina.amount * 100f:0.##} extra stamina");
+                Afflictions.SetStatus(Status.Hunger, 0f);
+                Local.data.extraStamina = 0f;
+            });
+        }
+        else
+        {
+            Fail("the Scout Cookies in hand, for the extra stamina check");
+        }
+
+        // Food that restores hunger through a status change (not the game's food action).
+        List<(Item item, Action_ModifyStatus status)> byStatus = SingletonAsset<ItemDatabase>.Instance.itemLookup.Values
+            .Where(i => i != null && (tick == null || i.itemID != tick.itemID))
+            .SelectMany(i => i.GetComponentsInChildren<Action_ModifyStatus>(true).Where(m => m.statusType == Status.Hunger && m.changeAmount < 0f).Select(m => (i, m)))
+            .ToList();
+        Info("food that restores hunger through a status change", byStatus.Count == 0 ? "none" : string.Join(", ", byStatus.Select(f => $"{f.item.gameObject.name} {-f.status.changeAmount * 100f:0.#}")));
+        if (byStatus.Count > 0)
+        {
+            Item first = byStatus[0].item;
+            yield return SpawnIntoHand(first);
+            Action_ModifyStatus status = held != null && held.itemID == first.itemID ? held.GetComponentsInChildren<Action_ModifyStatus>(true).FirstOrDefault(m => m.statusType == Status.Hunger && m.changeAmount < 0f) : null;
+            if (status != null)
+            {
+                float game = -status.changeAmount;
+                Unlocked(() =>
+                {
+                    Afflictions.SetStatus(Status.Hunger, 0.5f);
+                    status.RunAction();
+                    float restored = 0.5f - Afflictions.GetCurrentStatus(Status.Hunger);
+                    Check("food restoring hunger through a status change restores 75% of it as well (15)", Mathf.Abs(restored - game * 0.75f) < 0.002f,
+                        $"{first.gameObject.name}: {restored * 100f:0.##} of {game * 100f:0.##} hunger");
+                    Afflictions.SetStatus(Status.Hunger, 0f);
+                });
+            }
+        }
     }
 
     /// <summary>Eating the tick that was pulled off (it is in the hand after <see cref="TickBites"/>).</summary>
@@ -10434,6 +10655,92 @@ internal sealed partial class Runner : MonoBehaviour
             Afflictions.UpdateWeight();
             ClearStatuses(Afflictions);
             Protect(true);
+        }
+    }
+
+    /// <summary>
+    /// A thrown cactus ball (15): thrown at full charge, it leaves the hand 1.5 times slower than with ascent 15's rule off
+    /// (switched in memory).
+    /// </summary>
+    private IEnumerator CactusThrow()
+    {
+        Item cactus = ItemByName("CactusBall");
+        if (cactus == null || Rules.Level < Lvl.WorseItems)
+        {
+            Info("the cactus throw check is skipped", cactus == null ? "no cactus ball in the item database" : $"testing ascent {target}");
+            yield break;
+        }
+        Character local = Local;
+        Vector2 look = local.data.lookValues;
+        ConfigEntry<bool> worse = UltimateAscent.Plugin.AscentSwitches[Lvl.WorseItems];
+        bool saved = worse.Value;
+        Dictionary<bool, float> speed = new Dictionary<bool, float>();
+        Protect(true);
+        try
+        {
+            foreach (bool on in new[] { true, false })
+            {
+                worse.Value = on;
+                HostOptions.Invalidate();
+                // The step before may have left a cactus ball stuck to the scout, which its tidying destroys at the end of
+                // a frame: a moment first, and a second try if the hand still held that one.
+                yield return new WaitForSeconds(1f);
+                yield return SpawnIntoHand(cactus);
+                if (held == null)
+                {
+                    yield return new WaitForSeconds(1f);
+                    yield return SpawnIntoHand(cactus);
+                }
+                if (held == null)
+                {
+                    Info("the cactus throw check stopped", "no cactus ball in the hand");
+                    yield break;
+                }
+                local.data.lookValues = new Vector2(look.x, 10f);
+                yield return new WaitForSeconds(0.6f);
+                HashSet<Item> before = new HashSet<Item>(Item.ALL_ITEMS);
+                Step("throw a cactus ball at full charge" + (on ? "" : " (ascent 15's rule off)"), () =>
+                {
+                    byte slot = local.refs.items.currentSelectedSlot.Value;
+                    local.refs.items.photonView.RPC("DropItemRpc", RpcTarget.All, 1f, slot, held.transform.position, Vector3.zero, held.transform.rotation, local.player.GetItemSlot(slot).data, false);
+                });
+                Item thrown = null;
+                for (float until = Time.time + 1f; Time.time < until && thrown == null;)
+                {
+                    thrown = Item.ALL_ITEMS.FirstOrDefault(i => i != null && !before.Contains(i) && i.itemID == cactus.itemID);
+                    if (thrown == null)
+                    {
+                        yield return null;
+                    }
+                }
+                // As it leaves the hand (the first physics step after the throw).
+                speed[on] = thrown != null && thrown.rig != null ? thrown.rig.linearVelocity.magnitude : -1f;
+                yield return new WaitForSeconds(1f);
+                if (thrown != null && thrown.photonView != null)
+                {
+                    PhotonNetwork.Destroy(thrown.gameObject);
+                }
+                held = null;
+            }
+        }
+        finally
+        {
+            worse.Value = saved;
+            HostOptions.Invalidate();
+            local.data.lookValues = look;
+            local.refs.afflictions.RemoveAllThorns();
+            Afflictions.UpdateWeight();
+            ClearStatuses(Afflictions);
+        }
+        if (speed.Count < 2)
+        {
+            Info("the cactus throw check stopped", $"{speed.Count} of 2 throws measured");
+        }
+        if (speed.Count == 2)
+        {
+            float ratio = speed[false] > 0f ? speed[true] / speed[false] : 0f;
+            Check("a cactus ball is thrown 1.5 times weaker (15)", speed[true] > 0f && Mathf.Abs(ratio - 1f / A14_WorseItems.CactusThrowWeaker) < 0.04f,
+                $"{speed[true]:0.0} m/s at full charge, {speed[false]:0.0} m/s with ascent 15's rule off: x{ratio:0.00} (expected x{1f / A14_WorseItems.CactusThrowWeaker:0.00})");
         }
     }
 

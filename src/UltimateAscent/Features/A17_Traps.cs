@@ -23,15 +23,15 @@ namespace UltimateAscent.Features;
 /// their blades wobbling 1.5 times as fast too. Every scout's game moves them by the run's shared clock, so they
 /// stay in step. The pressure plates' spikes come up 1.5 times as soon (0.53 s after the
 /// step; the game: 0.8 s).</item>
-/// <item>Ladders help less: climbing one is 1.2 times as fast as climbing rock (the game: 3 times) and costs 90%
+/// <item>Ladders help less: climbing one is 1.5 times as fast as climbing rock (the game: 3 times) and costs 75%
 /// of its stamina (the game: 25%).</item>
-/// <item>Mimic chests release gas that puts 5 drowsiness, 5 poison and 5 spores on you every 0.5 s
+/// <item>Mimic chests release gas that puts 5 drowsiness, 2.5 poison and 2.5 spores on you every 0.5 s
 /// (the game: 5 drowsiness), and look like ordinary chests (the game gives its mimics a chest of their own). A
 /// 35% share of the ordinary chests in the Citadel are mimics too, picked anew for each climb (the same ones for
 /// every player): they release the same gas when opened, and keep their loot like the game's own mimics.</item>
 /// <item>Napberries pulse once a second (the game: twice every 3 s).</item>
-/// <item>An arrow trap's green warning line shows only its first half metre out of the opening (the game: all
-/// the way to where the arrow would land).</item>
+/// <item>An arrow trap's green warning line reaches only 1 m out of its opening (the game: all the way to where
+/// the arrow would land).</item>
 /// </list>
 /// </summary>
 internal static class A17_Traps
@@ -47,8 +47,8 @@ internal static class A17_Traps
     internal const float TrapSpeed = 1.5f;
 
     /// <summary>A ladder's climbing speed and stamina, against climbing rock (the game's: 3 and 0.25).</summary>
-    internal const float LadderSpeed = 1.2f;
-    internal const float LadderStamina = 0.9f;
+    internal const float LadderSpeed = 1.5f;
+    internal const float LadderStamina = 0.75f;
 
     /// <summary>The game counts a climbing surface this cheap as a ladder (its ladder crosshair).</summary>
     internal const float GameLadderStamina = 0.34f;
@@ -56,8 +56,9 @@ internal static class A17_Traps
     /// <summary>The share of the Citadel's ordinary chests that are mimics.</summary>
     internal const float MimicShare = 0.35f;
 
-    /// <summary>What the mimic gas puts on the bar of each status every tick (0.5 s).</summary>
-    private const float GasTick = 0.05f;
+    /// <summary>What the mimic gas puts on the bar every tick (0.5 s): drowsiness, and poison and spores each.</summary>
+    internal const float GasDrowsy = 0.05f;
+    internal const float GasPoisonSpores = 0.025f;
 
     /// <summary>The napberry animation holds two pulses in a 3 s loop; played 1.5x as fast, that is one a second.</summary>
     private const float NapberryPace = 1.5f;
@@ -260,7 +261,7 @@ internal static class A17_Traps
         return flag.gas;
     }
 
-    /// <summary>Mimic gas: 5 drowsiness, 5 poison and 5 spores every tick, exactly.</summary>
+    /// <summary>Mimic gas: 5 drowsiness, 2.5 poison and 2.5 spores every tick, exactly.</summary>
     [HarmonyPatch(typeof(StatusField), nameof(StatusField.TickStatus))]
     private static class MimicGas
     {
@@ -275,9 +276,9 @@ internal static class A17_Traps
             {
                 __instance.tick = 0f;
                 CharacterAfflictions afflictions = Character.localCharacter.refs.afflictions;
-                afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Drowsy, A15_StrongerAilments.Raw(CharacterAfflictions.STATUSTYPE.Drowsy, GasTick));
-                afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Poison, A15_StrongerAilments.Raw(CharacterAfflictions.STATUSTYPE.Poison, GasTick));
-                afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Spores, A15_StrongerAilments.Raw(CharacterAfflictions.STATUSTYPE.Spores, GasTick));
+                afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Drowsy, A15_StrongerAilments.Raw(CharacterAfflictions.STATUSTYPE.Drowsy, GasDrowsy));
+                afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Poison, A15_StrongerAilments.Raw(CharacterAfflictions.STATUSTYPE.Poison, GasPoisonSpores));
+                afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Spores, A15_StrongerAilments.Raw(CharacterAfflictions.STATUSTYPE.Spores, GasPoisonSpores));
             }
             return false;
         }
@@ -371,8 +372,8 @@ internal static class A17_Traps
         // The arrow traps are kept: the level's traps wake before a climb starts; gone ones drop out in the tick.
     }
 
-    /// <summary>How far an arrow trap's warning line reaches out of its opening.</summary>
-    internal const float WarningLineReach = 0.5f;
+    /// <summary>How far an arrow trap's warning line reaches out of its opening (where the line leaves the trap's housing).</summary>
+    internal const float WarningLineReach = 1f;
 
     /// <summary>The arrow traps in the level, and whether their warning line is cut short now.</summary>
     private static readonly System.Collections.Generic.Dictionary<ArrowShooter, bool> arrowTraps = new System.Collections.Generic.Dictionary<ArrowShooter, bool>();
@@ -394,18 +395,22 @@ internal static class A17_Traps
         }
     }
 
-    private static bool Shorten(LineRenderer line)
+    /// <summary>
+    /// The line ends 1 m past the trap's mouth (it starts inside the housing, behind the muzzle: cut a fixed length from
+    /// there, little or nothing of it showed), never past the game's end.
+    /// </summary>
+    private static bool Shorten(ArrowShooter trap)
     {
+        LineRenderer line = trap.lineRenderer;
         if (line == null || line.positionCount < 2)
         {
             return false;
         }
-        Vector3 start = line.useWorldSpace ? line.GetPosition(0) : line.transform.TransformPoint(line.GetPosition(0));
         Vector3 end = line.useWorldSpace ? line.GetPosition(1) : line.transform.TransformPoint(line.GetPosition(1));
-        Vector3 along = end - start;
-        if (along.magnitude > WarningLineReach)
+        float reach = GameFixes.Bore(trap).mouth + WarningLineReach;
+        if (Vector3.Dot(end - trap.pos, trap.forward) > reach + 0.001f)
         {
-            end = start + along.normalized * WarningLineReach;
+            end = trap.pos + trap.forward * reach;
             line.SetPosition(1, line.useWorldSpace ? end : line.transform.InverseTransformPoint(end));
         }
         return true;
@@ -430,7 +435,7 @@ internal static class A17_Traps
             }
             if (on)
             {
-                arrowTraps[trap.Key] = Shorten(trap.Key.lineRenderer);
+                arrowTraps[trap.Key] = Shorten(trap.Key);
             }
             else if (trap.Value)
             {

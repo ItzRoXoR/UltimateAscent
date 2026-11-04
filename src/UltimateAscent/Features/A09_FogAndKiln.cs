@@ -8,14 +8,19 @@ namespace UltimateAscent.Features;
 /// <summary>
 /// Ascent 9 (13DDA): the fog moves twice as fast and starts almost at once (20 s instead of
 /// waiting for the scouts to move on), from the beach until the Caldera or the Gloom; it changes
-/// no fog from there on (with True Final Ascent's FINAL ASCENT, whose Caldera comes before its
-/// Gloom, that means until the Caldera).
-/// The Kiln's lava and the Citadel's gloom start after 30 seconds and reach the top in 700 seconds;
+/// no fog from there on. With True Final Ascent's FINAL ASCENT it goes wherever TFA's fog goes
+/// (its Builder sends the fog through every block).
+/// The Kiln's lava and the Citadel's gloom start after 30 seconds and reach the top in 700 seconds
+/// (a taller one, built by TFA's Builder, rises as fast, so it takes longer);
 /// the Nadir's ghosts rise 2.5 times as fast.
 /// </summary>
 internal static class A09_FogAndKiln
 {
     private const float FogWaitSeconds = 20f;
+
+    /// <summary>The Kiln's lava and the Citadel's gloom reach the top in this long (the game: 1,200 s).</summary>
+    internal const float RiseSeconds = 700f;
+    internal const float GameRiseSeconds = 1200f;
 
     /// <summary>The fog origins below the Caldera/Gloom are the beach, Tropics/Roots and Alpine/Mesa ones.</summary>
     private const int CalderaFogId = (int)Segment.Caldera;
@@ -46,7 +51,13 @@ internal static class A09_FogAndKiln
             return false;
         }
         int id = handler.currentID;
-        return id >= 0 && id < CalderaFogId && id < handler.origins.Length && handler.origins[id] != null && !handler.origins[id].disableFog && BeforeTheVolcano;
+        if (id < 0 || id >= handler.origins.Length || handler.origins[id] == null || handler.origins[id].disableFog)
+        {
+            return false;
+        }
+        // Wherever True Final Ascent's FINAL ASCENT sends the fog (its Builder: through every block, the Caldera, the Gloom
+        // and the Nadir too), this rule goes along with it. The fog's number there is TFA's segment, not the biome's.
+        return Compat.Tfa.FinalAscentActive || (id < CalderaFogId && BeforeTheVolcano);
     }
 
     /// <summary>Fog speed x2 (only the normal fog speeds; never compounds).</summary>
@@ -99,13 +110,15 @@ internal static class A09_FogAndKiln
     {
         private static void Prefix(LavaRising __instance)
         {
+            // Only the scouts' own part of the map rises (True Final Ascent's Builder: its segment, which may hold several
+            // blocks, so the place tells which hazard is theirs).
             if (!Rules.Enabled(Lvl.FogAndKiln) || !Map.Ready || Map.CurrentSegment != __instance.requiredSegment)
             {
                 return;
             }
-            bool kilnLava = __instance.risingFieldType == LavaRising.RisingFieldType.Lava && __instance.requiredSegment == Segment.TheKiln && Map.InVolcanoKiln;
-            bool citadelGloom = __instance.risingFieldType == LavaRising.RisingFieldType.Gloom && __instance.requiredSegment == Segment.TheKiln;
-            bool nadirGhosts = __instance.risingFieldType == LavaRising.RisingFieldType.VoidGhosts && __instance.requiredSegment == Segment.Void;
+            bool kilnLava = __instance.risingFieldType == LavaRising.RisingFieldType.Lava && Map.InVolcanoKiln;
+            bool citadelGloom = __instance.risingFieldType == LavaRising.RisingFieldType.Gloom && Map.InCitadel;
+            bool nadirGhosts = __instance.risingFieldType == LavaRising.RisingFieldType.VoidGhosts && Map.InNadir;
             if (!kilnLava && !citadelGloom && !nadirGhosts)
             {
                 return;
@@ -115,7 +128,8 @@ internal static class A09_FogAndKiln
             {
                 return;
             }
-            float travel = nadirGhosts ? original / 2.5f : Mathf.Min(700f, original);
+            // 700 s where the game takes 1,200 s; a Kiln or Citadel the Builder made taller rises longer, at the same pace.
+            float travel = nadirGhosts ? original / 2.5f : original * RiseSeconds / GameRiseSeconds;
             if (!nadirGhosts && __instance.initialWaitTime != 30f)
             {
                 Overrides.Set(__instance, nameof(LavaRising.initialWaitTime), Mathf.Min(30f, Overrides.Original(__instance, "initialWaitTime", __instance.initialWaitTime)));

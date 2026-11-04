@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Runtime.CompilerServices;
 using HarmonyLib;
 using UltimateAscent.Core;
@@ -14,9 +15,12 @@ namespace UltimateAscent.Features;
 /// revived scouts, and ascent 19 takes those statues away, so joiners arrived dead.</item>
 /// <item>A scout's arrival (the game spawns joiners and kills them at once before any revive) is no death for ascent
 /// 11's curse on the survivors: <see cref="JustArrived"/>.</item>
-/// <item>On every ascent: the game gives the starting curse (from ascent 7) only to scouts who wake up on the beach;
-/// a seat by the plane that does not start its scout passed out gave none, so one scout started without it. Those
-/// scouts get it as they appear (True Final Ascent does the same for its FINAL ASCENT).</item>
+/// <item>On every ascent: the starting curse (from ascent 7) reaches every scout. The game gives it once, as a scout
+/// wakes up on the beach (or at the base camp), on that scout's own game, and it could miss: a seat by the plane that
+/// does not start its scout passed out gave none, and a joining player's game could lose it while its scout was being
+/// set up (statuses are refused while a scout is being moved, or while the game still counts it in the airport). So once
+/// the scout is up it is checked, once: what is missing of it is added as soon as its statuses are taken again (True
+/// Final Ascent does the same for its FINAL ASCENT).</item>
 /// </list>
 /// </summary>
 internal static class LateJoiners
@@ -89,29 +93,56 @@ internal static class LateJoiners
         }
     }
 
-    /// <summary>A scout starting the climb without waking up on the beach gets the starting curse as it appears.</summary>
+    /// <summary>How long after a scout appears its starting curse is still checked (it must be up by then).</summary>
+    private const float CurseCheckSeconds = 60f;
+
+    /// <summary>A scout starting the climb (on the beach, or arriving at the base camp) has its starting curse checked once it is up.</summary>
     [HarmonyPatch(typeof(CharacterSpawner), nameof(CharacterSpawner.SpawnMyPlayerCharacter))]
     private static class StartingCurse
     {
         private static void Postfix(CharacterSpawner.SpawnFlavor spawnFlavor, bool initializeNewScout, Character __result)
         {
-            if (__result == null || !initializeNewScout || (spawnFlavor == CharacterSpawner.SpawnFlavor.PassedOut && !CharacterSpawner.BlockPassOutSpawns)
-                || !GameHandler.IsOnIsland || GameHandler.PlayersHaveLeftShore || Peak.Quicksave.ShouldUseSaveData || RunSettings.isMiniRun)
+            if (__result == null || !initializeNewScout || !GameHandler.IsOnIsland || Peak.Quicksave.ShouldUseSaveData || RunSettings.isMiniRun)
             {
                 return;
             }
+            __result.StartCoroutine(MakeUpStartingCurse(__result, spawnFlavor.ToString()));
+        }
+    }
+
+    /// <summary>
+    /// Once the scout is alive and awake (within a minute of appearing): a scout who has all of the starting curse is left
+    /// as is; what is missing is added, once, as soon as its statuses are taken.
+    /// </summary>
+    internal static IEnumerator MakeUpStartingCurse(Character scout, string how)
+    {
+        for (float until = Time.time + CurseCheckSeconds; Time.time < until; )
+        {
+            yield return null;
+            if (scout == null || !scout.IsLocal)
+            {
+                yield break;
+            }
+            CharacterAfflictions afflictions = scout.refs != null ? scout.refs.afflictions : null;
+            if (afflictions == null || !Rules.InRun || scout.data.dead || scout.data.passedOut || scout.data.fullyPassedOut || scout.data.passedOutOnTheBeach > 0f
+                || scout.data.fallSeconds > 0f)
+            {
+                continue;
+            }
+            // Up: a scout who has it is done; one who lacks it waits until statuses are taken again.
             float curse = Ascents.startingCurse;
-            CharacterAfflictions afflictions = __result.refs != null ? __result.refs.afflictions : null;
-            if (curse <= 0f || afflictions == null)
-            {
-                return;
-            }
             float has = afflictions.GetCurrentStatus(CharacterAfflictions.STATUSTYPE.Curse);
-            if (has < curse)
+            if (curse <= 0f || has >= curse - 0.001f)
             {
-                afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Curse, curse - has);
-                Plugin.Log.LogInfo($"Starting curse given to a scout who did not wake up on the beach ({spawnFlavor}): {curse * 100f:0}.");
+                yield break;
             }
+            if (scout.statusesLocked || scout.warping || afflictions.m_inAirport)
+            {
+                continue;
+            }
+            afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Curse, curse - has);
+            Plugin.Log.LogInfo($"Starting curse made up ({how}): had {has * 100f:0.#}, now {curse * 100f:0}.");
+            yield break;
         }
     }
 }

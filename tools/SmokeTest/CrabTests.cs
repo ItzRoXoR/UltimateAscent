@@ -261,6 +261,53 @@ internal sealed partial class Runner
             ClearStatuses(afflictions);
             held = null;
 
+            // Down, a scout is left alone: knocked down 2 s right by a crab free to go for them, no pinch (nor its going for
+            // them) while they lie and in their first 5 s up again; after that it goes for them as before.
+            {
+                Vector3? byIt = StandNear(pincher.transform.position, 1.1f, 1.5f) ?? StandNear(pincher.transform.position, 1.1f, 1.8f, firm: false);
+                pincher.Still = true;
+                pincher.Unaware = true;
+                if (byIt.HasValue)
+                {
+                    local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, byIt.Value + Vector3.up * 1.2f, false);
+                }
+                yield return new WaitForSeconds(1f);
+                ClearStatuses(afflictions);
+                local.Fall(2f);
+                yield return null;
+                int pinchesAtFall = Crabs.PinchesTaken;
+                pincher.Unaware = false;
+                float upAt = -1f, pinchedAt = -1f;
+                bool wentForDown = false;
+                for (float until = Time.time + 2.5f + Crabs.UpFor + 8f; Time.time < until && pinchedAt < 0f;)
+                {
+                    yield return null;
+                    bool down = local.data.fallSeconds > 0f;
+                    if (!down && upAt < 0f)
+                    {
+                        upAt = Time.time;
+                    }
+                    bool graced = down || upAt < 0f || Time.time - upAt < Crabs.UpFor - 0.1f;
+                    wentForDown |= graced && pincher.Target == local;
+                    if (!graced)
+                    {
+                        // The grace over: it may crawl up and pinch.
+                        pincher.Still = false;
+                    }
+                    if (Crabs.PinchesTaken > pinchesAtFall)
+                    {
+                        pinchedAt = Time.time;
+                    }
+                }
+                pincher.Unaware = true;
+                pincher.Still = false;
+                float pinchedAfterUp = pinchedAt >= 0f && upAt >= 0f ? pinchedAt - upAt : -1f;
+                Check("a crab leaves a scout who is down alone: no pinch while they lie, nor in their first 5 s back on their feet; then it goes for them (17)",
+                    upAt >= 0f && !wentForDown && pinchedAfterUp >= Crabs.UpFor,
+                    $"up again {(upAt >= 0f ? "yes" : "no")}; went for them meanwhile {wentForDown}; pinched {(pinchedAfterUp >= 0f ? $"{pinchedAfterUp:0.0} s after they got up" : pinchedAt >= 0f ? "while down" : "not at all")}");
+                ClearStatuses(afflictions);
+            }
+
             // Held: a crab in the scout's hands pinches them (as a scorpion stings its holder) and falls out of them.
             yield return SpawnIntoHand(Crabs.Template);
             Item heldCrab = held;
@@ -358,18 +405,20 @@ internal sealed partial class Runner
                 {
                     afflictions.SetStatus(Status.Hunger, 0.4f);
                     local.data.extraStamina = 0f;
+                    A14_WorseItems.Reset();
                 });
                 float hungerBefore = afflictions.GetCurrentStatus(Status.Hunger);
                 float staminaBefore = local.data.extraStamina;
                 yield return EatHeld();
                 float hunger = hungerBefore - afflictions.GetCurrentStatus(Status.Hunger);
                 float stamina = local.data.extraStamina - staminaBefore;
-                float wanted = half ? 0.05f : 0.1f;
-                foodRight &= Mathf.Abs(hunger - wanted) < 0.006f && Mathf.Abs(stamina - wanted) < 0.006f;
+                float wantedHunger = half ? 0.1f * A14_WorseItems.FoodShare : 0.1f;
+                float wantedStamina = half ? 0.1f * A14_WorseItems.ExtraStaminaShare : 0.1f;
+                foodRight &= Mathf.Abs(hunger - wantedHunger) < 0.006f && Mathf.Abs(stamina - wantedStamina) < 0.006f;
                 food.Add($"{Eaten(half)}: {hunger * 100f:0.0} hunger, {stamina * 100f:0.0} extra stamina");
             }
             halfFood.Value = halfFoodWas;
-            Check("cooked, a crab is a crab leg (its model, darker than the live crab, its icon and its name); eaten, 10 hunger and 10 extra stamina, 5 and 5 with ascent 15's half food (17)",
+            Check("cooked, a crab is a crab leg (its model, darker than the live crab, its icon and its name); eaten, 10 hunger and 10 extra stamina, 7.5 and 5 with ascent 15's worse food (17)",
                 looksRight && shellShare < 0.45f && foodRight && named.IndexOf(LocalizedText.GetText(Crabs.LegNameKey), StringComparison.OrdinalIgnoreCase) >= 0 && iconName == (Crabs.LegIcon != null ? Crabs.LegIcon.name : "?"),
                 $"shown as a leg {looksRight}, its shell {shellShare:0.00} as bright as the live crab's; named '{named}'; the slot's icon '{iconName}'; {string.Join("; ", food)}");
 

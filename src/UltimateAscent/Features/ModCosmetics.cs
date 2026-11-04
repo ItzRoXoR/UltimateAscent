@@ -12,11 +12,13 @@ using Zorro.Core;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// Three cosmetics the game made and never offered, now in the passport (on every run, alone or with others):
-/// the Orange Spacesuit (the Astronaut suit in the game's own orange texture), the Orange Helmet (the orange
-/// space helmet every scout already carries, switched off) and the VR Headset (likewise). Each is unlocked by
-/// one of the mod's challenges (<see cref="CosmeticUnlocks"/>); none has a Scout badge or touches the badge
-/// ribbon. Clicking one while it is locked tells how to unlock it.
+/// The mod's cosmetics in the passport (on every run, alone or with others): three the game made and never offered,
+/// the Orange Spacesuit (the Astronaut suit in the game's own orange texture), the Orange Helmet (the orange space
+/// helmet every scout already carries, switched off) and the VR Headset (likewise), the Pain Sash (<see
+/// cref="PainSash"/>), after the game's sashes, and the Burnt Skin, a skin colour after the game's (charred, in the Pain
+/// Sash's colours, <see cref="BurntSkin"/>). Each is unlocked by one of the mod's challenges (<see
+/// cref="CosmeticUnlocks"/>); none has a Scout badge or touches the badge ribbon. Clicking one while it is locked
+/// tells how to unlock it.
 /// <para>What a player unlocked and which of these they wear is kept in the mod's save (<see cref="ModSave"/>),
 /// not in Steam: the game would write the choice into a Steam stat, so for these it does not. Players without
 /// the mod see the game's default in their place (the game's own correction of unknown cosmetics).</para>
@@ -24,6 +26,10 @@ namespace UltimateAscent.Features;
 /// the Bundled outfits' ice hoods, worn through those outfits), and a hat's place in the list is its model's
 /// place in the row. So the two hats join the list at its end and their models go in at the same places, the
 /// ice hoods moving two along (the Bundled outfits are told so).</para>
+/// <para>The sash: a sash's place in the list is its material's place in each scout's row of sash materials, so the
+/// Pain Sash's material goes into every scout's row at the sash's place. Players without the mod see the game's last
+/// sash in its place (the game's own correction of a sash it does not know). A skin is only its colour: the Burnt Skin
+/// joins the game's list at its end.</para>
 /// </summary>
 internal static class ModCosmetics
 {
@@ -41,13 +47,18 @@ internal static class ModCosmetics
     private static readonly Piece OrangeHelmet = new Piece { Key = "orangehelmet", Unlock = CosmeticUnlocks.OrangeSpacesuit, Type = Customization.Type.Hat, Model = "SpaceHelmet Orange", Icon = "OrangeHelmet_icon.png" };
     private static readonly Piece VrHeadset = new Piece { Key = "vrheadset", Unlock = CosmeticUnlocks.VrHeadset, Type = Customization.Type.Hat, Model = "VRHeadset", Icon = "VRHeadset_icon.png" };
     private static readonly Piece OrangeSpacesuit = new Piece { Key = "orangespacesuit", Unlock = CosmeticUnlocks.OrangeSpacesuit, Type = Customization.Type.Fit, Icon = "OrangeSpacesuit_icon.png" };
-    private static readonly Piece[] Pieces = { OrangeHelmet, VrHeadset, OrangeSpacesuit };
+    private static readonly Piece PainSashPiece = new Piece { Key = "painsash", Unlock = CosmeticUnlocks.PainSash, Type = Customization.Type.Sash, Icon = "PainSash_icon.png" };
+    internal const string BurntSkinKey = "burntskin";
+    private static readonly Piece BurntSkinPiece = new Piece { Key = BurntSkinKey, Unlock = CosmeticUnlocks.BurntSkin, Type = Customization.Type.Skin };
+    private static readonly Piece[] Pieces = { OrangeHelmet, VrHeadset, OrangeSpacesuit, PainSashPiece, BurntSkinPiece };
 
     internal const string AstronautFit = "Fit_Astronaut";
     internal const string AstronautHat = "Hat_26_Astronaut";
 
     private const string HatKey = "hat";
     private const string OutfitKey = "outfit";
+    private const string SashKey = "sash";
+    private const string SkinKey = "skin";
 
     private static Customization extended;
     private static int hatsBefore = -1;
@@ -109,7 +120,7 @@ internal static class ModCosmetics
         return null;
     }
 
-    /// <summary>Adds the three to the game's lists, once per Customization (they are there before anything reads an index).</summary>
+    /// <summary>Adds ours to the game's lists, once per Customization (they are there before anything reads an index).</summary>
     internal static void Ensure()
     {
         Customization customization = Singleton<Customization>.Instance;
@@ -168,7 +179,52 @@ internal static class ModCosmetics
             OrangeSpacesuit.Index = fits.Count;
             fits.Add(OrangeSpacesuit.Option);
             customization.fits = fits.ToArray();
-            Plugin.Log.LogInfo($"Cosmetics: Orange Helmet and VR Headset are hats {OrangeHelmet.Index} and {VrHeadset.Index}, the Orange Spacesuit is outfit {OrangeSpacesuit.Index}.");
+
+            // The Pain Sash after the game's sashes (an option like the galaxy sash's, the last of them).
+            List<CustomizationOption> sashes = new List<CustomizationOption>(customization.sashes ?? Array.Empty<CustomizationOption>());
+            sashes.RemoveAll(sash => PieceOf(sash) != null);
+            if (PainSashPiece.Option == null && sashes.Count > 0 && sashes[sashes.Count - 1] != null)
+            {
+                CustomizationOption pain = UnityEngine.Object.Instantiate(sashes[sashes.Count - 1]);
+                pain.name = "UA_Sash_PainSash";
+                pain.hideFlags = HideFlags.DontUnloadUnusedAsset;
+                pain.requiredAchievement = ACHIEVEMENTTYPE.NONE;
+                pain.requiredSteamStat = STEAMSTATTYPE.NONE;
+                pain.requiresAscent = false;
+                pain.customRequirement = CustomizationOption.CUSTOMREQUIREMENT.None;
+                pain.texture = Icon(PainSashPiece.Icon) ?? pain.texture;
+                PainSashPiece.Option = pain;
+            }
+            if (PainSashPiece.Option != null)
+            {
+                PainSashPiece.Index = sashes.Count;
+                sashes.Add(PainSashPiece.Option);
+                customization.sashes = sashes.ToArray();
+            }
+
+            // The Burnt Skin after the game's skins (an option like their last one, in its own colour).
+            List<CustomizationOption> skins = new List<CustomizationOption>(customization.skins ?? Array.Empty<CustomizationOption>());
+            skins.RemoveAll(skin => PieceOf(skin) != null);
+            if (BurntSkinPiece.Option == null && skins.Count > 0 && skins[skins.Count - 1] != null)
+            {
+                CustomizationOption burnt = UnityEngine.Object.Instantiate(skins[skins.Count - 1]);
+                burnt.name = "UA_Skin_Burnt";
+                burnt.hideFlags = HideFlags.DontUnloadUnusedAsset;
+                burnt.requiredAchievement = ACHIEVEMENTTYPE.NONE;
+                burnt.requiredSteamStat = STEAMSTATTYPE.NONE;
+                burnt.requiresAscent = false;
+                burnt.customRequirement = CustomizationOption.CUSTOMREQUIREMENT.None;
+                burnt.color = BurntSkin.Colour;
+                BurntSkinPiece.Option = burnt;
+            }
+            if (BurntSkinPiece.Option != null)
+            {
+                BurntSkinPiece.Index = skins.Count;
+                skins.Add(BurntSkinPiece.Option);
+                customization.skins = skins.ToArray();
+            }
+            Plugin.Log.LogInfo($"Cosmetics: Orange Helmet and VR Headset are hats {OrangeHelmet.Index} and {VrHeadset.Index}, the Orange Spacesuit is outfit {OrangeSpacesuit.Index}, "
+                + $"the Pain Sash is sash {PainSashPiece.Index}, the Burnt Skin is skin {BurntSkinPiece.Index}.");
         }
         catch (Exception ex)
         {
@@ -203,7 +259,7 @@ internal static class ModCosmetics
         return orange;
     }
 
-    private static Texture2D Icon(string name)
+    internal static Texture2D Icon(string name)
     {
         using Stream stream = typeof(ModCosmetics).Assembly.GetManifestResourceStream("UltimateAscent." + name);
         if (stream == null)
@@ -246,10 +302,17 @@ internal static class ModCosmetics
         return model != null ? model.GetComponent<Renderer>() : null;
     }
 
-    /// <summary>Puts the two hat models into this scout's row at the hats' places (once per scout).</summary>
+    /// <summary>Puts ours into this scout's rows of models and materials (once per scout).</summary>
     private static void Dress(CustomizationRefs refs)
     {
         Ensure();
+        DressHats(refs);
+        DressSash(refs);
+    }
+
+    /// <summary>Puts the two hat models into this scout's row at the hats' places.</summary>
+    private static void DressHats(CustomizationRefs refs)
+    {
         if (refs == null || refs.playerHats == null || hatsBefore < 0 || OrangeHelmet.Option == null || refs.playerHats.Length < hatsBefore)
         {
             return;
@@ -262,6 +325,27 @@ internal static class ModCosmetics
         row.Insert(hatsBefore, ModelOrStandIn(refs, VrHeadset.Model));
         row.Insert(hatsBefore, ModelOrStandIn(refs, OrangeHelmet.Model));
         refs.playerHats = row.ToArray();
+    }
+
+    /// <summary>Puts the Pain Sash's material into this scout's row of sash materials at the sash's place.</summary>
+    private static void DressSash(CustomizationRefs refs)
+    {
+        if (refs == null || refs.sashAscentMaterials == null || refs.sashAscentMaterials.Length == 0 || PainSashPiece.Index < 0)
+        {
+            return;
+        }
+        Material pain = PainSash.MaterialFrom(refs.sashAscentMaterials);
+        if (pain == null || (refs.sashAscentMaterials.Length > PainSashPiece.Index && refs.sashAscentMaterials[PainSashPiece.Index] == pain))
+        {
+            return;
+        }
+        List<Material> row = new List<Material>(refs.sashAscentMaterials);
+        while (row.Count < PainSashPiece.Index)
+        {
+            row.Add(row[row.Count - 1]);
+        }
+        row.Insert(PainSashPiece.Index, pain);
+        refs.sashAscentMaterials = row.ToArray();
     }
 
     /// <summary>The model, or an empty stand-in (so a scout made without it still has every place in the row).</summary>
@@ -352,6 +436,8 @@ internal static class ModCosmetics
             loading--;
             Restore(Customization.Type.Hat, HatKey);
             Restore(Customization.Type.Fit, OutfitKey);
+            Restore(Customization.Type.Sash, SashKey);
+            Restore(Customization.Type.Skin, SkinKey);
         }
 
         private static Exception Finalizer(Exception __exception)
@@ -386,6 +472,16 @@ internal static class ModCosmetics
             data.currentHat = piece.Index;
             ModSave.Set(HatKey, piece.Key);
         }
+        else if (piece.Type == Customization.Type.Sash)
+        {
+            data.currentSash = piece.Index;
+            ModSave.Set(SashKey, piece.Key);
+        }
+        else if (piece.Type == Customization.Type.Skin)
+        {
+            data.currentSkin = piece.Index;
+            ModSave.Set(SkinKey, piece.Key);
+        }
         else
         {
             data.currentOutfit = piece.Index;
@@ -394,7 +490,7 @@ internal static class ModCosmetics
         CharacterCustomization.SetCustomizationData(data, PhotonNetwork.LocalPlayer);
     }
 
-    /// <summary>A hat of ours goes on without the game's Steam stat; any other hat goes on as usual (and ours is no longer saved).</summary>
+    /// <summary>A hat (outfit, sash) of ours goes on without the game's Steam stat; any other goes on as usual (and ours is no longer saved).</summary>
     [HarmonyPatch(typeof(CharacterCustomization), nameof(CharacterCustomization.SetCharacterHat))]
     private static class ChooseHat
     {
@@ -405,6 +501,18 @@ internal static class ModCosmetics
     private static class ChooseOutfit
     {
         private static bool Prefix(int index) => Choose(Customization.Type.Fit, OutfitKey, index);
+    }
+
+    [HarmonyPatch(typeof(CharacterCustomization), nameof(CharacterCustomization.SetCharacterSash))]
+    private static class ChooseSash
+    {
+        private static bool Prefix(int index) => Choose(Customization.Type.Sash, SashKey, index);
+    }
+
+    [HarmonyPatch(typeof(CharacterCustomization), nameof(CharacterCustomization.SetCharacterSkinColor))]
+    private static class ChooseSkin
+    {
+        private static bool Prefix(int index) => Choose(Customization.Type.Skin, SkinKey, index);
     }
 
     private static bool Choose(Customization.Type type, string saveKey, int index)

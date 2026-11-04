@@ -7,10 +7,12 @@ using UnityEngine;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// Config "More Wild Food in Multiplayer" (off by default, the host's): in multiplayer, every bush, palm, vine and
-/// mushroom patch grows half as much food again as the game gives it (a half left over is a coin toss for one more),
-/// on every ascent. The extra food lies beside the game's own, the same kind. Spawners of anything else (the Mesa
-/// Tomb's Torches...) are left as they are.
+/// Config "More Wild Food in Multiplayer" (off by default, the host's): in a run that starts with more than one player
+/// in the lobby, every bush, palm, vine and mushroom patch grows half as much food again as the game gives it (a half
+/// left over is a coin toss for one more), on every ascent. It is decided as the run starts (the user's): players
+/// joining later do not bring it, players leaving do not end it; a host alone in their lobby, like a solo run, gets the
+/// game's amounts. The extra food lies beside the game's own, the same kind. Spawners of anything else (the Mesa Tomb's
+/// Torches...) are left as they are.
 /// </summary>
 internal static class MoreWildFood
 {
@@ -25,8 +27,21 @@ internal static class MoreWildFood
     /// <summary>For the tests: extra items grown so far.</summary>
     internal static int Grown;
 
+    /// <summary>The run was started with more than one player in the lobby (set on every game as the island loads).</summary>
+    internal static bool StartedTogether { get; private set; }
+
     private static bool On => Plugin.MoreWildFood != null && Plugin.MoreWildFood.Value && PhotonNetwork.IsMasterClient
-        && (AsMultiplayer || (PhotonNetwork.InRoom && !PhotonNetwork.OfflineMode));
+        && (AsMultiplayer || StartedTogether);
+
+    /// <summary>As the island loads (the start of a run, every game): how many are in the lobby now decides the run's food.</summary>
+    [HarmonyPatch(typeof(AirportCheckInKiosk), nameof(AirportCheckInKiosk.BeginIslandLoadRPC))]
+    private static class Start
+    {
+        private static void Prefix()
+        {
+            StartedTogether = PhotonNetwork.InRoom && !PhotonNetwork.OfflineMode && PhotonNetwork.PlayerList.Length > 1;
+        }
+    }
 
     [HarmonyPatch]
     private static class Grow

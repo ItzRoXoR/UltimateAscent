@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using HarmonyLib;
@@ -8,13 +9,19 @@ namespace UltimateAscent.Features;
 
 /// <summary>
 /// The Stone: the game's cut stone made a throwing stone. Stones lie on the ground in every climb (see
-/// <see cref="GroundItems"/>). A stone that hits a scout at 10 m/s or more (a throw charged a third of
-/// the way, or a fall from 5 m) knocks them down for 2 s and injures them by 10 (20 from ascent 17);
-/// a stone shatters on any impact that hard, whatever it hits.
+/// <see cref="GroundItems"/>). A stone shatters when it hits anything while flying faster than 18 m/s (a throw
+/// charged most of the way, or a fall from about 17 m); one that shatters on a scout or a zombie knocks them
+/// down for 2 s, and a scout also takes 10 injury (20 from ascent 17), 0.25 s after the hit, so the damage
+/// sound follows the rock smash (it would drown under it). A stone that stays whole knocks down only the scout
+/// who threw it, coming back down on them on the throw's own flight (thrown straight up), when it flies at
+/// 10 m/s or more (a throw charged a third of the way). A scout who lands on a stone takes nothing
+/// from it, nor from one their landing sends flying back at them. All of this goes by the stone's own
+/// speed just before the impact (the game's go by how fast the stone and what it hit came together).
 /// <para>It is built from the Coconut, which already knocks down the scouts it falls on and breaks
 /// when it lands hard: the coconut's look, sounds of breaking and halves are replaced by the cut
-/// stone's rock and name. The knock-down a stone sends carries a mark (2.0023 s) so that the scout it
-/// hit can tell it from the others and take the injury on their own client. A stone that breaks makes
+/// stone's rock and name. The knock-down a stone sends carries a mark (2.0013 s, or 2.0023 s when it
+/// shatters) so that the scout it hit can tell it from the others and take the injury on their own
+/// client. A stone that breaks makes
 /// the user's rock smash (cut from their clip) and leaves a small gray dust cloud (the Climbing Chalk's
 /// dust, gray and smaller), for every player; hitting a scout or a zombie makes only that smash, not the
 /// coconut's bonk.</para>
@@ -50,13 +57,20 @@ internal static class StoneItem
     private const float DustSeconds = 5f;
     private static readonly Color DustColour = new Color(0.56f, 0.54f, 0.51f);
 
-    /// <summary>The impact speed that knocks a scout down and shatters the stone.</summary>
-    internal const float BreakSpeed = 10f;
+    /// <summary>The stone's own speed that knocks its thrower down when it comes back down on them.</summary>
+    internal const float HitSpeed = 10f;
+
+    /// <summary>The stone's own speed above which it shatters on impact.</summary>
+    internal const float BreakSpeed = 18f;
 
     internal const float Knockdown = 2f;
-    private const float KnockdownMarked = Knockdown + 0.0023f;
+    private const float KnockdownStun = Knockdown + 0.0013f;
+    internal const float KnockdownMarked = Knockdown + 0.0023f;
     internal const float Injury = 0.1f;
     internal const float InjuryHazards = 0.2f;
+
+    /// <summary>The injury lands this long after the hit: once the rock smash's loud start (its first 0.25 s) is over.</summary>
+    internal const float InjuryDelay = 0.25f;
 
     private static Item template;
     private static SFX_Instance breakSound;
@@ -66,9 +80,11 @@ internal static class StoneItem
 
     internal static Item Template => template;
 
-    /// <summary>For the tests: how many stones broke, and how many dust clouds they left, on this client.</summary>
+    /// <summary>For the tests: how many stones broke, how many dust clouds they left, how many scouts they hit, and how many of those hits injured, on this client.</summary>
     internal static int Breaks;
     internal static int DustClouds;
+    internal static int Hits;
+    internal static int Injuring;
 
     internal static bool IsStone(Item item) => item != null && template != null && item.itemID == template.itemID;
 
@@ -147,9 +163,9 @@ internal static class StoneItem
         breakable.ragdollCharacterOnBreak = false;
 
         Bonkable bonkable = stone.GetComponent<Bonkable>();
-        bonkable.minBonkVelocity = BreakSpeed;
+        bonkable.minBonkVelocity = HitSpeed;
         bonkable.decreaseMinVelocityIfRecentlyThrown = false;
-        bonkable.minBonkVelocityThrown = BreakSpeed;
+        bonkable.minBonkVelocityThrown = HitSpeed;
         bonkable.ragdollTime = KnockdownMarked;
         bonkable.bonk = new SFX_Instance[0];
 
@@ -256,21 +272,138 @@ internal static class StoneItem
         }
     }
 
+    /// <summary>The stone's own speed just before its latest impact (the game keeps it for breakable things).</summary>
+    private static float OwnSpeed(Component part) =>
+        part.TryGetComponent(out Breakable breakable) ? breakable.lastVelocity.magnitude : 0f;
+
+    /// <summary>
+    /// Every stone keeps its own speed, also one that lay still when it appeared (the game only keeps it for
+    /// breakable things that were moving then).
+    /// </summary>
+    [HarmonyPatch(typeof(Breakable), "Start")]
+    private static class KeepsItsSpeed
+    {
+        private static void Postfix(Breakable __instance)
+        {
+            if (IsStone(__instance.GetComponent<Item>()) && __instance.GetComponent<Peak.BreakableHelper>() == null)
+            {
+                __instance.gameObject.AddComponent<Peak.BreakableHelper>().breakable = __instance;
+            }
+        }
+    }
+
+    /// <summary>A stone a scout touched this long ago or less cannot hit that scout (it was set flying by them).</summary>
+    private const float OwnKickSeconds = 2f;
+
+    /// <summary>Each stone's latest touch with a scout: who, and when.</summary>
+    private static readonly Dictionary<Bonkable, (Character who, float when)> lastTouch = new Dictionary<Bonkable, (Character, float)>();
+
+    /// <summary>
+    /// A stone hits a scout only when it flies into them: a scout landing on one takes nothing, nor from one their
+    /// landing sent flying back at them (a stone they touched within the last 2 s). It knocks a scout or a zombie down
+    /// only when it shatters on them; a whole one only its thrower, on the throw's own flight (it has not touched the
+    /// ground since).
+    /// </summary>
+    [HarmonyPatch(typeof(Bonkable), nameof(Bonkable.VelocityAboveThreshold))]
+    private static class HitsWhenFlying
+    {
+        private static bool Prefix(Bonkable __instance, Collision coll, ref bool __result)
+        {
+            if (!IsStone(__instance.GetComponent<Item>()))
+            {
+                return true;
+            }
+            Character touched = coll.gameObject.GetComponentInParent<Character>();
+            bool theirKick = touched != null && lastTouch.TryGetValue(__instance, out (Character who, float when) last) && last.who == touched && Time.time - last.when <= OwnKickSeconds;
+            bool theirThrow = touched != null && __instance.thrown && __instance.GetComponent<Item>().lastThrownCharacter == touched;
+            float speed = OwnSpeed(__instance);
+            __result = (theirThrow || touched == null ? speed >= HitSpeed : speed > BreakSpeed) && !theirKick;
+            if (touched != null)
+            {
+                foreach (Bonkable gone in lastTouch.Where(t => t.Key == null || Time.time - t.Value.when > OwnKickSeconds).Select(t => t.Key).ToList())
+                {
+                    lastTouch.Remove(gone);
+                }
+                lastTouch[__instance] = (touched, Time.time);
+            }
+            return false;
+        }
+    }
+
+    /// <summary>A stone that hits a scout injures them only when it shatters on them; otherwise it only knocks them down.</summary>
+    [HarmonyPatch(typeof(Bonkable), "Bonk")]
+    private static class InjuresWhenItShatters
+    {
+        private static void Prefix(Bonkable __instance)
+        {
+            if (IsStone(__instance.GetComponent<Item>()))
+            {
+                __instance.ragdollTime = OwnSpeed(__instance) > BreakSpeed ? KnockdownMarked : KnockdownStun;
+            }
+        }
+    }
+
+    /// <summary>A stone shatters only when it flies into something faster than 18 m/s.</summary>
+    [HarmonyPatch(typeof(Breakable), "OnCollisionEnter")]
+    private static class BreaksWhenFast
+    {
+        private static bool Prefix(Breakable __instance, Collision collision)
+        {
+            Item item = __instance.GetComponent<Item>();
+            if (!IsStone(item))
+            {
+                return true;
+            }
+            if (item.photonView.IsMine && item.itemState == ItemState.Ground && __instance.breakOnCollision && item.rig != null && OwnSpeed(__instance) > BreakSpeed)
+            {
+                __instance.Break(collision);
+            }
+            return false;
+        }
+    }
+
+    /// <summary>A stone shatters on something it does not collide with (a snake's hit box), on its owner's client.</summary>
+    internal static void ShatterOn(Item stone)
+    {
+        if (stone != null && stone.photonView.IsMine && stone.TryGetComponent(out Breakable breakable))
+        {
+            // Nothing of the break needs the collision: no pieces, no ragdoll, no sounds of the game's own.
+            breakable.Break(null);
+        }
+    }
+
     /// <summary>A stone that hits a scout hard enough sends the marked knock-down.</summary>
     [HarmonyPatch(typeof(Character), nameof(Character.RPCA_Fall))]
     private static class StoneHit
     {
         private static void Prefix(Character __instance, ref float seconds)
         {
-            if (Mathf.Abs(seconds - KnockdownMarked) > 0.0001f)
+            bool injuring = Mathf.Abs(seconds - KnockdownMarked) <= 0.0001f;
+            if (!injuring && Mathf.Abs(seconds - KnockdownStun) > 0.0001f)
             {
                 return;
             }
-            // No coconut bonk: the stone shatters on the same hit, and its rock smash is the sound of it (see Shatter).
+            // No coconut bonk: the stone's own impact sound, and its rock smash when it shatters (see Shatter), are the sound of it.
             seconds = Knockdown;
+            Hits++;
+            if (!injuring)
+            {
+                return;
+            }
+            Injuring++;
             if (__instance.IsLocal && !__instance.data.dead)
             {
-                ExactStatus.Add(__instance.refs.afflictions, CharacterAfflictions.STATUSTYPE.Injury, InjuryNow, "stone");
+                __instance.StartCoroutine(InjureAfterTheSmash(__instance));
+            }
+        }
+
+        /// <summary>The injury, and the game's damage sound with it, after the stone's own sound.</summary>
+        private static IEnumerator InjureAfterTheSmash(Character scout)
+        {
+            yield return new WaitForSeconds(InjuryDelay);
+            if (scout != null && !scout.data.dead)
+            {
+                ExactStatus.Add(scout.refs.afflictions, CharacterAfflictions.STATUSTYPE.Injury, InjuryNow, "stone");
             }
         }
     }

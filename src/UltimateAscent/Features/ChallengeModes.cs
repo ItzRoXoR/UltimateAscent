@@ -51,8 +51,8 @@ internal static class ChallengeModes
     /// </summary>
     internal static bool SunByAscent(int ascent) => ascent >= Lvl.HotSun && ascent != BoardingPassUi.FinalAscentIndex;
 
-    /// <summary>Hot Mode's sun heats at this share of ascent 23's.</summary>
-    internal const float HotModeHeat = 0.5f * 1.3f;
+    /// <summary>Hot Mode's sun heats this much a second (65% of what ascent 23's sun was, 0.5 a second, before it became 2).</summary>
+    internal const float HotModeHeatPerSecond = 0.005f * 0.65f;
 
     /// <summary>Hot Mode's sun shines in this climb: it is ticked, and the climb is below ascent 23 (or a custom run without a picked ascent).</summary>
     internal static bool HotRoasts => Hot && Rules.InRun && (!Rules.ByAscent || Ascents._currentAscent < Lvl.HotSun);

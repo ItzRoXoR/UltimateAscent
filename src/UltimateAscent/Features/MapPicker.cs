@@ -20,7 +20,11 @@ namespace UltimateAscent.Features;
 /// today's map, "TODAY'S MAP (12)" (the game's lettering has no number sign); the others are "MAP 5". The pick is kept
 /// in the mod's save with the day it was made, so it stays for the day's later climbs and goes back to today's map
 /// when the day changes. The host's pick is the map (the host's game loads it); guests do not see the line. True
-/// Final Ascent's FINAL ASCENT keeps its own map.
+/// Final Ascent's FINAL ASCENT keeps its own map. With the config's "Map Biomes" on, every map but today's shows its
+/// biomes after its number, by the first letters of their names: "MAP 90 (STMC)" for Shore, Tropics, Mesa, Caldera.
+/// With the Builder maps pack and True Final Ascent installed, its maps come after the original ones, "Builder: MAP 1"
+/// on (not in a custom run; see <see cref="BuilderMaps"/>): a picked one plays as TFA's FINAL ASCENT on that map, at the
+/// ascent on the pass.
 /// </summary>
 internal static class MapPicker
 {
@@ -37,7 +41,8 @@ internal static class MapPicker
 
     private static GameObject line;
     private static TMP_Text label;
-
+    private static LayoutElement labelWidth;
+    private static bool? widthWithBiomes;
 
     private static bool Russian => LocalizedText.CURRENT_LANGUAGE == LocalizedText.Language.Russian;
 
@@ -64,12 +69,31 @@ internal static class MapPicker
     /// <summary>Today's map, as a place in the rotation.</summary>
     internal static int Today => Count > 0 ? ((Day % Count) + Count) % Count : 0;
 
-    /// <summary>The map picked (a place in the rotation): today's unless another was picked today.</summary>
+    /// <summary>The maps to pick from: the rotation's (0 to <see cref="Count"/> - 1), then the Builder maps offered.</summary>
+    internal static int Total => Count + BuilderMaps.Count;
+
+    /// <summary>The Builder map at this place among the maps to pick from, if it is one.</summary>
+    internal static BuilderMaps.Map Builder(int map) => map >= Count && map < Total ? BuilderMaps.All[map - Count] : null;
+
+    /// <summary>
+    /// The map picked (a place among the maps to pick from): today's unless another was picked today. A Builder map is
+    /// kept by its number ("b12"), so the pick holds should the pack change.
+    /// </summary>
     internal static int Picked
     {
         get
         {
-            if (Count == 0 || !ChallengeModes.Offered || ModSave.Get(DayKey) != Day.ToString() || !int.TryParse(ModSave.Get(PickKey), out int pick) || pick < 0 || pick >= Count)
+            string saved = ModSave.Get(PickKey) ?? "";
+            if (Count == 0 || !ChallengeModes.Offered || ModSave.Get(DayKey) != Day.ToString())
+            {
+                return Today;
+            }
+            if (saved.StartsWith("b", System.StringComparison.Ordinal) && int.TryParse(saved.Substring(1), out int number))
+            {
+                int at = BuilderMaps.Offered ? BuilderMaps.All.FindIndex(m => m.Number == number) : -1;
+                return at >= 0 ? Count + at : Today;
+            }
+            if (!int.TryParse(saved, out int pick) || pick < 0 || pick >= Count)
             {
                 return Today;
             }
@@ -77,7 +101,8 @@ internal static class MapPicker
         }
         set
         {
-            if (value == Today)
+            BuilderMaps.Map builder = Builder(value);
+            if (value == Today || value < 0 || value >= Total)
             {
                 ModSave.Set(PickKey, "");
                 ModSave.Set(DayKey, "");
@@ -85,7 +110,7 @@ internal static class MapPicker
             else
             {
                 ModSave.Set(DayKey, Day.ToString());
-                ModSave.Set(PickKey, value.ToString());
+                ModSave.Set(PickKey, builder != null ? "b" + builder.Number : value.ToString());
             }
         }
     }
@@ -93,22 +118,80 @@ internal static class MapPicker
     /// <summary>The map's number: the one in its scene's name (Level_12: 12), or its place in the rotation.</summary>
     internal static int Number(int map)
     {
+        BuilderMaps.Map builder = Builder(map);
+        if (builder != null)
+        {
+            return builder.Number;
+        }
         MapBaker baker = SingletonAsset<MapBaker>.Instance;
         string scene = baker != null ? baker.GetLevel(map) : "";
         Match number = Regex.Match(scene ?? "", @"(\d+)$");
         return number.Success ? int.Parse(number.Value) : map;
     }
 
-    /// <summary>The maps in the order the arrows go: by number (today's among them, under its own name), round at the ends.</summary>
-    internal static List<int> Order() => Enumerable.Range(0, Count).OrderBy(Number).ToList();
+    /// <summary>
+    /// The maps in the order the arrows go: by number (today's among them, under its own name), then the Builder maps by
+    /// theirs, round at the ends.
+    /// </summary>
+    internal static List<int> Order() => Enumerable.Range(0, Count).OrderBy(Number).Concat(Enumerable.Range(Count, BuilderMaps.Count)).ToList();
 
     internal static string Name(int map)
     {
+        BuilderMaps.Map builder = Builder(map);
+        if (builder != null)
+        {
+            string letters = Plugin.MapBiomes.Value ? BiomesOf(builder.Code) : "";
+            return letters.Length > 0 ? BuilderMaps.Name(builder) + " (" + letters + ")" : BuilderMaps.Name(builder);
+        }
         if (map == Today)
         {
             return (Russian ? "КАРТА ДНЯ (" : "TODAY'S MAP (") + Number(map) + ")";
         }
-        return (Russian ? "КАРТА " : "MAP ") + Number(map);
+        string name = (Russian ? "КАРТА " : "MAP ") + Number(map);
+        string biomes = Plugin.MapBiomes.Value ? Biomes(map) : "";
+        return biomes.Length > 0 ? name + " (" + biomes + ")" : name;
+    }
+
+    /// <summary>
+    /// The game's letter for each part of the climb in its map list (its biome types' initials: the Caldera is its
+    /// volcano, the Gloom its swamp), and the name it shows for that part.
+    /// </summary>
+    private static readonly Dictionary<char, string>[] BiomeNames =
+    {
+        new Dictionary<char, string> { ['S'] = "SHORE" },
+        new Dictionary<char, string> { ['T'] = "TROPICS", ['R'] = "ROOTS" },
+        new Dictionary<char, string> { ['A'] = "ALPINE", ['M'] = "MESA" },
+        new Dictionary<char, string> { ['V'] = "CALDERA", ['S'] = "GLOOM" },
+    };
+
+    /// <summary>
+    /// The map's four biomes by the first letters of the names the game shows for them, in its language (Shore,
+    /// Tropics, Mesa, Caldera: STMC), from the game's map list; "" when the list has nothing for the map.
+    /// </summary>
+    internal static string Biomes(int map)
+    {
+        MapBaker baker = SingletonAsset<MapBaker>.Instance;
+        return BiomesOf(baker != null && baker.BiomeIDs != null && map >= 0 && map < baker.BiomeIDs.Count && map < Count ? baker.BiomeIDs[map] : null);
+    }
+
+    /// <summary>The letters for a map list's biome code ("STAV"), as <see cref="Biomes"/> shows them; "" for none.</summary>
+    internal static string BiomesOf(string code)
+    {
+        if (code == null || code.Length != BiomeNames.Length)
+        {
+            return "";
+        }
+        char[] letters = new char[code.Length];
+        for (int part = 0; part < code.Length; part++)
+        {
+            if (!BiomeNames[part].TryGetValue(code[part], out string key))
+            {
+                return "";
+            }
+            string shown = LocalizedText.GetText(key)?.Trim();
+            letters[part] = char.ToUpperInvariant(string.IsNullOrEmpty(shown) ? key[0] : shown[0]);
+        }
+        return new string(letters);
     }
 
     internal static void Step(int by)
@@ -139,6 +222,13 @@ internal static class MapPicker
             {
                 return true;
             }
+            BuilderMaps.Map builder = Builder(map);
+            if (builder != null)
+            {
+                Plugin.Log.LogInfo($"Map picker: loading {Name(map)} ({System.IO.Path.GetFileName(builder.Path)}) as TFA's FINAL ASCENT on ascent {ascent}.");
+                Compat.TfaMaps.Start(__instance, builder.Path, ascent, serializedRunSettings);
+                return false;
+            }
             string scene = SingletonAsset<MapBaker>.Instance.GetLevel(map);
             if (string.IsNullOrEmpty(scene))
             {
@@ -164,7 +254,7 @@ internal static class MapPicker
     }
 
     /// <summary>Only the host picks (the host's game loads the map); a map at all only with the game's rotation there.</summary>
-    private static bool Picks => Count > 1 && ChallengeModes.Offered && (!PhotonNetwork.InRoom || PhotonNetwork.IsMasterClient);
+    private static bool Picks => Total > 1 && ChallengeModes.Offered && (!PhotonNetwork.InRoom || PhotonNetwork.IsMasterClient);
 
     private static void Refresh()
     {
@@ -175,6 +265,11 @@ internal static class MapPicker
         line.SetActive(Picks);
         if (label != null)
         {
+            if (labelWidth != null && widthWithBiomes != Plugin.MapBiomes.Value)
+            {
+                widthWithBiomes = Plugin.MapBiomes.Value;
+                labelWidth.preferredWidth = WidestName(label);
+            }
             label.text = Name(Picked);
         }
         // At the card's bottom right; in a custom run the Custom Options button is there, so at its bottom left.
@@ -182,8 +277,10 @@ internal static class MapPicker
         RectTransform rect = (RectTransform)line.transform;
         rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(custom ? 0f : 1f, 0f);
         rect.anchoredPosition = new Vector2(custom ? 12f : -12f, 8f);
-
     }
+
+    /// <summary>As wide as the longest name, so the outline does not jump from map to map.</summary>
+    private static float WidestName(TMP_Text name) => Enumerable.Range(0, Mathf.Max(Total, 1)).Select(m => name.GetPreferredValues(Name(m)).x).DefaultIfEmpty(120f).Max() + 4f;
 
     /// <summary>
     /// The picker at the card's bottom right (bottom left in a custom run): "&lt;", the map's name in a rounded outline in
@@ -246,9 +343,9 @@ internal static class MapPicker
         name.alignment = TextAlignmentOptions.Midline;
         name.raycastTarget = false;
         label = name;
-        // As wide as the longest name, so the outline does not jump from map to map.
-        LayoutElement width = words.AddComponent<LayoutElement>();
-        width.preferredWidth = Enumerable.Range(0, Mathf.Max(Count, 1)).Select(m => name.GetPreferredValues(Name(m)).x).DefaultIfEmpty(120f).Max() + 4f;
+        labelWidth = words.AddComponent<LayoutElement>();
+        labelWidth.preferredWidth = WidestName(name);
+        widthWithBiomes = Plugin.MapBiomes.Value;
 
         Chevron(pass, holder.transform, "Next", ">", blue, 1);
         Dice(pass, holder.transform, blue);

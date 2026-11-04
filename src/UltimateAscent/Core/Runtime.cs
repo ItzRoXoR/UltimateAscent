@@ -14,6 +14,7 @@ internal sealed class Runtime : MonoBehaviourPunCallbacks, IOnEventCallback
     {
         HostOptions.Publish,
         BoardingPassUi.Tick,
+        Features.Fixes.RopeFixes.Tick,
         A11_RuleZero.Tick,
         A19_NoReviveStatues.Tick,
         A20_BingBong.Tick,
@@ -29,17 +30,22 @@ internal sealed class Runtime : MonoBehaviourPunCallbacks, IOnEventCallback
         A17_Traps.Tick,
         GloomCrows.Tick,
         PeakZombies.Tick,
+        Crabs.Tick,
         A22_Episodes.Tick,
         ClimbingChalkHands.Tick,
         CalderaTide.Tick,
         KilnAsh.Tick,
+        A17_Hazards.Tick,
         AlpineSnowfall.Tick,
         WeatherGrace.Tick,
         A25_AllWeather.Tick,
         ExtraTornadoes.Tick,
+        WindDebris.Tick,
         SixSlotBackpack.Tick,
         ChallengeModes.Tick,
         CosmeticUnlocks.Tick,
+        PainSash.Tick,
+        RunCounts.Tick,
     };
 
     private readonly bool[] failed = new bool[Ticks.Length];

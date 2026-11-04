@@ -13,7 +13,9 @@ namespace UltimateAscent.Features;
 /// Mountain goats in the Alps, at most 15, alone or in pairs, spread from where the Alps begin to the top of their climb,
 /// seven in ten on the climb itself; on every ascent, their ram half as strong below 17 (see <see cref="NewMobs"/>).
 /// <list type="bullet">
-/// <item>They graze, look about and roam the mountainside up to 150 m from their spot, surer on it than the Roots'
+/// <item>They graze, look about and roam the mountainside up to 150 m from their spot, on the move most of the time
+/// (grazing 2-5 s where they stop, and half the time walking straight on) and keeping about the way they go from one
+/// walk to the next, so they cross their range; surer on it than the Roots'
 /// beetles: they walk slopes up to 80 degrees, up or down, and leap from foothold to foothold, up to 3.5 m up, 6 m down
 /// and 8 m forward (across a gap that wide), so they come down the cliffs they climb, ledge by ledge. They never leave the Alps: they stop where
 /// the Alps' ground ends, and do not go for a scout beyond it.</item>
@@ -80,6 +82,24 @@ internal static class Goats
     internal const float RoamUp = 12f;
     internal const float RoamDown = 30f;
     /// <summary>
+    /// How long it grazes where it stops and looks about after (seconds); then nine times in ten it sets off again (else
+    /// it grazes on), and half the times a walk ends on ground it can rest on it walks straight on somewhere new without
+    /// grazing there. So it is
+    /// on the move most of the time and gets about its range, rather than grazing round one spot.
+    /// </summary>
+    internal const float GrazeMin = 2f;
+    internal const float GrazeMax = 5f;
+    internal const float LookMin = 1f;
+    internal const float LookMax = 2.5f;
+    internal const float SetOffChance = 0.9f;
+    internal const float WalkOnChance = 0.5f;
+    /// <summary>
+    /// Each spot it roams to lies within this many degrees of the way it last went, so walk after walk it crosses its
+    /// range rather than milling round one spot; finding nothing that way it looks wider, all round at last, and stopped
+    /// on its way (a wall, a drop it cannot take) it turns 60-120 degrees to one side, to go on round it.
+    /// </summary>
+    internal const float HeadingSpread = 40f;
+    /// <summary>
     /// It walks on slopes up to this steep (the Roots' beetles crawl on surfaces up to 70 degrees, but never leap), rests
     /// and grazes on ground up to this steep, lands from a leap on ground up to this steep, and leaps up to these heights
     /// and distances.
@@ -141,6 +161,10 @@ internal static class Goats
     internal static int Landings;
     /// <summary>For the tests: the next decision's dice (below ChargeChance charges), once.</summary>
     internal static float? NextRoll;
+    /// <summary>For the tests: off, a goat picks where to roam next all round, not about the way it goes.</summary>
+    internal static bool HeadingKept = true;
+    /// <summary>For the tests: every goat goes about, however far the scouts are.</summary>
+    internal static bool AllAwake;
     /// <summary>For the tests: the spots found for the goats when they spawned, and how many places were looked at.</summary>
     internal static int SpotsFound;
     internal static int SpotsTried;
@@ -160,26 +184,33 @@ internal static class Goats
     private static AudioClip ram;
     private static bool soundsLoaded;
 
-    /// <summary>The third part of each map gets a spawner; it spawns only where that part is the Alps (not the Mesa).</summary>
+    /// <summary>
+    /// The third part of each map gets a spawner where that part is the Alps (not the Mesa); with True Final Ascent's
+    /// Builder every Alpine block does (each copy its own). Only once the map is set up (see <see cref="Crabs"/>).
+    /// </summary>
     [HarmonyPatch(typeof(MapHandler), nameof(MapHandler.InitializeMap))]
     private static class EveryMap
     {
         private static void Postfix()
         {
-            MapHandler map = MapHandler.Exists ? Singleton<MapHandler>.Instance : null;
+            MapHandler map = MapHandler.ExistsAndInitialized ? Singleton<MapHandler>.Instance : null;
             if (map == null || map.segments == null || map.segments.Length <= (int)Segment.Alpine)
             {
                 return;
             }
-            MapHandler.MapSegment alps = map.segments[(int)Segment.Alpine];
-            GameObject parent = alps.segmentParent;
-            if (parent == null || alps.biome != Biome.BiomeType.Alpine || parent.transform.Find(SpawnerName) != null)
+            if (Compat.Tfa.BuilderActive)
             {
+                foreach (Compat.Tfa.Stage stage in Compat.Tfa.Stages().Where(s => s.Kind == "Alpine"))
+                {
+                    Map.AddSpawner<GoatSpawner>(stage.Terrain, SpawnerName);
+                }
                 return;
             }
-            GameObject holder = new GameObject(SpawnerName);
-            holder.transform.SetParent(parent.transform, false);
-            holder.AddComponent<GoatSpawner>();
+            MapHandler.MapSegment alps = map.segments[(int)Segment.Alpine];
+            if (alps.biome == Biome.BiomeType.Alpine)
+            {
+                Map.AddSpawner<GoatSpawner>(alps.segmentParent, SpawnerName);
+            }
         }
     }
 
@@ -199,7 +230,7 @@ internal static class Goats
             groups.Add(size);
             count += size;
         }
-        List<Vector3[]> places = Places(groups);
+        List<Vector3[]> places = Places(groups, segment);
         int pair = 0;
         foreach (Vector3[] place in places)
         {
@@ -228,19 +259,14 @@ internal static class Goats
     /// climb itself (the Alps' two walls up to their campfire), the rest on the snowfield before it, each part's groups
     /// spread along its stretch, 25 m or more from the others, the second of a pair a couple of metres from the first.
     /// </summary>
-    private static List<Vector3[]> Places(List<int> groups)
+    private static List<Vector3[]> Places(List<int> groups, Transform segment)
     {
         List<Vector3[]> places = new List<Vector3[]>();
-        MapHandler map = Singleton<MapHandler>.Instance;
-        GameObject first = map.segments[(int)Segment.Alpine - 1].segmentCampfire;
-        GameObject last = map.segments[(int)Segment.Alpine].segmentCampfire;
-        if (first == null || last == null)
+        if (!Map.WayThrough(segment, (int)Segment.Alpine, out Vector3 a, out Vector3 b))
         {
             Plugin.Log.LogWarning("Goats: the Alps' campfires were not found; no goats.");
             return places;
         }
-        Vector3 a = first.transform.position;
-        Vector3 b = last.transform.position;
         Vector3 along = b - a;
         along.y = 0f;
         float length = along.magnitude;
@@ -337,6 +363,12 @@ internal static class Goats
     }
 
     internal static float Flat(Vector3 a, Vector3 b) => new Vector2(a.x - b.x, a.z - b.z).magnitude;
+
+    /// <summary>
+    /// On every player's game as it starts, with the mod's items: the network template, which the host's goats are made
+    /// from on the other games (by its name, so a game without it makes none).
+    /// </summary>
+    internal static void Build() => Register();
 
     /// <summary>
     /// The network template, made once: a PhotonView watching a Goat, kept inactive beside the mod's items; solid (a
@@ -1280,6 +1312,8 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
     /// <summary>Which way the ground under it faces (it walks along it, up slopes as steep as it can).</summary>
     private Vector3 groundUp = Vector3.up;
     private float yaw;
+    /// <summary>The way it last set off (degrees round from north): it roams on about this way.</summary>
+    private float heading;
     private float speedNow;
     private Character target;
     private float nextDecision;
@@ -1369,6 +1403,10 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
     internal float SteepestWalked { get; private set; }
     internal string LastStop { get; private set; } = "";
     internal float Speed => pace;
+    /// <summary>For the tests: which way the ground under it faces.</summary>
+    internal Vector3 GroundUp => groundUp;
+    /// <summary>For the tests: how often it has set off somewhere (of its own accord or told).</summary>
+    internal int SetOffs { get; private set; }
     /// <summary>For the tests: its forehead (where a ram lands from), and how far its head points below the level (degrees; about 40 at rest, 80 charging, 90 grazing).</summary>
     internal Vector3 Nose => head != null ? head.TransformPoint(GoatBody.Forehead) : feet + Forward * 0.8f + Vector3.up * 0.65f;
     internal float HeadDown => head != null ? Mathf.Asin(Mathf.Clamp(-head.forward.y, -1f, 1f)) * Mathf.Rad2Deg : 40f;
@@ -1426,6 +1464,7 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
         feet = transform.position;
         netFeet = feet;
         yaw = transform.eulerAngles.y;
+        heading = yaw;
         netYaw = yaw;
         posedAt = feet;
         seed = Random.Range(0f, 100f);
@@ -1574,7 +1613,7 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
                 return;
             }
         }
-        if (!SomeoneWithin(AwakeDistance) && !Puppet)
+        if (!SomeoneWithin(AwakeDistance) && !Puppet && !Goats.AllAwake)
         {
             speedNow = 0f;
             return;
@@ -1721,7 +1760,7 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
         return false;
     }
 
-    /// <summary>Grazing done it looks up; looking about done it roams somewhere (most often) or grazes again; one of a pair goes back to the other first.</summary>
+    /// <summary>Grazing done it looks up; looking about done it roams somewhere (nearly always) or grazes again; one of a pair goes back to the other first.</summary>
     private void NextActivity()
     {
         if (groundUp.y < RestNormal)
@@ -1737,7 +1776,7 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
         }
         if (state == State.Grazing)
         {
-            Begin(State.Standing, Random.Range(1.5f, 4f));
+            Begin(State.Standing, Random.Range(Goats.LookMin, Goats.LookMax));
             return;
         }
         if (follower && partner != null && Goats.Flat(feet, partner.feet) > 6f && PickNear(partner.feet, 1.5f, 4f, out Vector3 near))
@@ -1745,26 +1784,34 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
             StartRoam(near);
             return;
         }
-        if (Random.value < 0.7f && PickRoam(out Vector3 to))
+        if (Random.value < Goats.SetOffChance && PickRoam(out Vector3 to))
         {
             StartRoam(to);
             return;
         }
-        Begin(State.Grazing, Random.Range(6f, 15f));
+        Begin(State.Grazing, Random.Range(Goats.GrazeMin, Goats.GrazeMax));
     }
 
     private void StartRoam(Vector3 to)
     {
         backingUp = false;
         roamTo = to;
+        SetOffs++;
+        Vector3 way = to - feet;
+        way.y = 0f;
+        if (way.sqrMagnitude > 0.01f)
+        {
+            heading = Mathf.Atan2(way.x, way.z) * Mathf.Rad2Deg;
+        }
         bestLeft = Distance3(feet, roamTo);
         bestSince = Time.time;
         Begin(State.Roaming, 25f);
     }
 
     /// <summary>
-    /// Somewhere to roam: 4-15 m off on ground it can rest on, up a slope or a ledge, or down one or off the cliff it
-    /// stands on, within its range of its spot (beyond it, on its way back there); one of a pair keeps near the other.
+    /// Somewhere to roam: 4-15 m off about the way it last went (wider with each try), on ground it can rest on, up a
+    /// slope or a ledge, or down one or off the cliff it stands on, within its range of its spot (beyond it, on its way
+    /// back there); one of a pair keeps near the other.
     /// </summary>
     private bool PickRoam(out Vector3 to)
     {
@@ -1774,7 +1821,8 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
         }
         for (int attempt = 0; attempt < 12; attempt++)
         {
-            Vector3 probe = feet + Quaternion.Euler(0f, Random.Range(0f, 360f), 0f) * Vector3.forward * Random.Range(Goats.RoamStepMin, Goats.RoamStepMax);
+            float spread = Goats.HeadingKept ? Mathf.Lerp(Goats.HeadingSpread, 180f, attempt / 11f) : 180f;
+            Vector3 probe = feet + Quaternion.Euler(0f, heading + Random.Range(-spread, spread), 0f) * Vector3.forward * Random.Range(Goats.RoamStepMin, Goats.RoamStepMax);
             Vector3 homeward = home - feet;
             homeward.y = 0f;
             if (Goats.Flat(probe, home) > Goats.RoamRange && homeward.sqrMagnitude > 0.01f)
@@ -1791,8 +1839,14 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
         return false;
     }
 
-    /// <summary>For the tests: where it would roam to next (as it picks, nothing done).</summary>
+    /// <summary>For the tests: where it would roam to next (as it picks, nothing done), and the way it is heading.</summary>
     internal bool TryPickRoam(out Vector3 to) => PickRoam(out to);
+
+    internal float Heading
+    {
+        get => heading;
+        set => heading = value;
+    }
 
     private bool PickNear(Vector3 centre, float min, float max, out Vector3 to)
     {
@@ -1866,8 +1920,16 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
         float left = Distance3(feet, roamTo);
         if (Goats.Flat(feet, roamTo) < 0.4f && Mathf.Abs(feet.y - roamTo.y) < 1f || now >= stateUntil)
         {
+            // Half the time it walks straight on somewhere new, from ground it can rest on (back on firm ground from a face
+            // it could not get down, it rests first).
+            bool backedUp = backingUp;
             backingUp = false;
-            Begin(State.Grazing, Random.Range(6f, 15f));
+            if (!backedUp && groundUp.y >= RestNormal && Random.value < Goats.WalkOnChance && PickRoam(out Vector3 onward))
+            {
+                StartRoam(onward);
+                return;
+            }
+            Begin(State.Grazing, Random.Range(Goats.GrazeMin, Goats.GrazeMax));
             return;
         }
         if (left < bestLeft - 0.3f)
@@ -1901,7 +1963,8 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
 
     /// <summary>
     /// No way on: part way down a face too steep to rest on (it cannot leap down from there), it goes back up to the last
-    /// ground it could rest on, rather than wait there and lose its footing; anywhere else it stops and looks about.
+    /// ground it could rest on, rather than wait there and lose its footing; anywhere else it stops and looks about, and
+    /// turns aside to go on round what stopped it.
     /// </summary>
     private void GiveUpRoam()
     {
@@ -1915,6 +1978,7 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
             return;
         }
         backingUp = false;
+        heading += (Random.value < 0.5f ? -1f : 1f) * Random.Range(60f, 120f);
         Begin(State.Standing, Random.Range(1f, 2.5f));
     }
 
@@ -2531,6 +2595,7 @@ internal sealed class Goat : MonoBehaviourPun, IPunObservable
         if (flat.sqrMagnitude > 0.01f)
         {
             yaw = Mathf.Atan2(flat.x, flat.z) * Mathf.Rad2Deg;
+            heading = yaw;
         }
         leaping = false;
         target = null;

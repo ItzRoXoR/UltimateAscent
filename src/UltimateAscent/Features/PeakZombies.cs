@@ -10,10 +10,13 @@ using Zorro.Core;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// Ascent 17: zombies dressed as scouts wait on the peak's grassy hill (<see cref="PeakHill"/>: the hill after the
-/// Kiln or the Citadel, not the summit with the flare boxes). Ten places on its level ground, 6 m apart, are picked
-/// for each climb by the host once a scout is near enough for the hill to be in the map; the hill's bee swarms are put
-/// out then too (<see cref="ScatteredBees"/>). Each place gets its zombie as a scout comes within the game's own zombie
+/// Ascent 17: zombies dressed as scouts wait at the top of the peak (<see cref="PeakHill"/>: the hill after the Kiln or
+/// the Citadel), by the statue the gems go in and on the rocks around the peak. Fifteen places are picked for each climb
+/// by the host once a scout is near enough for the hill to be in the map, all on level ground with room round it: five on
+/// the ledges of the hill's rocks, off its top (<see cref="PeakHill.Ledges"/>: anywhere, 6 m apart), three by the statue
+/// (the nearest it, 4 m apart), the rest at the very top (<see cref="PeakHill.TopGround"/>: the highest, 4 m apart,
+/// closer where the top is small; where it has too little room, more by the statue, and where the rocks have too few
+/// ledges, more at the top); the hill's bee swarms are put out then too (<see cref="ScatteredBees"/>). Each place gets its zombie as a scout comes within the game's own zombie
 /// spawning range (the game removes zombies with nobody within 100 m), so they wait asleep like the game's; one the
 /// game took away that way comes back when a scout does, a dead one does not. Half wear one look, half the other:
 /// <list type="bullet">
@@ -27,9 +30,11 @@ namespace UltimateAscent.Features;
 internal static class PeakZombies
 {
     internal const string Marker = "UltimateAscent.peakzombie";
-    internal const int Count = 10;
-    private const float Apart = 6f;
-    private const float MaxSlope = 30f;
+    internal const int Count = 15;
+    internal const int ByStatue = 3;
+    internal const int OnRocks = 5;
+    private const float Apart = 4f;
+    private const float RocksApart = 6f;
     private const string ZombiePrefab = "MushroomZombie";
 
     /// <summary>How often, and how many times, the hill is looked for while a scout is near it and it is not found.</summary>
@@ -146,14 +151,25 @@ internal static class PeakZombies
         return spawnRange;
     }
 
-    /// <summary>The hill's ground (one pass over it): ten level places for the zombies, and the bee swarms.</summary>
+    /// <summary>The hill's ground (one pass over it): fifteen places for the zombies, at its top, by the statue and on its rocks, and the bee swarms.</summary>
     internal static void OnTheHill()
     {
         List<RaycastHit> ground = PeakHill.Ground(out string counts);
-        List<Vector3> level = ground.Where(h => Vector3.Angle(h.normal, Vector3.up) < MaxSlope).Select(h => h.point).ToList();
+        List<Vector3> top = PeakHill.TopGround(out List<Vector3> byStatue, out string topCounts);
+        List<Vector3> onRocks = PeakHill.Spread(PeakHill.Ledges(ground, out string ledgeCounts), OnRocks, RocksApart);
+        List<Vector3> atStatue = PeakHill.InTurn(byStatue, ByStatue, Apart);
+        List<Vector3> onTop = PeakHill.InTurn(top, Count - atStatue.Count - onRocks.Count, Apart);
+        if (onTop.Count + atStatue.Count + onRocks.Count < Count)
+        {
+            // The top has too little room: more by the statue.
+            atStatue = PeakHill.InTurn(byStatue, Count - onTop.Count - onRocks.Count, Apart);
+        }
         Places.Clear();
-        Places.AddRange(PeakHill.Spread(level, Count, Apart));
-        Plugin.Log.LogInfo($"Ascent 17: the peak's hill: {counts}, {level.Count} level; {Places.Count} places for zombies.");
+        Places.AddRange(onTop);
+        Places.AddRange(atStatue);
+        Places.AddRange(onRocks);
+        Plugin.Log.LogInfo($"Ascent 17: the peak's hill: {counts}; its top: {topCounts}; its rocks: {ledgeCounts}; {Places.Count} places for zombies "
+            + $"({onTop.Count} at the top, {atStatue.Count} by the statue, {onRocks.Count} on the rocks).");
         if (ground.Count == 0)
         {
             return;

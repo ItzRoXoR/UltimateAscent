@@ -1,5 +1,6 @@
 using System;
 using UltimateAscent.Features;
+using UltimateAscent.Features.Fixes;
 using UltimateAscent.Features.Weather;
 using UnityEngine.SceneManagement;
 
@@ -23,6 +24,7 @@ internal static class RunLifecycle
         A17_ClimbingHazards.Reset,
         A17_BananaDarkness.Reset,
         A17_Looker.Reset,
+        A17_ScoutmasterRoutes.Reset,
         A17_Traps.Reset,
         GloomCrows.Reset,
         PeakZombies.Reset,
@@ -37,6 +39,8 @@ internal static class RunLifecycle
         ClimbingChalkItem.Reset,
         ClimbingChalkHands.Reset,
         ExactStatus.Reset,
+        A14_WorseItems.Reset,
+        Crabs.Reset,
         A18_AlpineNights.Reset,
         CalderaTide.Reset,
         KilnAsh.Reset,
@@ -48,6 +52,15 @@ internal static class RunLifecycle
         ExtraTornadoes.Reset,
         Compat.Tfa.Reset,
         WildFoods.OnMapLoaded,
+        RunCounts.Reset,
+        PainSash.Reset,
+        ClownFlyTrap.Reset,
+        WindDebris.Reset,
+        SpruceNeedles.Reset,
+        ItemFixes.Reset,
+        WarpFixes.Reset,
+        LaunchFixes.Reset,
+        CarryFixes.Reset,
     };
 
     internal static void OnSceneChanged(Scene next)

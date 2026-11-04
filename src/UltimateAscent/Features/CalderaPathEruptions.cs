@@ -12,7 +12,8 @@ namespace UltimateAscent.Features;
 /// up to the campfire that opens the Kiln, the volcano erupts every 2-6 s (the game's eruption, a column of fire
 /// burning 35 s) while any scout is on that stretch or coming up to it. The eruptions land all over it, each one away from the last few, so the
 /// fire reaches about everywhere; only 20 m around the campfire and around the statue stay clear (the Caldera's own
-/// eruptions keep off them too). The host chooses where and sends the game's own eruption message.
+/// eruptions keep off them too). The host chooses where and sends the game's own eruption message. With True Final
+/// Ascent's Builder every Caldera block has its own last stretch, up to the campfire at its end.
 /// </summary>
 internal static class CalderaPathEruptions
 {
@@ -33,7 +34,8 @@ internal static class CalderaPathEruptions
     private const int Remembered = 8;
     private const int Tries = 10;
 
-    private static MapHandler builtFor;
+    /// <summary>The Caldera whose stretch is known: its ground (a Builder block's), or the map.</summary>
+    private static Object builtFor;
     private static readonly List<Vector3> ground = new List<Vector3>();
     private static Vector3 campfire;
     private static Vector3 statue;
@@ -94,8 +96,8 @@ internal static class CalderaPathEruptions
         return Mathf.Lerp(start.x, campfire.x, t);
     }
 
-    /// <summary>The host, every frame while the Caldera's eruption spawner runs: the next eruption on the stretch when it is due.</summary>
-    internal static void Tick(EruptionSpawner spawner)
+    /// <summary>The host, every frame: the next eruption on the stretch when it is due.</summary>
+    internal static void Tick()
     {
         if (!On || Held || !PhotonNetwork.IsMasterClient || !Map.InVolcanoCaldera || !Build() || ground.Count == 0)
         {
@@ -123,7 +125,7 @@ internal static class CalderaPathEruptions
         }
         LastAt = Time.time;
         Spawned++;
-        spawner.photonView.RPC("RPCA_SpawnEruption", RpcTarget.All, spot);
+        A17_Hazards.Erupt(spot);
     }
 
     private static Vector3 Pick()
@@ -149,9 +151,9 @@ internal static class CalderaPathEruptions
     }
 
     /// <summary>
-    /// The stretch's ground, found once per map: from the statue to the campfire, every 3 m, the open ground (not
+    /// The stretch's ground, found once per Caldera: from the statue to the campfire, every 3 m, the open ground (not
     /// steep, above the lava, not in it, not far below the statue), within 60 m of the line between them, minus 20 m
-    /// around the campfire and the statue.
+    /// around the campfire and the statue. The Caldera is the map's, or the Builder block the scouts are in.
     /// </summary>
     internal static bool Build()
     {
@@ -160,18 +162,24 @@ internal static class CalderaPathEruptions
         {
             return false;
         }
-        if (builtFor == map)
+        Compat.Tfa.Stage stage = Compat.Tfa.CurrentStage;
+        Object key = stage != null ? stage.Terrain : map;
+        if (key == null)
+        {
+            return false;
+        }
+        if (builtFor == key)
         {
             return true;
         }
-        GameObject campfireRoot = MapHandler.GetCampfireRoot((int)Segment.Caldera);
+        GameObject campfireRoot = stage != null ? (stage.Exit != null ? stage.Exit : stage.Campfire) : MapHandler.GetCampfireRoot((int)Segment.Caldera);
         Campfire fire = campfireRoot != null ? campfireRoot.GetComponentInChildren<Campfire>(true) : null;
-        GameObject segment = map.segments.Length > (int)Segment.Caldera ? map.segments[(int)Segment.Caldera].segmentParent : null;
+        GameObject segment = stage != null ? stage.Terrain : map.segments.Length > (int)Segment.Caldera ? map.segments[(int)Segment.Caldera].segmentParent : null;
         if (fire == null || segment == null)
         {
             return false;
         }
-        builtFor = map;
+        builtFor = key;
         ground.Clear();
         recent.Clear();
         Cleared = 0;

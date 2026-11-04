@@ -11,11 +11,15 @@ namespace UltimateAscent.Features;
 
 /// <summary>
 /// The challenges that unlock the mod's cosmetics (<see cref="ModCosmetics"/>), each counted for the player
-/// who reaches the peak (any ascent, alone or with others; not custom runs, not the Nadir):
+/// who wins the climb, at the peak or in the Nadir (alone or with others), in a climb that can earn the game's
+/// achievements (not custom runs, nor a chain of True Final Ascent's Builder that TFA keeps from earning them):
 /// <list type="bullet">
 /// <item>VR Headset: Blind Mode on for the whole climb.</item>
 /// <item>Orange Spacesuit and Orange Helmet: the Astronaut suit and the Astronaut helmet worn together for the whole climb, with the sun that
 /// incinerates held items: Hot Mode on (below ascent 23), or ascent 23's own sun (its rule on).</item>
+/// <item>Pain Sash: ascent 25 won in the Nadir (with every modifier on, the game's ascent 8 rule among them, the Nadir is
+/// the only way to win), every modifier the climb's "ALL MODIFIERS ON" line counts on for the whole climb.</item>
+/// <item>Burnt Skin: the same on ascent 23, 24 or 25.</item>
 /// </list>
 /// What is unlocked stays in the mod's save. The run's statistics show each new cosmetic as a small icon where
 /// a Scout badge would go, then the game's own "new outfit / new hat" window for it.
@@ -24,6 +28,11 @@ internal static class CosmeticUnlocks
 {
     internal const string VrHeadset = "vrheadset";
     internal const string OrangeSpacesuit = "orangespacesuit";
+    internal const string PainSash = "painsash";
+    internal const string BurntSkin = "burntskin";
+
+    /// <summary>The Burnt Skin takes this ascent or a higher one (up to the mod's last).</summary>
+    internal const int BurntSkinFrom = 23;
 
     private const string SaveKey = "unlocked";
 
@@ -34,6 +43,7 @@ internal static class CosmeticUnlocks
     private static bool blindAllClimb;
     private static bool hotAllClimb;
     private static bool astronautAllClimb;
+    private static bool allModifiersAllClimb;
     private static float nextLook;
 
     /// <summary>Unlocked during this climb, still to be shown in its statistics.</summary>
@@ -53,12 +63,31 @@ internal static class CosmeticUnlocks
         Plugin.Log.LogInfo("Cosmetics unlocked: " + unlock + ".");
     }
 
+    /// <summary>The Pain Sash's banner on the boarding pass's reward line: the sash's maroon.</summary>
+    private static readonly Color PainSashBanner = new Color(0.45f, 0.06f, 0.08f, 1f);
+
+    /// <summary>
+    /// The mod's reward an ascent still holds for this player, as the boarding pass's reward line shows it (its name and
+    /// the banner's colour): the Pain Sash on 25, while it is locked. The other cosmetics are not shown there.
+    /// </summary>
+    internal static bool Reward(int ascent, out string name, out Color banner)
+    {
+        bool russian = LocalizedText.CURRENT_LANGUAGE == LocalizedText.Language.Russian;
+        name = russian ? "ЛЕНТА БОЛИ" : "PAIN SASH";
+        banner = PainSashBanner;
+        return ascent == Lvl.Last && !Has(PainSash);
+    }
+
     /// <summary>How to unlock a cosmetic, as the passport tells it (the mod's name first).</summary>
     internal static string Requirement(string unlock)
     {
         bool russian = LocalizedText.CURRENT_LANGUAGE == LocalizedText.Language.Russian;
         string how = unlock == VrHeadset
             ? (russian ? "Доберитесь до вершины, не выключая Слепой режим весь подъём." : "Reach the peak with Blind Mode on for the whole climb.")
+            : unlock == PainSash
+            ? (russian ? "Доберитесь до вершины на Восхождении 25 со всеми включёнными модификаторами." : "Reach the peak on ascent 25 with all modifiers on.")
+            : unlock == BurntSkin
+            ? (russian ? "Доберитесь до вершины на Восхождении 23 или выше со всеми включёнными модификаторами." : "Reach the peak on ascent 23 or higher with all modifiers on.")
             : (russian ? "Доберитесь до вершины в костюме и шлеме астронавта с Жарким режимом (или на 23+)." : "Reach the peak in the Astronaut suit and helmet with Hot Mode on (or on ascent 23+).");
         // The mod's name in the passport's own blue, the one its field names wear.
         return "<color=#4A8FE7>ULTIMATE ASCENT:</color> " + how;
@@ -95,10 +124,11 @@ internal static class CosmeticUnlocks
         {
             climbing = true;
             NewThisClimb.Clear();
-            bool counts = !RunSettings.IsCustomRun;
+            bool counts = !RunSettings.blockingAchievements;
             blindAllClimb = counts && ChallengeModes.Blind;
             hotAllClimb = counts && ChallengeModes.Hot;
             astronautAllClimb = counts && WearsAstronaut();
+            allModifiersAllClimb = counts && AllModifiersOn();
             nextLook = 0f;
         }
         if (Time.unscaledTime < nextLook)
@@ -109,15 +139,22 @@ internal static class CosmeticUnlocks
         blindAllClimb &= ChallengeModes.Blind;
         hotAllClimb &= ChallengeModes.Hot;
         astronautAllClimb &= WearsAstronaut();
+        allModifiersAllClimb &= AllModifiersOn();
     }
 
-    /// <summary>The challenges' state in this climb, for the tests.</summary>
-    internal static string State => $"blind {blindAllClimb}, hot {hotAllClimb}, astronaut {astronautAllClimb}";
+    /// <summary>Every modifier was on for the whole climb so far (for the tests).</summary>
+    internal static bool AllModifiersAllClimb => allModifiersAllClimb;
 
-    /// <summary>The local scout has won the climb at the peak.</summary>
-    internal static void Won()
+    /// <summary>Every modifier the climb's "ALL MODIFIERS ON" line counts is on (the host's switches).</summary>
+    internal static bool AllModifiersOn() => ModifiersLabel.Off().Count == 0;
+
+    /// <summary>The challenges' state in this climb, for the tests.</summary>
+    internal static string State => $"blind {blindAllClimb}, hot {hotAllClimb}, astronaut {astronautAllClimb}, all modifiers {allModifiersAllClimb}";
+
+    /// <summary>The local scout has won the climb: at the peak, or in the Nadir.</summary>
+    internal static void Won(bool inNadir)
     {
-        if (!climbing)
+        if (!climbing || RunSettings.blockingAchievements)
         {
             return;
         }
@@ -130,16 +167,26 @@ internal static class CosmeticUnlocks
         {
             Add(OrangeSpacesuit);
         }
+        // With every modifier on (the game's ascent 8 rule among them) a climb is won in the Nadir.
+        bool everythingOn = inNadir && allModifiersAllClimb && AllModifiersOn();
+        if (everythingOn && Ascents._currentAscent == Lvl.Last)
+        {
+            Add(PainSash);
+        }
+        if (everythingOn && Ascents._currentAscent >= BurntSkinFrom && Ascents._currentAscent <= Lvl.Last)
+        {
+            Add(BurntSkin);
+        }
     }
 
     [HarmonyPatch(typeof(CharacterStats), nameof(CharacterStats.Win))]
-    private static class AtThePeak
+    private static class OnWinning
     {
         private static void Postfix(CharacterStats __instance)
         {
-            if (__instance.character != null && __instance.character.IsLocal && !__instance.wonViaNadir)
+            if (__instance.character != null && __instance.character.IsLocal)
             {
-                Won();
+                Won(__instance.wonViaNadir);
             }
         }
     }
@@ -168,9 +215,39 @@ internal static class CosmeticUnlocks
             {
                 ShowIcon(screen, option);
                 yield return new WaitForSeconds(0.2f);
-                yield return screen.CosmeticUnlockRoutine(option);
+                yield return Unlocked(screen, option);
                 yield return new WaitForSeconds(0.2f);
             }
+        }
+    }
+
+    /// <summary>
+    /// The game's unlock window; a sash is called a sash in it and a skin a new look, the skin's hand in its colour (the
+    /// game's window only knows hats, outfits and looks, and shows the hand white).
+    /// </summary>
+    internal static IEnumerator Unlocked(EndScreen screen, CustomizationOption option)
+    {
+        IEnumerator window = screen.CosmeticUnlockRoutine(option);
+        bool titled = false;
+        while (window.MoveNext())
+        {
+            if (!titled && screen.cosmeticUnlockTitle != null)
+            {
+                if (option.type == Customization.Type.Sash)
+                {
+                    screen.cosmeticUnlockTitle.text = LocalizedText.GetText("NEWSASH");
+                }
+                else if (option.type == Customization.Type.Skin)
+                {
+                    screen.cosmeticUnlockTitle.text = LocalizedText.GetText("NEWLOOK");
+                }
+                if (screen.cosmeticUnlockIcon != null)
+                {
+                    screen.cosmeticUnlockIcon.color = option.type == Customization.Type.Skin ? option.color : Color.white;
+                }
+            }
+            titled = true;
+            yield return window.Current;
         }
     }
 
@@ -185,7 +262,11 @@ internal static class CosmeticUnlocks
         frame.name = "UltimateAscentCosmetic " + option.name;
         frame.gameObject.SetActive(true);
         frame.icon.texture = option.texture;
-        frame.icon.color = Color.white;
+        frame.icon.color = option.type == Customization.Type.Skin ? option.color : Color.white;
+        if (option.type == Customization.Type.Skin)
+        {
+            frame.icon.gameObject.AddComponent<KeepTint>().Colour = option.color;
+        }
         frame.icon.enabled = true;
         frame.icon.transform.localScale = Vector3.one * IconScale;
         if (frame.blank != null)
@@ -198,5 +279,26 @@ internal static class CosmeticUnlocks
         }
         // No badge behind it: hovering it must not ask the badge list about one.
         UnityEngine.Object.Destroy(frame);
+    }
+}
+
+/// <summary>A skin's hand among the climb's badges stays in the skin's colour (the badge frame's own animation turns it white).</summary>
+internal sealed class KeepTint : MonoBehaviour
+{
+    internal Color Colour;
+
+    private UnityEngine.UI.RawImage image;
+
+    private void LateUpdate()
+    {
+        if (image == null)
+        {
+            image = GetComponent<UnityEngine.UI.RawImage>();
+        }
+        if (image != null)
+        {
+            // The animation's fading in is kept.
+            image.color = new Color(Colour.r, Colour.g, Colour.b, image.color.a);
+        }
     }
 }

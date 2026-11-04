@@ -8,8 +8,8 @@ namespace UltimateAscent.Features.Weather;
 /// room property (run, start time, duration, active, direction). Everybody derives the current
 /// state from the shared clock, so late joiners and players who missed a message see the same
 /// weather, and rebuilt storms (which have no network view of their own) work in multiplayer.
-/// In the Caldera and the Gloom the wind and the snowstorm never blow together: whichever began later stays
-/// calm until the other is over (each game goes by where its own scout is).
+/// From the Caldera and the Gloom up to the Peak the wind and the snowstorm never blow together: whichever began later
+/// stays calm until the other is over (each game goes by where its own scout is).
 /// </summary>
 internal static class WeatherPhases
 {
@@ -112,7 +112,9 @@ internal static class WeatherPhases
         string run = Net.RunKey;
         double now = Net.Clock;
         Phase state = channel.state;
-        if (Rules.IsHost && run != null && (state == null || state.run != run || state.Remaining(now) <= 0.0))
+        // While the scouts rest at one of True Final Ascent's Builder's rest stops, a calm lasts (as TFA holds the game's storms).
+        bool held = state != null && state.run == run && !state.active && Compat.Tfa.RestPaused;
+        if (Rules.IsHost && run != null && !held && (state == null || state.run != run || state.Remaining(now) <= 0.0))
         {
             bool first = state == null || state.run != run;
             bool active = !first && !state.active;
@@ -138,10 +140,10 @@ internal static class WeatherPhases
         ApplyState(zone, shown, now);
     }
 
-    /// <summary>In the Caldera and the Gloom, a wind or snowstorm that began while the other was blowing waits for it to end.</summary>
+    /// <summary>From the Caldera and the Gloom on, a wind or snowstorm that began while the other was blowing waits for it to end.</summary>
     private static bool WaitsForTheOther(Channel channel, Phase phase, string run, double now)
     {
-        if (!phase.active || (channel != wind && channel != snow) || !(Map.CurrentPlace == Place.Caldera || Map.CurrentPlace == Place.Gloom))
+        if (!phase.active || (channel != wind && channel != snow) || !A25_AllWeather.UpperMountain(Map.CurrentPlace))
         {
             return false;
         }

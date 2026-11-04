@@ -73,10 +73,14 @@ internal static class SixSlotBackpack
     /// <summary>The wheel's two unused slot slices, which hold slots 5 and 6.</summary>
     private static readonly string[] SpareSlices = { "UI_BackpackSegment (6)", "UI_BackpackSegment (7)" };
 
-    /// <summary>Where the wearing slice stays (its rotation in the wheel), the slots following it
-    /// counter-clockwise in this order (0-based): the game's 4, 2, 1, 3 with 6 after 4 and 5 after 3.</summary>
+    /// <summary>
+    /// Where the wearing slice stays (its rotation in the wheel: at the bottom), the slots following it counter-clockwise
+    /// in this order (0-based): 6, 4, 2 up the right side, 1, 3, 5 down the left (the game's 4, 2, 1, 3 with 6 before 4 and
+    /// 5 after 3). The wheel is laid out as the backpack seen from behind: on each side the bag's slot at the top, the
+    /// upper pouch's in the middle, the lower pouch's at the bottom.
+    /// </summary>
     private const float WearAngle = 135f;
-    private static readonly int[] SlotOrder = { 3, 5, 1, 0, 2, 4 };
+    private static readonly int[] SlotOrder = { 5, 3, 1, 0, 2, 4 };
 
     /// <summary>A slice's icon is turned back by the slice's rotation plus this (the game's own layout).</summary>
     private const float IconTurn = 23.8f;
