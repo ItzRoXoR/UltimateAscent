@@ -4,8 +4,8 @@
 
 * The Lantern turns up in the suitcases of the Shore, the Tropics, the Roots, the Alpine and the Mesa, on every ascent
   (before: from ascent 9, and in the Caldera's and the Gloom's too; the game: only the Tropics' and the Alpine's). In
-  the Alpine's it is as common as in the game (3.1% of a suitcase's picks there); in the Shore's, the Tropics' and the
-  Roots' half as common, in the Mesa's a third. The Torch comes wherever the Lantern does and nowhere else, equally
+  the Alpine's it keeps the game's weight (Epic); in the Shore's, the Tropics' and the Roots' half of it, in the Mesa's
+  a third. The Torch comes wherever the Lantern does and nowhere else, equally
   often in each of those suitcases (as often as before: half the game's Lantern weight).
 * Config **More Wild Food in Multiplayer** counts only for a run that starts with more than one player in the lobby
   (before, any lobby, a host alone in theirs too). It is decided as the run starts: players joining later do not bring
