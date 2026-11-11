@@ -34,6 +34,8 @@ internal sealed class Runtime : MonoBehaviourPunCallbacks, IOnEventCallback
         A22_Episodes.Tick,
         ClimbingChalkHands.Tick,
         CalderaTide.Tick,
+        MoreNests.Tick,
+        GloomFood.Tick,
         KilnAsh.Tick,
         A17_Hazards.Tick,
         AlpineSnowfall.Tick,

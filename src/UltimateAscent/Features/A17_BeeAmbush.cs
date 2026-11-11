@@ -29,11 +29,11 @@ internal static class A17_BeeAmbush
     /// <summary>An ambush swarm follows its scout up to 120 m from where it appeared, like a hive's bees from their hive.</summary>
     private const float Leash = A17_Hazards.BeeChaseDistance;
     private const string FallbackPrefab = "BeeSwarm";
-    private const float MinSpawnDistance = 2f;
-    private const float MaxSpawnDistance = 3f;
+    internal const float MinSpawnDistance = 3f;
+    internal const float MaxSpawnDistance = 3.5f;
 
     /// <summary>An ambush swarm chases its scout at least this long, however far they run (then the usual leash applies).</summary>
-    internal const float MinChaseSeconds = 20f;
+    internal const float MinChaseSeconds = 12f;
 
     private sealed class Chase
     {
@@ -300,7 +300,7 @@ internal static class A17_BeeAmbush
     }
 
     /// <summary>
-    /// 2-3 m from the scout, in open air; it chases them from there (<see cref="ChasesItsScout"/>).
+    /// 3-3.5 m from the scout (level distance), in open air; it chases them from there (<see cref="ChasesItsScout"/>).
     /// </summary>
     private static Vector3 SpawnPoint(Character target)
     {
@@ -361,7 +361,7 @@ internal static class A17_BeeAmbush
     }
 
     /// <summary>
-    /// For its first 20 s an ambush swarm keeps after its scout however far they run or however far from where it
+    /// For its first 12 s an ambush swarm keeps after its scout however far they run or however far from where it
     /// appeared (the game drops a target beyond its aggro range or leash); only a scout who passes out loses it.
     /// </summary>
     [HarmonyPatch(typeof(BeeSwarm), nameof(BeeSwarm.TryDeAggro))]

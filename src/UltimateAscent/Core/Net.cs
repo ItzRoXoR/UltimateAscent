@@ -15,6 +15,9 @@ internal static class Net
     /// <summary>The Photon event this mod's messages travel in (the game uses 18, True Final Ascent 180-184).</summary>
     internal const byte EventCode = 171;
 
+    /// <summary>The player (actor number) whose message is being handled now.</summary>
+    internal static int Sender { get; private set; }
+
     private static readonly Dictionary<string, Action<object[]>> handlers = new Dictionary<string, Action<object[]>>();
 
     /// <summary>What to do when a message of this kind arrives (on the game it was sent to).</summary>
@@ -59,11 +62,14 @@ internal static class Net
         }
         object[] args = new object[content.Length - 1];
         Array.Copy(content, 1, args, 0, args.Length);
-        Receive(kind, args);
+        Receive(kind, args, data.Sender);
     }
 
-    private static void Receive(string kind, object[] args)
+    private static void Receive(string kind, object[] args) => Receive(kind, args, PhotonNetwork.LocalPlayer != null ? PhotonNetwork.LocalPlayer.ActorNumber : -1);
+
+    private static void Receive(string kind, object[] args, int sender)
     {
+        Sender = sender;
         if (!handlers.TryGetValue(kind, out Action<object[]> handler))
         {
             return;

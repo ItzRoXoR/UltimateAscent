@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.6.5
+
+* Ascent 15: food restores half its hunger again (1.6.4: 75%); what falls between the bar's steps of 2.5 is still
+  carried to your next food.
+* The Gloom's banana vines bear fruit 40% of the time (the game: 10%), on every ascent.
+* The Gloom has 10 cattail Hot Dogs (the game: 7 on the maps seen), on every ascent: the host adds the missing ones on
+  the swamp floor, at the heights the game's stand at, 20 m or more from the others.
+* Egg nests: on every ascent (and in custom runs) the Caldera has 2–3 times as many egg nests as the map gives it, and
+  the Gloom 14–17 more. The new nests are copies of the biome's own nests that the game filled with eggs, and are
+  always filled (at least one egg, as many as the original may hold); in the Caldera near the tops of the rock
+  islands, at least 18 m above the lava and away from the condors' lava pillars; in the Gloom on hills rising out of
+  the sleepy fog. The host picks the places as the biome loads; every player sees the same nests.
+* PEAK 3.1 lets only the host warp a scout: the Warp Fungus's and the Warp Compass's warps did nothing for anyone but
+  the host. They now go through the host (only for the player's own scout).
+* Bees (17): a calm swarm stings for 8 poison a second (was 10), an angry one for 12 (was 15).
+* Bee ambushes (17): the swarm appears 3–3.5 m from the scout (was 2–3 m) and chases them however far they run for
+  at least 12 s (was 20 s), then up to 120 m from where it appeared.
+
 ## 1.6.4
 
 * The Lantern turns up in the suitcases of the Shore, the Tropics, the Roots, the Alpine and the Mesa, on every ascent

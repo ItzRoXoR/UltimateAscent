@@ -23,7 +23,7 @@ public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "UltimateAscent";
     public const string Name = "Ultimate Ascent";
-    public const string Version = "1.6.4";
+    public const string Version = "1.6.5";
 
     internal static ManualLogSource Log;
     internal static Plugin Instance;
@@ -117,6 +117,7 @@ public sealed class Plugin : BaseUnityPlugin
         Features.ClownFlyTrap.Listen();
         Features.WindDebris.Listen();
         Features.SpruceNeedles.Listen();
+        Features.Fixes.HostWarps.Listen();
 
         SceneManager.activeSceneChanged += OnActiveSceneChanged;
         Rules.OnActiveSceneChanged(SceneManager.GetActiveScene());

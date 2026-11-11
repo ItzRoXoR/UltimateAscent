@@ -29,6 +29,7 @@ internal sealed partial class Runner
         }
         Check("the Builder maps are offered with True Final Ascent installed", BuilderMaps.Offered && MapPicker.Total == MapPicker.Count + BuilderMaps.All.Count,
             $"{BuilderMaps.All.Count} maps found ({string.Join(", ", BuilderMaps.All.Take(5).Select(m => $"{m.Number} {m.Code}"))}...); TFA can start them {Compat.TfaMaps.Ready}; picker total {MapPicker.Total}");
+        AllBuilderMapsCurrent();
         List<int> order = MapPicker.Order();
         int lastOriginal = order.Where(m => m < MapPicker.Count).Last();
         MapPicker.Picked = lastOriginal;
@@ -61,6 +62,69 @@ internal sealed partial class Runner
             MapPicker.Picked = MapPicker.Today;
             pass.UpdateAscent();
         }
+    }
+
+    /// <summary>
+    /// Every map of the pack as the installed True Final Ascent judges it, with its own code: its header reads (EntryOf),
+    /// its body matches its print (else TFA would delete it as damaged), it is not outdated (its layout stamp is this
+    /// TFA's for its chain, else TFA builds a new island instead) and it needs no add-on biomes (else TFA rebuilds too).
+    /// </summary>
+    private void AllBuilderMapsCurrent()
+    {
+        Type cache = AccessTools.TypeByName("TrueFinalAscent.FinalAscentMapCache");
+        var entryOf = AccessTools.Method(cache, "EntryOf");
+        var outdated = AccessTools.Method(cache, "Outdated");
+        var head = AccessTools.Method(cache, "Head");
+        var printOf = AccessTools.Method(cache, "PrintOf");
+        var layoutFor = AccessTools.Method(cache, "LayoutFor");
+        string version = BepInEx.Bootstrap.Chainloader.PluginInfos.Values.Where(p => p.Metadata.Name.IndexOf("Final Ascent", StringComparison.OrdinalIgnoreCase) >= 0 || p.Metadata.GUID.IndexOf("finalascent", StringComparison.OrdinalIgnoreCase) >= 0)
+            .Select(p => p.Metadata.Version.ToString()).FirstOrDefault() ?? "?";
+        if (entryOf == null || outdated == null || head == null || printOf == null)
+        {
+            Check("every Builder map passes the installed True Final Ascent's own checks", false, $"TFA {version}: its map checks were not found (EntryOf {entryOf != null}, Outdated {outdated != null}, Head {head != null}, PrintOf {printOf != null})");
+            return;
+        }
+        List<string> bad = new List<string>();
+        Dictionary<string, int> layouts = new Dictionary<string, int>();
+        foreach (BuilderMaps.Map map in BuilderMaps.All)
+        {
+            object entry = entryOf.Invoke(null, new object[] { map.Path });
+            if (entry == null)
+            {
+                bad.Add($"{map.Number}: header not read");
+                continue;
+            }
+            string layout = Traverse.Create(entry).Field("Layout").GetValue<string>();
+            string biomes = Traverse.Create(entry).Field("Biomes").GetValue<string>();
+            string print = Traverse.Create(entry).Field("Print").GetValue<string>();
+            string variants = Traverse.Create(entry).Field("Variants").GetValue<string>();
+            string wanted = layoutFor != null ? layoutFor.Invoke(null, new object[] { variants }) as string : "?";
+            layouts[$"{layout} (TFA wants {wanted})"] = layouts.TryGetValue($"{layout} (TFA wants {wanted})", out int n) ? n + 1 : 1;
+            byte[] all = System.IO.File.ReadAllBytes(map.Path);
+            object[] args = { all, 0 };
+            if (head.Invoke(null, args) == null)
+            {
+                bad.Add($"{map.Number}: body not found");
+                continue;
+            }
+            int body = (int)args[1];
+            byte[] packed = new byte[all.Length - body];
+            Buffer.BlockCopy(all, body, packed, 0, packed.Length);
+            if ((string)printOf.Invoke(null, new object[] { packed }) != print)
+            {
+                bad.Add($"{map.Number}: print differs (TFA would delete it)");
+            }
+            if ((bool)outdated.Invoke(null, new[] { entry }))
+            {
+                bad.Add($"{map.Number}: outdated, layout {layout} (TFA wants {wanted})");
+            }
+            if (!string.IsNullOrEmpty(biomes))
+            {
+                bad.Add($"{map.Number}: needs add-on biomes {biomes}");
+            }
+        }
+        Check($"every Builder map passes the installed True Final Ascent's own checks (TFA {version})", bad.Count == 0 && BuilderMaps.All.Count > 0,
+            bad.Count > 0 ? $"{bad.Count} of {BuilderMaps.All.Count}: " + string.Join("; ", bad.Take(8)) : $"{BuilderMaps.All.Count} maps read, prints match, none outdated; layouts: {string.Join(", ", layouts.Select(l => $"{l.Value} x {l.Key}"))}");
     }
 
     /// <summary>With "-Only buildermap": the climb is TFA's FINAL ASCENT on the picked Builder map, laid out from its file.</summary>

@@ -11,7 +11,7 @@ namespace UltimateAscent.Features;
 
 /// <summary>
 /// Ascent 15 (13DDA): items are worse.
-/// Food restores 75% of its hunger, extra stamina from items is half, healing gives 60% (the Green Clusterberry's poison cure half), cure-alls only partly cure, consumables
+/// Food restores half its hunger, extra stamina from items is half, healing gives 60% (the Green Clusterberry's poison cure half), cure-alls only partly cure, consumables
 /// lose two uses at a time, ropes are shorter, chain/balloons weaker, energy drinks slower,
 /// the lollipop's crash is 85 drowsiness, cooking no longer removes poison or spores, eating a scorpion
 /// poisons you, the Parasol wears out after 20 s of gliding, gliders drain more stamina, letting go of a rescue
@@ -25,7 +25,7 @@ internal static class A14_WorseItems
     private static bool On => Rules.Enabled(Lvl.WorseItems);
 
     /// <summary>The share of hunger food restores (however the item restores it), and of the extra stamina items give.</summary>
-    internal const float FoodShare = 0.75f;
+    internal const float FoodShare = 0.5f;
     internal const float ExtraStaminaShare = 0.5f;
 
     /// <summary>The share of a status an item cures; the Gloom's Early Worm wakes you only half as much.</summary>
@@ -72,7 +72,7 @@ internal static class A14_WorseItems
 
     /// <summary>
     /// What the scout's food has restored below the bar's step (2.5 hunger, which the game drops), carried to their next
-    /// food: 75% of 5 is 2.5 one time and 5 the next, so every food restores 75% in the end.
+    /// food: half of 7.5 is 2.5 one time and 5 the next, so every food restores half in the end.
     /// </summary>
     private static float foodOwed;
 

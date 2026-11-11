@@ -878,10 +878,15 @@ internal sealed partial class Runner : MonoBehaviour
             ("the peak's hill, mapped (peakprobe, only when asked)", () => OnlyWhenAsked("peakprobe", PeakHillProbe)),
             ("the rising hazards' settings, read from the map (risingprobe, only when asked)", () => OnlyWhenAsked("risingprobe", RisingProbe)),
             ("every lava on the map (lavaprobe, only when asked)", () => OnlyWhenAsked("lavaprobe", LavaProbe)),
+            ("the egg nests and their ground, read from the map (nestprobe, only when asked)", () => OnlyWhenAsked("nestprobe", NestProbe)),
+            ("the bananas and the Hot Dog, read from the game (foodprobe, only when asked)", () => OnlyWhenAsked("foodprobe", FoodProbe)),
             ("zombies at the peak: its top, its statue, its rocks (peakzombies, 17)", PeakZombiesCheck),
             ("waiting bee swarms on the peak's hill (17)", WaitingBeesCheck),
             ("a parasol under lowgravity", ParasolLowGravityCheck),
             ("ascent 22's episodes (22)", Ascent22Episodes),
+            ("warps go through the host (hostwarp)", HostWarpCheck),
+            ("more egg nests in the Caldera or the Gloom (morenests)", MoreNestsCheck),
+            ("the Gloom's food: banana vines and cattail Hot Dogs (gloomfood)", GloomFoodCheck),
             ("the caldera's last stretch ablaze (17)", CalderaStretchCheck),
             ("the caldera's storms (25)", CalderaStormsCheck),
             ("the caldera's condors (17)", FasterCondorsCheck),
@@ -6205,7 +6210,7 @@ internal sealed partial class Runner : MonoBehaviour
                 float restored = 0.5f - Afflictions.GetCurrentStatus(Status.Hunger);
                 float expected = (cooked ? 2f : 1f) * WildFoods.WeirdShroomHunger * A14_WorseItems.FoodShare;
                 float carried = A14_WorseItems.FoodOwed;
-                Check(cooked ? "a cooked Weird Shroom restores 7.5 hunger (15: 75% of 10)" : "a Weird Shroom restores 3.75 hunger (15: 75% of its 5; the game: 10): 2.5 on the bar, 1.25 carried to the next food",
+                Check(cooked ? "a cooked Weird Shroom restores 5 hunger (15: half of 10)" : "a Weird Shroom restores 2.5 hunger (15: half of its 5; the game: 10)",
                     Mathf.Abs(restored + carried - expected) < 0.005f && restored > 0f, $"{restored * 100f:0.##} hunger restored, {carried * 100f:0.##} carried (expected {expected * 100f:0.##} in all)");
                 Afflictions.SetStatus(Status.Hunger, 0f);
             }
@@ -7758,8 +7763,8 @@ internal sealed partial class Runner : MonoBehaviour
     }
 
     /// <summary>
-    /// Ascent 15's food: a plain food restores 75% of its hunger; the Scout Cookies 75% of theirs and half their extra
-    /// stamina; food that restores hunger through a status change 75% too (each listed).
+    /// Ascent 15's food: a plain food restores half its hunger; the Scout Cookies half of theirs and half their extra
+    /// stamina; food that restores hunger through a status change half too (each listed).
     /// </summary>
     private IEnumerator LessFood()
     {
@@ -7798,9 +7803,9 @@ internal sealed partial class Runner : MonoBehaviour
                 action.RunAction();
                 four += 0.9f - Afflictions.GetCurrentStatus(Status.Hunger);
             }
-            Check("food restores 75% of its hunger (15): a meal lands on the bar's steps, the rest carried to the next, so four meals restore three portions exactly",
-                Mathf.Abs(first + carried - action.restorationAmount * 0.75f) < 0.002f && Mathf.Abs(four - action.restorationAmount * 3f) < 0.002f && A14_WorseItems.FoodOwed < 0.001f,
-                $"{held.gameObject.name} ({action.restorationAmount * 100f:0.##} hunger): the first {first * 100f:0.##} (+{carried * 100f:0.##} carried), four {four * 100f:0.##} (three portions: {action.restorationAmount * 300f:0.##})");
+            Check("food restores half its hunger (15): a meal lands on the bar's steps, the rest carried to the next, so four meals restore two portions exactly",
+                Mathf.Abs(first + carried - action.restorationAmount * 0.5f) < 0.002f && Mathf.Abs(four - action.restorationAmount * 2f) < 0.002f && A14_WorseItems.FoodOwed < 0.001f,
+                $"{held.gameObject.name} ({action.restorationAmount * 100f:0.##} hunger): the first {first * 100f:0.##} (+{carried * 100f:0.##} carried), four {four * 100f:0.##} (two portions: {action.restorationAmount * 200f:0.##})");
             Afflictions.SetStatus(Status.Hunger, 0f);
         });
 
@@ -7823,8 +7828,8 @@ internal sealed partial class Runner : MonoBehaviour
                 cookieStamina.RunAction();
                 float restored = 0.5f - Afflictions.GetCurrentStatus(Status.Hunger);
                 float stamina = Local.data.extraStamina;
-                Check("the Scout Cookies restore 75% of their hunger, and give half their extra stamina (15)",
-                    Mathf.Abs(restored - cookieFood.restorationAmount * 0.75f) < 0.002f && Mathf.Abs(stamina - cookieStamina.amount * 0.5f) < 0.002f,
+                Check("the Scout Cookies restore half their hunger, and give half their extra stamina (15)",
+                    Mathf.Abs(restored - cookieFood.restorationAmount * 0.5f) < 0.002f && Mathf.Abs(stamina - cookieStamina.amount * 0.5f) < 0.002f,
                     $"a bite: {restored * 100f:0.##} of {cookieFood.restorationAmount * 100f:0.##} hunger, {stamina * 100f:0.##} of {cookieStamina.amount * 100f:0.##} extra stamina");
                 Afflictions.SetStatus(Status.Hunger, 0f);
                 Local.data.extraStamina = 0f;
@@ -7854,7 +7859,7 @@ internal sealed partial class Runner : MonoBehaviour
                     Afflictions.SetStatus(Status.Hunger, 0.5f);
                     status.RunAction();
                     float restored = 0.5f - Afflictions.GetCurrentStatus(Status.Hunger);
-                    Check("food restoring hunger through a status change restores 75% of it as well (15)", Mathf.Abs(restored - game * 0.75f) < 0.002f,
+                    Check("food restoring hunger through a status change restores half of it as well (15)", Mathf.Abs(restored - game * 0.5f) < 0.002f,
                         $"{first.gameObject.name}: {restored * 100f:0.##} of {game * 100f:0.##} hunger");
                     Afflictions.SetStatus(Status.Hunger, 0f);
                 });
@@ -8708,7 +8713,8 @@ internal sealed partial class Runner : MonoBehaviour
         Unlocked(() =>
         {
             Local.data.currentStamina = 1f;
-            Local.refs.climbing.RPCA_ClimbJump();
+            // PEAK 3.1: the lunge checks who asked for it (only the scout themselves).
+            Local.refs.climbing.RPCA_ClimbJump(new PhotonMessageInfo(PhotonNetwork.LocalPlayer, PhotonNetwork.ServerTimestamp, Local.refs.view));
             cost = 1f - Local.data.currentStamina;
             Local.data.currentStamina = 1f;
         });
@@ -9731,7 +9737,7 @@ internal sealed partial class Runner : MonoBehaviour
         A17_BeeAmbush.Spawn(local);
         BeeSwarm born = FindObjectsByType<BeeSwarm>(FindObjectsSortMode.None).FirstOrDefault(b => A17_BeeAmbush.IsAmbush(b) && !ScatteredBees.IsWaiting(b));
         float bornAt = born != null ? Vector3.Distance(new Vector3(born.transform.position.x, 0f, born.transform.position.z), new Vector3(local.Center.x, 0f, local.Center.z)) : -1f;
-        Check("an ambush swarm appears 2-3 m from the scout (17)", bornAt >= 1.95f && bornAt <= 3.05f, $"{bornAt:0.00} m away (level distance)");
+        Check("an ambush swarm appears 3-3.5 m from the scout (17)", bornAt >= A17_BeeAmbush.MinSpawnDistance - 0.05f && bornAt <= A17_BeeAmbush.MaxSpawnDistance + 0.05f, $"{bornAt:0.00} m away (level distance)");
         BeeSwarm template = A17_BeeAmbush.template;
         Info("bee swarm ranges", template == null
             ? "the beehives' swarm was not found"
@@ -9759,7 +9765,7 @@ internal sealed partial class Runner : MonoBehaviour
             yield break;
         }
 
-        // The stings: angry bees land 15 poison a second (calm ones 10), ascent 14's x1.75 included.
+        // The stings: angry bees land 12 poison a second (calm ones 8), exact.
         StatusField stinger = swarm.stingerField;
         Status stingType = stinger != null ? stinger.statusType : Status.Poison;
         Check("bees sting within 2 m (17)", stinger != null && Mathf.Abs(stinger.radius - 2f) < 0.01f, stinger == null ? "no stinger field" : $"radius {stinger.radius:0.0#} m (the game: 1.3 m)");
@@ -9775,14 +9781,14 @@ internal sealed partial class Runner : MonoBehaviour
             sting.Stop();
             Protect(true);
         }
-        float expected = 0.15f * sting.Seconds;
-        Check("angry bees land 15 poison a second (17)", stingType == Status.Poison && sting.Total > expected * 0.9f && sting.Total < expected * 1.1f,
-            $"{sting.Total * 100f:F1} {stingType} in {sting.Seconds:F1} s = {sting.Total * 100f / Mathf.Max(0.01f, sting.Seconds):F1}/s (expected 15/s)");
+        float expected = A17_Hazards.AngryBeePoison * sting.Seconds;
+        Check("angry bees land 12 poison a second (17)", stingType == Status.Poison && sting.Total > expected * 0.9f && sting.Total < expected * 1.1f,
+            $"{sting.Total * 100f:F1} {stingType} in {sting.Seconds:F1} s = {sting.Total * 100f / Mathf.Max(0.01f, sting.Seconds):F1}/s (expected 12/s)");
         // The game shakes the screen once per 0.025 poison: without pacing that is every frame here.
         int steps = Mathf.FloorToInt(sting.Total / 0.025f);
         Check("the stings shake the screen like a normal bee attack", PoisonFxCounter.Count > 0 && PoisonFxCounter.Count <= Mathf.CeilToInt(sting.Seconds / 0.3f) + 1,
             $"{PoisonFxCounter.Count} poison shake(s) in {sting.Seconds:F1} s for {steps} poison steps");
-        // Running far away within its first 20 s: it keeps after the scout (the game drops a target beyond its range).
+        // Running far away within its first 12 s: it keeps after the scout (the game drops a target beyond its range).
         if (swarm != null && A17_BeeAmbush.StillChasing(swarm))
         {
             Vector3 home = local.Center;
@@ -9795,7 +9801,7 @@ internal sealed partial class Runner : MonoBehaviour
             yield return new WaitForSeconds(2f);
             float gap = swarm != null ? Vector3.Distance(swarm.transform.position, local.Center) : -1f;
             float range = swarm != null ? swarm.hiveAggroDistance : 0f;
-            Check("within its first 20 s an ambush swarm keeps after a scout who runs far beyond its range (17)",
+            Check("within its first 12 s an ambush swarm keeps after a scout who runs far beyond its range (17)",
                 swarm != null && swarm.currentAggroCharacter == local && gap > range,
                 swarm == null ? "the swarm is gone" : $"target {(swarm.currentAggroCharacter != null ? swarm.currentAggroCharacter.characterName : "none")}, {gap:F1} m away (the game drops a target beyond {range:F1} m)");
             local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, home, false);

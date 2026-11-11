@@ -43,6 +43,8 @@ internal static class RunLifecycle
         Crabs.Reset,
         A18_AlpineNights.Reset,
         CalderaTide.Reset,
+        MoreNests.Reset,
+        GloomFood.Reset,
         KilnAsh.Reset,
         AlpineSnowfall.Reset,
         ChallengeModes.Reset,

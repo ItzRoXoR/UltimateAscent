@@ -259,9 +259,9 @@ internal static class A17_Hazards
         }
     }
 
-    /// <summary>Calm bees sting for 10 poison a second, angry ones for 15 (the game: 3 and 6).</summary>
-    private const float CalmBeePoison = 0.1f;
-    private const float AngryBeePoison = 0.15f;
+    /// <summary>Calm bees sting for 8 poison a second, angry ones for 12 (the game: 3 and 6).</summary>
+    internal const float CalmBeePoison = 0.08f;
+    internal const float AngryBeePoison = 0.12f;
 
     /// <summary>Bees sting within 2 m (the game: 1.3 m).</summary>
     private const float StingRadius = 2f;
@@ -310,7 +310,7 @@ internal static class A17_Hazards
         }
     }
 
-    /// <summary>A swarm's stings land exactly 10 (calm) or 15 (angry) poison a second.</summary>
+    /// <summary>A swarm's stings land exactly 8 (calm) or 12 (angry) poison a second.</summary>
     [HarmonyPatch(typeof(StatusField), nameof(StatusField.TickStatus))]
     private static class Stings
     {

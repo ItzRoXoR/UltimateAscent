@@ -1,7 +1,7 @@
 # Threats at ascent 24
 
 Every value below is from PEAK 3.0.0 (read from the game code and the game data) and from
-Ultimate Ascent 1.6.4's rules. Status amounts use the stamina bar's scale: **100 = the whole bar**. A rule
+Ultimate Ascent 1.6.5's rules. Status amounts use the stamina bar's scale: **100 = the whole bar**. A rule
 marked *(17)* comes from that ascent; ascent 24 contains every ascent up to 24. Ultimate Ascent's
 numbers are what lands on the bar, ascent 14's boost included; below ascent 14 the same rules land
 them without that boost, so they are always lower there. Distances are the game's own units,
@@ -17,7 +17,7 @@ called metres here as in the mod; the game's altitude display counts one unit as
 | Status strength | — | Cold and drowsiness ×1.3, heat ×1.5, spores ×1.65, poison ×1.75 *(14)*, on everything. The exact numbers below are tuned so that they land as given, this boost included. |
 | Explosions | Knockback, a knock-down and the explosion's own status. | Every explosion: status ×2, knockback ×3–4 (the Gloom ghost's ×1.5), knock-down ×3 *(17)*. Only a cooked Lantern's or Faerie Lantern's burst and the Gloom ghost's burst also bring **drowsiness up to passing out** → at 24 being knocked down by one of them kills. (Mines and the Gloom ghost land exact amounts instead of ×2; a Shroomberry's spore burst and a cooked Toxic Drink's are not treated as explosions.) |
 | Cooking | Campfires (the portable stove too), lava and explosions cook items; cooking takes a food's poison away. | Campfires, lava and explosions char what they cook **to ruin** on the first cooking *(17; the config's Hot Campfires switch can turn this off)*; cooking no longer removes poison *(15)*. |
-| Food and items | As listed per item. | Hunger from food ×0.75 (the bar moves in steps of 2.5: what falls between them is carried to your next food), extra stamina from food ×0.5, what status items cure ×0.6 *(15)*; what they cost you (a Napberry's sleep, a Scorchberry's heat) stays the game's, except the exact amounts in **Food** below *(14)*. |
+| Food and items | As listed per item. | Hunger from food ×0.5 (the bar moves in steps of 2.5: what falls between them is carried to your next food), extra stamina from food ×0.5, what status items cure ×0.6 *(15)*; what they cost you (a Napberry's sleep, a Scorchberry's heat) stays the game's, except the exact amounts in **Food** below *(14)*. |
 | Touch hazards (anything that hurts on contact) | Own values. | Damage ×2, at least 2 cold/heat *(17)*; urchins, thorny vines, spiked fences, lava streams and petrifying stones have exact values (below). Climbing ice rock ×2; magma rock burns and petrifying stones petrify while you climb them. Status emitters that add a status (spore clouds, heat fields) ×4. |
 | Recovery | Statuses heal over time after a short pause. | Heat heals 2.6× slower in the Caldera/Kiln (0.5 a second), drowsiness 2.5× slower in the Gloom/Citadel (1 a second) *(16)*; injuries **worsen** by 2 per minute, drowsiness does not heal at night (there is no night from the Caldera and the Gloom on), poison/spores make you stumble, heat drains stamina, cold slows you *(22)*; poison does not heal for 10 s after a tick bite *(17)*. |
 | Revives | Scout statues at the end of each part of the climb revive the dead (or hand out an artifact if nobody died); a revive adds 15 curse *(game ascent 7)* and takes 75 petrification off. | **No revive statues** *(19)*; every other revive (scout effigy, skeleton, the Nadir) adds **15 curse**, also the ones that give the game's no status, and **keeps petrification** *(19)*. |
@@ -50,7 +50,7 @@ nothing below the minimum factor. "Knocked down" is ragdoll time.
 | Getting about | — | crawl around the beach at **1 m/s** from spot to spot, resting a moment at each, scuttling sideways; a scout within **2 m** is chased at the same 1 m/s (a scout walks 2.5 m/s and sprints 5.2 m/s), one at random if more are that near, for at least **6 s**, then for as long as they stay within 2 m; a scout who is down (knocked down, out, waking up on the beach) is left alone, and for their first **5 s** back on their feet *(17)* |
 | Pinch | — | facing the scout, the big claw rises and opens for 1 s, then snaps shut (the scorpion's glint and sparks), and 0.15 s after the snap, within 1.5 m, it lands: **10 injury**, and whatever you hold falls out of your hands; again after 2 s *(17)* |
 | Picked up | — | like a scorpion, into your hands only (put away, it is dropped): held, it pinches you (10 injury) and falls out of your hands *(17)* |
-| Eating one | — | only once cooked, as a cooked crab leg (darker than the live crab; it goes in a pocket or a backpack, like any food): 10 hunger and 10 extra stamina, 7.5 and 5 *(15)*; every way to cook it burns it *(17)*, and burnt it can still be eaten: no hunger or stamina, **35 poison** (the game's 20 for burnt food, with ascent 14's boost) |
+| Eating one | — | only once cooked, as a cooked crab leg (darker than the live crab; it goes in a pocket or a backpack, like any food): 10 hunger and 10 extra stamina, 5 and 5 *(15)*; every way to cook it burns it *(17)*, and burnt it can still be eaten: no hunger or stamina, **35 poison** (the game's 20 for burnt food, with ascent 14's boost) |
 | Sounds | — | a claw click now and then while someone is about (none while it goes for a scout or is held), a scuttle while it moves, one snap as it pinches *(17)* |
 
 ## Tropics
@@ -70,12 +70,11 @@ nothing below the minimum factor. "Knocked down" is ragdoll time.
 ### Bees
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
-| Swarms | one per beehive | the same, plus **ambushes**: as every day and every night begins, each scout has a **50%** chance of one at a moment of their own within it (at random, at least 30 s from anyone else's, so never two at once), if they are in the Tropics then; the swarm appears 2–3 m away, angry, and chases that scout for at least 20 s however far they run (then up to 120 m from where it appeared); and **20 swarms without hives** hover over the peak's grassy hill (8 m apart), calm until a scout comes near, then angry like an ambush swarm, dispersing once they have lost you *(17)* |
-| Poison | calm 3/s, angry 6/s, +5 when you enter the swarm (1 s cooldown) | **calm 10/s, angry 15/s**; +7.5 on entering (the game's 5 × 1.75 *(14)*) |
+| Swarms | one per beehive | the same, plus **ambushes**: as every day and every night begins, each scout has a **50%** chance of one at a moment of their own within it (at random, at least 30 s from anyone else's, so never two at once), if they are in the Tropics then; the swarm appears 3–3.5 m away, angry, and chases that scout for at least 12 s however far they run (then up to 120 m from where it appeared); and **20 swarms without hives** hover over the peak's grassy hill (8 m apart), calm until a scout comes near, then angry like an ambush swarm, dispersing once they have lost you *(17)* |
+| Poison | calm 3/s, angry 6/s, +5 when you enter the swarm (1 s cooldown) | **calm 8/s, angry 12/s**; +7.5 on entering (the game's 5 × 1.75 *(14)*) |
 | Sting radius | 1.3 m; stops once your bar is full | **2 m**; same |
 | Aggro / lose interest | attack within 5 m (7 m angry); give up beyond 6 m (7 m angry); never more than 20 m from the hive | the same distances to the scout, but a swarm chases up to **120 m** from its hive (an ambush swarm from where it appeared) |
 | Anger | 8 s after the hive is grabbed, 12 s after it is destroyed | **50 s** (hive grabbed, hive destroyed, or an ambush) |
-| Measured | — | an ambush on a scout with 70 stamina: bar full **3.1 s** after the first sting, **dead 8.1 s** after it |
 
 ## Tropics and Roots
 
@@ -153,7 +152,7 @@ amount of extra stamina; most effects start 3 s after eating.
 
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
-| Eating one | 10 hunger, 5 spores, the colour's extra stamina and effect | **7.5 hunger** *(15)*, **15 spores** *(14)*; the extra stamina and the pick of effects are the game's |
+| Eating one | 10 hunger, 5 spores, the colour's extra stamina and effect | **5 hunger** *(15)*, **15 spores** *(14)*; the extra stamina and the pick of effects are the game's |
 | Good: infinite stamina | 4 s | same |
 | Good: faster | walking +50%, climbing +150% for 5 s | walking +50%, climbing **+70%** (ascent 15's energy-drink rule) |
 | Good: low gravity | 15 s | **8 s** *(15)* |
@@ -241,7 +240,7 @@ needle and is knocked down again and again. The needles are 24 cm long and 1.5 c
 |---|---|---|
 | Sting | within 1.5 m, every 3 s (a 2 s rest, then a 1 s wind-up), knockback 500 | within **1.7 m**, **every second** (the wind-up only) |
 | Poison | 2.5, then poison over **15 s** adding enough to fill your bar (at least 50) | over **7.5 s** *(17)*, ×1.75 *(14)* → **bar full ≈4 s after a sting** → dead ≈9 s after it unless cured; more stings stack |
-| Eating one | only once cooked: 20 hunger and 10 extra stamina, no poison | 15 hunger and 5 stamina *(15)*, **15 poison** *(15)*; but every way to cook it (campfire, portable stove, lava, explosion) chars it to ruin *(17)*, so at 24 a scorpion cannot be eaten |
+| Eating one | only once cooked: 20 hunger and 10 extra stamina, no poison | 10 hunger and 5 stamina *(15)*, **15 poison** *(15)*; but every way to cook it (campfire, portable stove, lava, explosion) chars it to ruin *(17)*, so at 24 a scorpion cannot be eaten |
 
 ### Dynamite
 | | Game | Ultimate Ascent at 24 |
@@ -324,7 +323,7 @@ needle and is knocked down again and again. The needles are 24 cm long and 1.5 c
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
 | Gloom fog | 0.9 drowsiness/s (lit bell towers protect, and so does a lit Portable Stove within 7 m — but because of a game bug, for the scouts present when it was placed only after it burned out, and then for good) | **2.5 drowsiness/s** *(18)* (×1.3 *(14)* below 18); drowsiness heals at 1 a second in the Gloom (game: 2.5) *(16)*, at night too (there is no night here); the stove bug is fixed: a stove protects while it burns, **30 s** *(15)*, and not after |
-| Early Worm (eaten) | removes 100 drowsiness, 5 hunger | removes **50** *(15)*, 3.75 hunger *(15)* |
+| Early Worm (eaten) | removes 100 drowsiness, 5 hunger | removes **50** *(15)*, 2.5 hunger *(15)* |
 | Early Worm (lying about) | stays where it lies | seen lying close by (within 15 m, in view), it brings a **raven** three times in four: it flies in, lands beside it and eats it *(17)* |
 
 ### Frogs
@@ -413,16 +412,16 @@ The poisonous Button, Cluster and Bugle Shrooms look like the safe ones of the s
 
 | Food | Game | Ultimate Ascent at 24 |
 |---|---|---|
-| Button Shroom (poisonous) | 10 hunger; after 10 s, 30 poison over 12 s | 7.5 hunger *(15)*; after 10 s, **150 poison** over 12 s *(14)* |
-| Cluster Shroom (poisonous) | 5 hunger; after 10 s, 40 poison over 16 s | 3.75 hunger; after 10 s, **75** over 16 s |
-| Bugle Shroom (poisonous) | 15 hunger; after 10 s, 20 poison over 8 s | 11.25 hunger; after 10 s, **120** over 8 s |
-| Green Crispberry | 5 hunger; after 2 s, 10 poison over 4 s | 3.75 hunger; after 2 s, **40** over 4 s |
-| Yellow Kingberry | 30 hunger; after 3 s, 25 poison over 10 s | 22.5 hunger; after 3 s, **150** over 10 s |
-| Pink Berrynana | 15 hunger; after 2 s, 15 poison over 6 s | 11.25 hunger; after 2 s, **100** over 6 s |
-| Green Kingberry | 30 hunger, 5 poison at once | 22.5 hunger, **35 poison at once** *(14)* |
-| Scorchberry | 10 hunger, 25 heat at once | 7.5 hunger, **80 heat at once** *(14)* |
-| Egg (Caldera, from a Big Egg in a nest) | 15 hunger raw, 30 cooked; no poison | 11.25 hunger *(15)*; eaten raw **5 poison** at once *(15)*; any cooking chars it to ruin *(17)*, so at 24 it is always eaten raw |
-| Egg (Gloom, from a raven's Small Egg) | 7.5 hunger raw, 15 cooked; no poison | 5.625 hunger *(15)*; raw **5 poison** *(15)*; same cooking as above |
+| Button Shroom (poisonous) | 10 hunger; after 10 s, 30 poison over 12 s | 5 hunger *(15)*; after 10 s, **150 poison** over 12 s *(14)* |
+| Cluster Shroom (poisonous) | 5 hunger; after 10 s, 40 poison over 16 s | 2.5 hunger; after 10 s, **75** over 16 s |
+| Bugle Shroom (poisonous) | 15 hunger; after 10 s, 20 poison over 8 s | 7.5 hunger; after 10 s, **120** over 8 s |
+| Green Crispberry | 5 hunger; after 2 s, 10 poison over 4 s | 2.5 hunger; after 2 s, **40** over 4 s |
+| Yellow Kingberry | 30 hunger; after 3 s, 25 poison over 10 s | 15 hunger; after 3 s, **150** over 10 s |
+| Pink Berrynana | 15 hunger; after 2 s, 15 poison over 6 s | 7.5 hunger; after 2 s, **100** over 6 s |
+| Green Kingberry | 30 hunger, 5 poison at once | 15 hunger, **35 poison at once** *(14)* |
+| Scorchberry | 10 hunger, 25 heat at once | 5 hunger, **80 heat at once** *(14)* |
+| Egg (Caldera, from a Big Egg in a nest) | 15 hunger raw, 30 cooked; no poison | 7.5 hunger *(15)*; eaten raw **5 poison** at once *(15)*; any cooking chars it to ruin *(17)*, so at 24 it is always eaten raw |
+| Egg (Gloom, from a raven's Small Egg) | 7.5 hunger raw, 15 cooked; no poison | 3.75 hunger *(15)*; raw **5 poison** *(15)*; same cooking as above |
 | Several meals | one poison effect at a time: a second meal only adds time at the first one's rate; natural poison or spore recovery also cancels it | every meal runs on its own and lands its whole total *(14)*; only a cure (an antidote, the healing Shroomberry, a small poison or spore cure) or death stops it |
 | Result | — | with 80 of the bar left after the starting curse, the four with 100 or more fill it alone → pass out → **death** *(24)* unless cured in time |
 
