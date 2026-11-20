@@ -40,8 +40,9 @@ internal static class CalderaTide
     private const string RestIsland = "TFA_CalderaRest";
 
     /// <summary>Rivers whose own updates are off (True Final Ascent switched their heat off), driven from here instead.</summary>
-    private static readonly List<Lava> sleeping = new List<Lava>();
-    private static float sleepingLooked = float.NegativeInfinity;
+    /// <summary>The map's rivers of lava (found once a climb, in the scene with its other segments, and again if one is gone).</summary>
+    private static readonly List<Lava> rivers = new List<Lava>();
+    private static bool riversFound;
 
     private sealed class Anchor
     {
@@ -87,8 +88,8 @@ internal static class CalderaTide
     {
         anchor = null;
         received = null;
-        sleeping.Clear();
-        sleepingLooked = float.NegativeInfinity;
+        rivers.Clear();
+        riversFound = false;
         islands.Clear();
     }
 
@@ -99,15 +100,15 @@ internal static class CalderaTide
         {
             return;
         }
-        if (Time.time - sleepingLooked >= 2f)
+        if (!riversFound || rivers.Exists(r => r == null))
         {
-            sleepingLooked = Time.time;
-            sleeping.Clear();
-            sleeping.AddRange(UnityEngine.Object.FindObjectsByType<Lava>(FindObjectsInactive.Include, FindObjectsSortMode.None).Where(l => l.name == "River" && !l.enabled));
+            riversFound = true;
+            rivers.Clear();
+            rivers.AddRange(UnityEngine.Object.FindObjectsByType<Lava>(FindObjectsInactive.Include, FindObjectsSortMode.None).Where(l => l.name == "River"));
         }
-        foreach (Lava river in sleeping)
+        foreach (Lava river in rivers)
         {
-            if (river != null && !river.enabled && river.gameObject.activeInHierarchy)
+            if (!river.enabled && river.gameObject.activeInHierarchy)
             {
                 Apply(river);
             }

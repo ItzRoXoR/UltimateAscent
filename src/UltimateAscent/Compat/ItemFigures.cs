@@ -43,6 +43,10 @@ internal static class ItemFigures
         try
         {
             Apply(item, weight, rules);
+            if (weight)
+            {
+                CrashForItemStats(item);
+            }
         }
         catch (Exception ex)
         {
@@ -88,6 +92,23 @@ internal static class ItemFigures
         }
         undo.Add(() => set(current));
         set(value);
+    }
+
+    /// <summary>
+    /// Item Stats reads a sugar rush's crash without looking whether there is one: on an item whose rush has none (the
+    /// wild Wonderberry) it threw on every redraw of the inventory, which left the slots half drawn. While it reads, such
+    /// a rush has a crash of nothing (no drowsiness for no time); put back after.
+    /// </summary>
+    private static void CrashForItemStats(Item item)
+    {
+        foreach (Action_ApplyAffliction apply in item.GetComponents<Action_ApplyAffliction>())
+        {
+            if (apply.affliction is Affliction_InfiniteStamina rush && rush.drowsyAffliction == null)
+            {
+                undo.Add(() => rush.drowsyAffliction = null);
+                rush.drowsyAffliction = new Affliction_AdjustDrowsyOverTime(0f, 0f);
+            }
+        }
     }
 
     private static void Apply(Item item, bool weight, bool rules)

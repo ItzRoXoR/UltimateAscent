@@ -8,7 +8,7 @@ namespace UltimateAscent.Core;
 /// <summary>
 /// The mod's own small save, next to the game's (its persistent data folder, UltimateAscent/Save.txt): one
 /// "key=value" per line. It keeps what belongs to the player rather than to the config: the cosmetics they
-/// unlocked, the mod's cosmetics they wear, and their Blind Mode and Hot Mode boxes. Nothing of it goes to
+/// unlocked, the mod's cosmetics they wear, and their Blind Mode and Hot Mode boxes (which count when they host or play alone). Nothing of it goes to
 /// Steam, and the config file is never touched.
 /// </summary>
 internal static class ModSave

@@ -108,6 +108,7 @@ internal static class StoneItem
         int layer = look.GetComponentInChildren<MeshRenderer>(true)?.gameObject.layer ?? 0;
 
         Item stone = ModItems.Copy(coconut, PrefabName);
+        stone.gameObject.AddComponent<StoneFlight>();
         Object.DestroyImmediate(stone.transform.Find(CoconutLook).gameObject);
         GameObject body = Object.Instantiate(rock.gameObject, stone.transform);
         body.name = "Stone";
@@ -427,6 +428,43 @@ internal static class StoneItem
                 Object.Instantiate(dust, at, Quaternion.identity);
                 DustClouds++;
             }
+        }
+    }
+}
+
+/// <summary>
+/// A thrown Stone's flight, on its owner's game (where it really flies): while it flies fast enough to shatter, a snake it
+/// passes within <see cref="Snakes.StoneReach"/> of (its head or anywhere along its body) is hit (<see cref="Snake.StruckBy"/>).
+/// Before, only a sphere round the snake's head counted, on the host's game, where a guest's stone did not count as fast.
+/// </summary>
+internal sealed class StoneFlight : MonoBehaviour
+{
+    private Item item;
+    private Vector3 last;
+    private bool flying;
+
+    private void Awake()
+    {
+        item = GetComponent<Item>();
+    }
+
+    private void FixedUpdate()
+    {
+        if (item == null || item.rig == null || item.photonView == null || !item.photonView.IsMine || item.itemState != ItemState.Ground
+            || item.rig.linearVelocity.sqrMagnitude <= StoneItem.BreakSpeed * StoneItem.BreakSpeed)
+        {
+            flying = false;
+            return;
+        }
+        Vector3 now = item.rig.position;
+        Vector3 from = flying ? last : now - item.rig.linearVelocity * Time.fixedDeltaTime;
+        last = now;
+        flying = true;
+        Snake hit = Snakes.StruckBetween(from, now);
+        if (hit != null)
+        {
+            flying = false;
+            hit.StruckBy(item);
         }
     }
 }

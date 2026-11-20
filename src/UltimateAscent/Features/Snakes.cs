@@ -954,6 +954,39 @@ internal static class Snakes
         return texture;
     }
 
+    /// <summary>
+    /// A Stone hits a snake its middle passes this close to: its head, or any point along its body (before: a 0.35 m
+    /// sphere round the head, which the stone's own size made about 0.5 m).
+    /// </summary>
+    internal const float StoneReach = 0.8f;
+
+    /// <summary>
+    /// The snake a Stone hit flying from one spot to the next (its way in one physics step, so a fast stone cannot pass
+    /// through between two): the first with its head or a point along its body within <see cref="StoneReach"/> of it.
+    /// </summary>
+    internal static Snake StruckBetween(Vector3 from, Vector3 to)
+    {
+        Vector3 way = to - from;
+        float length = way.magnitude;
+        Vector3 along = length > 1e-5f ? way / length : Vector3.zero;
+        foreach (Snake snake in All)
+        {
+            if (snake == null || (snake.Head - from).sqrMagnitude > (length + snake.Length + 2f) * (length + snake.Length + 2f))
+            {
+                continue;
+            }
+            foreach (Vector3 part in snake.Parts())
+            {
+                float t = Mathf.Clamp(Vector3.Dot(part - from, along), 0f, length);
+                if ((from + along * t - part).sqrMagnitude <= StoneReach * StoneReach)
+                {
+                    return snake;
+                }
+            }
+        }
+        return null;
+    }
+
     /// <summary>Asks the host to stun a snake (a hit from any scout's game), saying who hit it.</summary>
     internal static void Hit(Snake snake, float seconds, Vector3 push, Character by)
     {
@@ -1213,6 +1246,9 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
         internal Vector3 up;
     }
     private Vector3 lastHead;
+
+    /// <summary>Where the head was when the track was last made longer (none since it was laid out afresh).</summary>
+    private Vector3 trailHead = Vector3.positiveInfinity;
     private bool coiled;
     /// <summary>Reared up into an S (drawn so), and since when.</summary>
     private bool reared;
@@ -1276,6 +1312,20 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
 
     private Mesh mesh;
     private SkinnedMeshRenderer body;
+
+    /// <summary>
+    /// The frame the body was last posed in (-1: never), the time gone by since (what the pose's moves catch up with), and
+    /// the step the pose works with this frame (see <see cref="Drawn"/>).
+    /// </summary>
+    private int posedFrame = -1;
+    private float poseDelta;
+    private float poseStep;
+
+    /// <summary>The body's pose catches up with this much time at most (a snake back in sight after a while).</summary>
+    private const float MostPoseStep = 0.25f;
+
+    /// <summary>For the tests: frames in which a snake's body was not posed because nothing drew it.</summary>
+    internal static int PosesSkipped;
     private AudioSource slither;
     private AudioSource rattle;
     private Vector3 heardAt;
@@ -1286,6 +1336,12 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
     internal float RattleLoudness => rattle != null && rattle.isPlaying ? rattle.volume : 0f;
 
     internal Vector3 Head => head;
+
+    /// <summary>How long it is, snout to tail tip.</summary>
+    internal float Length => length;
+
+    /// <summary>For the tests: how many points its body's track has.</summary>
+    internal int TrackPoints => trail.Count;
 
     /// <summary>
     /// For the tests: of the parts of it raised off what it lies on that reach out (an arch, a strike; not those rising
@@ -1348,18 +1404,40 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
         }
     }
 
-    /// <summary>The head and points along the body (every fourth bone), for what can hit it.</summary>
+    /// <summary>
+    /// The head and points along the body (every fourth bone), for what can hit it: where the bones are, which go with the
+    /// snake while it is not posed (see <see cref="Track"/>).
+    /// </summary>
     internal IEnumerable<Vector3> Parts()
     {
         yield return head;
-        if (spine == null)
+        if (bones == null)
         {
             yield break;
         }
-        for (int i = 4; i < spine.Length; i += 4)
+        for (int i = 4; i < Bones; i += 4)
         {
-            yield return spine[i];
+            yield return bones[i].position;
         }
+    }
+
+    /// <summary>
+    /// A Stone flying fast enough to shatter came within reach of it, on the stone's own game (where it really flies): the
+    /// host stuns it (asked, from anyone else's game), and the stone shatters.
+    /// </summary>
+    internal void StruckBy(Item stone)
+    {
+        Vector3 push = stone.rig != null ? stone.rig.linearVelocity : Vector3.zero;
+        Character by = stone.lastThrownCharacter;
+        if (photonView.IsMine)
+        {
+            Stun(StoneItem.Knockdown, push, by);
+        }
+        else
+        {
+            Snakes.Hit(this, StoneItem.Knockdown, push, by);
+        }
+        StoneItem.ShatterOn(stone);
     }
 
     internal bool IsTree => kind == Snakes.Kind.Tree;
@@ -1489,8 +1567,11 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
         body.bones = bones;
         body.rootBone = bones[0];
         body.quality = SkinQuality.Bone2;
-        body.updateWhenOffscreen = true;
+        // Skinned only while something draws it (a camera, or a light for its shadow), culled by a box round the head
+        // that the whole body stays within however it lies (no part of it is further from the snout than its length).
+        body.updateWhenOffscreen = false;
         body.sharedMesh = mesh;
+        body.localBounds = new Bounds(Vector3.zero, Vector3.one * 2f * (length + radius * 4f));
         Material material = new Material(Snakes.Skin()) { name = "UA_SnakeSkin_" + kind };
         material.SetTexture("_BaseTexture", Snakes.Pattern(kind));
         body.sharedMaterials = new[] { material, Plain("UA_SnakeMouth", new Color(0.62f, 0.2f, 0.26f), 0.55f) };
@@ -1541,7 +1622,9 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
             GameObject fang = new GameObject("Fang Mesh");
             fang.transform.SetParent(pivot, false);
             fang.AddComponent<MeshFilter>().sharedMesh = cone;
-            fang.AddComponent<MeshRenderer>().sharedMaterial = ivory;
+            MeshRenderer fangLook = fang.AddComponent<MeshRenderer>();
+            fangLook.sharedMaterial = ivory;
+            fangLook.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             fangs.Add(pivot);
         }
         glint = Snakes.ScorpionEffect(Snakes.ScorpionGlintName, bones[0], new Vector3(0f, -radius * 0.25f, -headLength * 0.2f), radius);
@@ -1820,7 +1903,10 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
         part.transform.localPosition = at;
         part.transform.localRotation = turn;
         part.transform.localScale = size;
-        part.GetComponent<Renderer>().sharedMaterial = material;
+        Renderer look = part.GetComponent<Renderer>();
+        look.sharedMaterial = material;
+        // Too small for a shadow anyone would see: one fewer thing to draw for every light.
+        look.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
     }
 
     private void Update()
@@ -1835,8 +1921,128 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
             facing = Vector3.Slerp(facing, netFacing, Time.deltaTime * 12f).normalized;
         }
         transform.position = head;
-        Pose();
+        if (Drawn())
+        {
+            Pose();
+        }
+        else
+        {
+            Track();
+        }
         Voice();
+    }
+
+    /// <summary>
+    /// The body is posed this frame: it is in the camera's view (its whole length round the head, and room for its shadow)
+    /// and drawn, every frame within <see cref="FarPose"/> and every third frame beyond; or it is within
+    /// <see cref="NearPose"/> of the camera; or it is after a scout or stunned (its strike starts from where its head is
+    /// drawn, and what hits it is told by its body, on every game); or it was never posed, or the tests move it.
+    /// Otherwise it is not: an idle snake's pose is most of its work, and nobody would see it (see <see cref="Track"/>).
+    /// </summary>
+    private bool Drawn()
+    {
+        poseDelta += Time.deltaTime;
+        if (posedFrame < 0 || Puppet || body == null || !Idle)
+        {
+            return true;
+        }
+        bool inView = InView(head, length + ShadowRoom, out float distance);
+        if (distance <= NearPose || (inView && body.isVisible && (distance <= FarPose || (Time.frameCount + farTurn) % 3 == 0)))
+        {
+            return true;
+        }
+        PosesSkipped++;
+        return false;
+    }
+
+    /// <summary>Asleep, wandering by itself or going home: after nobody.</summary>
+    private bool Idle => state == State.Sleeping || state == State.Wandering || state == State.Returning;
+
+    /// <summary>Within this of the camera a snake is always posed; beyond this, in view, every third frame.</summary>
+    private const float NearPose = 8f;
+    private const float FarPose = 60f;
+
+    /// <summary>The room round its body kept in view for its shadow.</summary>
+    private const float ShadowRoom = 1.5f;
+
+    /// <summary>Which of the three frames a far snake is posed in (spread over the snakes).</summary>
+    private readonly int farTurn = Random.Range(0, 3);
+
+    /// <summary>The camera's view this frame (worked out once a frame for every snake) and where it is.</summary>
+    private static readonly Plane[] viewPlanes = new Plane[6];
+    private static int viewFrame = -1;
+    private static bool viewKnown;
+    private static Vector3 viewFrom;
+
+    /// <summary>A box round a spot is in the camera's view (with no camera, everything is), and how far the spot is from it.</summary>
+    private static bool InView(Vector3 at, float reach, out float distance)
+    {
+        if (viewFrame != Time.frameCount)
+        {
+            viewFrame = Time.frameCount;
+            Camera camera = MainCamera.instance != null ? MainCamera.instance.cam : Camera.main;
+            viewKnown = camera != null;
+            if (viewKnown)
+            {
+                GeometryUtility.CalculateFrustumPlanes(camera, viewPlanes);
+                viewFrom = camera.transform.position;
+            }
+        }
+        if (!viewKnown)
+        {
+            distance = 0f;
+            return true;
+        }
+        distance = Vector3.Distance(at, viewFrom);
+        return GeometryUtility.TestPlanesAABB(viewPlanes, new Bounds(at, Vector3.one * (2f * reach)));
+    }
+
+    /// <summary>Curled up: asleep or hissing at its spot, uncoiling, or curled up by a hit (its shove over).</summary>
+    private bool CurledUp => ((state == State.Sleeping || state == State.Hissing) && Vector3.Distance(head, home) < 0.3f) || state == State.Waking
+        || (state == State.Stunned && Time.time >= shoveUntil);
+
+    /// <summary>
+    /// Unseen, only what the pose keeps from frame to frame is kept: the head's track (so the body lies along the way it
+    /// went when it is drawn again), and what it is doing. Curled up meanwhile, it is drawn curled up (not curling); off
+    /// its coil or out of its S, it is drawn from straight behind the head on (the track it leaves from there).
+    /// </summary>
+    private void Track()
+    {
+        if ((head - lastHead).sqrMagnitude > JumpDistance * JumpDistance)
+        {
+            Reseed();
+        }
+        lastHead = head;
+        if (CurledUp)
+        {
+            if (!coiled)
+            {
+                coiled = true;
+                curlStart = float.NegativeInfinity;
+            }
+            if (state == State.Waking && lastPosed != State.Waking)
+            {
+                wakeStart = Time.time;
+                uncoilTurning = false;
+            }
+        }
+        else
+        {
+            if (coiled || (reared && state != State.Rearing))
+            {
+                coiled = false;
+                reared = false;
+                Reseed();
+            }
+            ExtendTrail();
+            // As much track as the body can lie along (its points at least a step apart).
+            int kept = Mathf.CeilToInt((length + 0.5f) / TrailStep) + 4;
+            if (trail.Count > kept)
+            {
+                trail.RemoveRange(kept, trail.Count - kept);
+            }
+        }
+        lastPosed = state;
     }
 
     /// <summary>A looping sound on the snake, silent until it is needed, through the game's sound-effects mixer (its volume setting).</summary>
@@ -2942,6 +3148,9 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
     /// </summary>
     private void Pose()
     {
+        posedFrame = Time.frameCount;
+        poseStep = Mathf.Min(poseDelta, MostPoseStep);
+        poseDelta = 0f;
         if ((head - lastHead).sqrMagnitude > JumpDistance * JumpDistance)
         {
             // Pushed or moved at once: the body lies straight behind the head again, and drops to the ground under it.
@@ -2949,7 +3158,7 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
         }
         lastHead = head;
         bool curledByHit = state == State.Stunned && Time.time >= shoveUntil;
-        if (((state == State.Sleeping || state == State.Hissing) && Vector3.Distance(head, home) < 0.3f) || state == State.Waking || curledByHit)
+        if (CurledUp)
         {
             for (int i = 0; i < Bones; i++)
             {
@@ -3002,6 +3211,7 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
                 coiled = false;
                 reared = false;
                 trail.Clear();
+                trailHead = Vector3.positiveInfinity;
                 // Out of its uncoiling or its S, the track is laid from how it was drawn before it was rounded off, each
                 // bone at first where it lay along it (see HandOverLeft): rounded off again as before, the strike goes on
                 // from just how it looked.
@@ -3019,10 +3229,7 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
                     handOverStart = Time.time;
                 }
             }
-            if (trail.Count == 0 || (head - trail[0].at).sqrMagnitude >= TrailStep * TrailStep)
-            {
-                trail.Insert(0, Point(head));
-            }
+            ExtendTrail();
             ShoveBody();
             Sag();
             Follow();
@@ -3182,7 +3389,7 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
             Snakes.FangGlints++;
         }
         lastGape = state;
-        mouth = Mathf.MoveTowards(mouth, wanted, Time.deltaTime * (wanted > mouth ? 12f : 5f));
+        mouth = Mathf.MoveTowards(mouth, wanted, poseStep * (wanted > mouth ? 12f : 5f));
         float open = Mathf.SmoothStep(0f, 1f, mouth);
         jaw.localRotation = Quaternion.Euler(open * JawDegrees, 0f, 0f);
         Vector3 hingeAt = bones[0].TransformPoint(jaw.localPosition);
@@ -3192,6 +3399,21 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
         foreach (Transform pivot in fangs)
         {
             pivot.localRotation = fang;
+        }
+    }
+
+    /// <summary>
+    /// The track goes on to where the head is, a step at a time: once the head is a step from the track's start, and a step
+    /// from where it was when that was laid. A point is laid on the ground under the head, which can be higher than the
+    /// head: compared with the point alone, a head lying a little low kept adding points where it lay, every frame, and
+    /// the track grew without end.
+    /// </summary>
+    private void ExtendTrail()
+    {
+        if (trail.Count == 0 || ((head - trail[0].at).sqrMagnitude >= TrailStep * TrailStep && (head - trailHead).sqrMagnitude >= TrailStep * TrailStep))
+        {
+            trail.Insert(0, Point(head));
+            trailHead = head;
         }
     }
 
@@ -3209,30 +3431,47 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
         Vector3 back = -facing;
         int used = 0;
         float left = HandOverLeft;
-        for (; used < trail.Count && b < Bones; used++)
+        float nextAlong = AlongBody(b, left);
+        // The last piece of the track walked: which way it went, for the bones beyond the track's end.
+        float lastX = 0f, lastY = 0f, lastZ = 0f, lastStep = 0f;
+        int count = trail.Count;
+        for (; used < count && b < Bones; used++)
         {
-            Vector3 to = trail[used].at;
-            Vector3 toUp = trail[used].up;
-            float toFloor = trail[used].floor;
-            float step = Vector3.Distance(from, to);
+            TrailPoint point = trail[used];
+            float dx = point.at.x - from.x, dy = point.at.y - from.y, dz = point.at.z - from.z;
+            float step = Mathf.Sqrt(dx * dx + dy * dy + dz * dz);
             if (step < 1e-5f)
             {
                 continue;
             }
-            back = (to - from) / step;
-            while (b < Bones && walked + step >= AlongBody(b, left))
+            lastX = dx;
+            lastY = dy;
+            lastZ = dz;
+            lastStep = step;
+            if (walked + step >= nextAlong)
             {
-                float along = AlongBody(b, left);
-                float k = (along - walked) / step;
-                spine[b] = from + back * (along - walked);
-                spineUp[b] = Vector3.Slerp(fromUp, toUp, k);
-                spineFloor[b] = Mathf.Lerp(fromFloor, toFloor, k);
-                b++;
+                back = new Vector3(dx / step, dy / step, dz / step);
+                while (b < Bones && walked + step >= nextAlong)
+                {
+                    float k = (nextAlong - walked) / step;
+                    spine[b] = from + back * (nextAlong - walked);
+                    spineUp[b] = Vector3.Slerp(fromUp, point.up, k);
+                    spineFloor[b] = Mathf.Lerp(fromFloor, point.floor, k);
+                    b++;
+                    if (b < Bones)
+                    {
+                        nextAlong = AlongBody(b, left);
+                    }
+                }
             }
             walked += step;
-            from = to;
-            fromUp = toUp;
-            fromFloor = toFloor;
+            from = point.at;
+            fromUp = point.up;
+            fromFloor = point.floor;
+        }
+        if (lastStep > 0f)
+        {
+            back = new Vector3(lastX / lastStep, lastY / lastStep, lastZ / lastStep);
         }
         for (; b < Bones; b++)
         {
@@ -3308,6 +3547,7 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
     private void Reseed()
     {
         trail.Clear();
+        trailHead = Vector3.positiveInfinity;
         Vector3 back = -new Vector3(facing.x, 0f, facing.z);
         back = back.sqrMagnitude > 1e-4f ? back.normalized : Vector3.back;
         for (float d = 0.1f; d <= length + 0.15f; d += 0.1f)
@@ -3325,7 +3565,7 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
         if (Time.time < shoveUntil)
         {
             shoving = true;
-            Vector3 step = shove * Time.deltaTime;
+            Vector3 step = shove * poseStep;
             for (int i = 1; i < trail.Count; i++)
             {
                 // Slid with the head, kept on the ground under it (pushed up a slope it would sink into it).
@@ -3352,7 +3592,7 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
     /// <summary>The track sinks where it lies above the ground under it: a body left in the air (after a jump, off a ledge) falls.</summary>
     private void Sag()
     {
-        float drop = TrailFall * Time.deltaTime * (1f - HandOverLeft);
+        float drop = TrailFall * poseStep * (1f - HandOverLeft);
         for (int i = 0; i < trail.Count; i++)
         {
             TrailPoint point = trail[i];
@@ -3627,19 +3867,6 @@ internal sealed class Snake : MonoBehaviourPun, IPunObservable
     /// A stone flying fast enough to shatter shatters on the snake and stuns it (the host decides the stun, the stone's
     /// owner breaks it); a slower one does nothing to it.
     /// </summary>
-    private void OnTriggerEnter(Collider other)
-    {
-        Item item = other.GetComponentInParent<Item>();
-        if (item == null || !StoneItem.IsStone(item) || item.rig == null || item.itemState != ItemState.Ground || item.rig.linearVelocity.magnitude <= StoneItem.BreakSpeed)
-        {
-            return;
-        }
-        if (photonView.IsMine)
-        {
-            Stun(StoneItem.Knockdown, item.rig.linearVelocity, item.lastThrownCharacter);
-        }
-        StoneItem.ShatterOn(item);
-    }
 
     [PunRPC]
     internal void RPC_Hit(float seconds, Vector3 push, int byView)

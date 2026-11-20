@@ -48,6 +48,7 @@ internal sealed class Runtime : MonoBehaviourPunCallbacks, IOnEventCallback
         CosmeticUnlocks.Tick,
         PainSash.Tick,
         RunCounts.Tick,
+        Compat.ItemStats.Watch,
     };
 
     private readonly bool[] failed = new bool[Ticks.Length];

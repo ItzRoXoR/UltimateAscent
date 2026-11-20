@@ -10,7 +10,8 @@ namespace UltimateAscent.Features;
 /// <summary>
 /// More of the Gloom's food, on every ascent (and in custom runs):
 /// banana vines (the Gloom's BerryVines, which grow Berrynanas) bear fruit 40% of the time (the game: 10%; a vine the
-/// game gives a better chance keeps it), as many bananas and of the same kinds as before;
+/// game gives a better chance keeps it), as many bananas and of the same kinds as before; the Tropics' banana vines (some
+/// 120 of them) keep the game's chance;
 /// and the Gloom has 10 cattail Hot Dogs (the game: one per spawner, 7 on the maps seen). The host adds the missing ones
 /// right after the game has put its own out as the Gloom loads: on the swamp floor at the heights the game's stand at
 /// (within a metre), on its own ground, level, open to the sky, 20 m or more from any other cattail Hot Dog.
@@ -41,13 +42,17 @@ internal static class GloomFood
     internal static bool IsBananaVine(Spawner spawner) =>
         spawner is BerryVine && spawner.spawns != null && spawner.spawns.items != null && spawner.spawns.items.Any(e => e.prefab != null && e.prefab.name.StartsWith("Berrynana"));
 
-    /// <summary>A banana vine bears fruit 40% of the time.</summary>
+    /// <summary>A banana vine of the Gloom (not one of the Tropics', which keep the game's chance).</summary>
+    internal static bool IsGloomBananaVine(Spawner spawner) =>
+        IsBananaVine(spawner) && Map.TryGetBiome(spawner, out Biome.BiomeType biome) && biome == Biome.BiomeType.Swamp;
+
+    /// <summary>A banana vine of the Gloom bears fruit 40% of the time.</summary>
     [HarmonyPatch(typeof(Spawner), nameof(Spawner.TrySpawnItems))]
     private static class BananaVines
     {
         private static void Prefix(Spawner __instance)
         {
-            if (Rules.InRun && IsBananaVine(__instance) && __instance.baseSpawnChance < BananaVineChance)
+            if (Rules.InRun && IsGloomBananaVine(__instance) && __instance.baseSpawnChance < BananaVineChance)
             {
                 __instance.baseSpawnChance = BananaVineChance;
             }

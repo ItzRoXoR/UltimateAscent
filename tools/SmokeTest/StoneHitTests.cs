@@ -136,6 +136,8 @@ internal sealed partial class Runner
         }
         Protect(true);
         Vector2 look = local.data.lookValues;
+        // Back where it started afterwards: the next checks pick the snake nearest the scout.
+        Vector3 home = local.Center;
         try
         {
             foreach ((float charge, bool stuns) in new[] { (HalfThrow, false), (1f, true) })
@@ -229,7 +231,15 @@ internal sealed partial class Runner
         {
             snake.Puppet = false;
             snake.Unaware = false;
+            // The other snakes notice scouts again (the next checks go for whichever is nearest).
+            foreach (Snake other in snakes.Where(s => s != null && s != snake))
+            {
+                other.Unaware = false;
+            }
             local.data.lookValues = look;
+            local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, home, false);
+            // The snake back at its own spot (knocked about, it may lie by the edge of the Tropics).
+            snake.PlaceAt(snake.Home, snake.Home + Vector3.forward);
         }
     }
 }

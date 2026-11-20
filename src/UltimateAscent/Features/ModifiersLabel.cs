@@ -7,11 +7,11 @@ using UnityEngine;
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// Under the ascent shown at the top right of a climb (the game's <see cref="AscentUI"/>), a small line in its lettering:
-/// "ALL MODIFIERS ON" when every switch in the config's [Ascents] list that this ascent takes in is on (the host's), or
-/// which are off ("MODIFIERS OFF: 14, 17, COLD NIGHTS"): the cold nights from ascent 5, the game's ascent 8, ascents
-/// 9-25 up to this one, and the hot campfires from 17. Shown from ascent 5 (below it no switch applies), not in custom
-/// runs unless they play by a picked ascent; it follows a change of the switches during the climb.
+/// Under the ascent shown at the top right of a climb (the game's <see cref="AscentUI"/>), a small line in its lettering
+/// naming the switches in the config's [Ascents] list that this ascent takes in and that are off (the host's):
+/// "MODIFIERS OFF: 14, 17, COLD NIGHTS" (the cold nights from ascent 5, the game's ascent 8, ascents 9-25 up to this one,
+/// and the hot campfires from 17). With all of them on there is no line. Shown from ascent 5 (below it no switch
+/// applies), not in custom runs unless they play by a picked ascent; it follows a change of the switches during the climb.
 /// </summary>
 [HarmonyPatch(typeof(AscentUI), "Start")]
 internal static class ModifiersLabel
@@ -66,7 +66,7 @@ internal static class ModifiersLabel
         List<string> off = Off();
         if (off.Count == 0)
         {
-            return Russian ? "ВСЕ МОДИФИКАТОРЫ ВКЛЮЧЕНЫ" : "ALL MODIFIERS ON";
+            return "";
         }
         return (Russian ? "ВЫКЛЮЧЕНЫ: " : "MODIFIERS OFF: ") + string.Join(", ", off);
     }

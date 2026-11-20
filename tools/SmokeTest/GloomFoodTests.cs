@@ -32,6 +32,9 @@ internal sealed partial class Runner
         List<BerryVine> vines = Object.FindObjectsByType<BerryVine>(FindObjectsInactive.Include, FindObjectsSortMode.None).Where(v => GloomFood.IsBananaVine(v) && Map.TryGetBiome(v, out Biome.BiomeType b) && b == Biome.BiomeType.Swamp).ToList();
         List<Item> bananas = Object.FindObjectsByType<Item>(FindObjectsSortMode.None).Where(i => i.itemState == ItemState.Ground && i.gameObject.name.StartsWith("Berrynana")).ToList();
         int bearing = vines.Count(v => bananas.Any(b => Vector3.Distance(b.transform.position, v.transform.position) < 12f));
+        List<BerryVine> elsewhere = Object.FindObjectsByType<BerryVine>(FindObjectsInactive.Include, FindObjectsSortMode.None).Where(v => GloomFood.IsBananaVine(v) && !vines.Contains(v)).ToList();
+        Check("only the Gloom's banana vines get the 40% (the Tropics' keep the game's chance)", vines.All(GloomFood.IsGloomBananaVine) && !elsewhere.Any(GloomFood.IsGloomBananaVine),
+            $"{vines.Count} in the Gloom, {elsewhere.Count} elsewhere ({string.Join(", ", elsewhere.GroupBy(v => Map.TryGetBiome(v, out Biome.BiomeType b) ? b.ToString() : "none").Select(g => $"{g.Count()} {g.Key}"))})");
         Check("the Gloom's banana vines bear fruit 40% of the time (the game: 10%)", vines.Count > 0 && vines.All(v => v.baseSpawnChance >= GloomFood.BananaVineChance - 0.001f),
             $"{vines.Count} vines, chances {string.Join(", ", vines.Select(v => v.baseSpawnChance.ToString("0.##")).Distinct())}; {bearing} bore fruit this time, {bananas.Count} bananas ({string.Join(", ", bananas.GroupBy(b => b.gameObject.name.Replace("(Clone)", "")).Select(g => $"{g.Count()} {g.Key}"))})");
 

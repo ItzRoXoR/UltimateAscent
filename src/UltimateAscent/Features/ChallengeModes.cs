@@ -1,14 +1,16 @@
 using HarmonyLib;
+using Photon.Pun;
 using UltimateAscent.Core;
 using UnityEngine;
 
 namespace UltimateAscent.Features;
 
 /// <summary>
-/// Blind Mode and Hot Mode: challenges each player ticks for themselves on the boarding pass
-/// (<see cref="ChallengeModesUi"/>), kept in the mod's save for next time. They work on every ascent and in
-/// custom runs, alone or with others (each player's own boxes count only for them). Reaching the peak with
-/// one of them unlocks one of the mod's cosmetics (<see cref="CosmeticUnlocks"/>).
+/// Blind Mode and Hot Mode: challenges ticked on the boarding pass (<see cref="ChallengeModesUi"/>), kept in the mod's
+/// save for next time. They work on every ascent and in custom runs. With others, the host's boxes count for everyone:
+/// the host publishes them in the room, and the other players' passes show them without letting them be changed (their
+/// own ticks are kept for when they host). Reaching the peak with one of them unlocks one of the mod's cosmetics
+/// (<see cref="CosmeticUnlocks"/>).
 /// <list type="bullet">
 /// <item>Blind Mode: all climb long the screen stays as dark as the Scoutmaster makes it at his closest (the
 /// game's own screen effect at full strength), with no sound of its own. When the Scoutmaster really comes
@@ -24,6 +26,11 @@ internal static class ChallengeModes
     private const string BlindKey = "blindmode";
     private const string HotKey = "hotmode";
 
+    /// <summary>The host's boxes, in the room: 1 Blind Mode, 2 Hot Mode.</summary>
+    private const string RoomKey = Net.Prefix + "modes";
+    private const int BlindBit = 1;
+    private const int HotBit = 2;
+
     private static readonly int Strength = Shader.PropertyToID("_Strength");
     private static readonly int Grain = Shader.PropertyToID("_GrainMult");
 
@@ -33,16 +40,39 @@ internal static class ChallengeModes
     /// <summary>The boarding pass's extras are on (the config's "Boarding Pass Extras"); off, both modes are too.</summary>
     internal static bool Offered => Plugin.BoardingPassExtras == null || Plugin.BoardingPassExtras.Value;
 
+    /// <summary>
+    /// Blind Mode is on for this climb: the host's box (this player's own when they host or play alone). Setting it ticks
+    /// this player's own box.
+    /// </summary>
     internal static bool Blind
     {
-        get => Offered && ModSave.GetBool(BlindKey);
+        get => (Modes & BlindBit) != 0;
         set => ModSave.SetBool(BlindKey, value);
     }
 
+    /// <summary>Hot Mode is on for this climb: the host's box, as for <see cref="Blind"/>.</summary>
     internal static bool Hot
     {
-        get => Offered && ModSave.GetBool(HotKey);
+        get => (Modes & HotBit) != 0;
         set => ModSave.SetBool(HotKey, value);
+    }
+
+    /// <summary>In someone else's room: the host's boxes count, and this player's pass only shows them.</summary>
+    internal static bool FromHost => PhotonNetwork.InRoom && !PhotonNetwork.IsMasterClient;
+
+    /// <summary>This player's own ticks, as their boarding pass extras allow.</summary>
+    private static int Own => Offered ? (ModSave.GetBool(BlindKey) ? BlindBit : 0) | (ModSave.GetBool(HotKey) ? HotBit : 0) : 0;
+
+    /// <summary>The boxes that count: the host's, published in the room (none from a host without them), or this player's own.</summary>
+    private static int Modes => FromHost ? Net.GetRoom(RoomKey) is int published ? published : 0 : Own;
+
+    /// <summary>Host: publish its boxes (cheap when unchanged).</summary>
+    internal static void Publish()
+    {
+        if (PhotonNetwork.InRoom && PhotonNetwork.IsMasterClient && !(Net.GetRoom(RoomKey) is int current && current == Own))
+        {
+            Net.SetRoom(RoomKey, Own);
+        }
     }
 
     /// <summary>
@@ -70,6 +100,8 @@ internal static class ChallengeModes
 
     internal static void Tick()
     {
+        Publish();
+        ChallengeModesUi.Follow();
         if (Blinding)
         {
             Darken(Screen());

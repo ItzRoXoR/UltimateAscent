@@ -23,6 +23,8 @@
   Z Citadel, N Nadir; "*200" after one makes it 200%), set in memory only.
   -BuilderMaps (with -WithTfa) puts the Builder maps (*.map) of that folder into the throwaway profile, as the pack
   installs them; "-Only buildermap" climbs the first of them.
+  -WithMods (with -Clean) copies these plugin folders of -Profile (comma-separated, e.g. boxofbiscuits97-ItemStats)
+  into the throwaway profile, and their configs (only read there).
 .EXAMPLE
   .\tools\smoketest.ps1 -Clean
   .\tools\smoketest.ps1 -Profile FinalAscent
@@ -45,6 +47,7 @@ param(
     [switch]$WithTfa,
     [string]$Chain = '',
     [string]$BuilderMaps = '',
+    [string]$WithMods = '',
     [int]$TimeoutSeconds = 960,
     [string]$ProfilesDir = "$env:APPDATA\r2modmanPlus-local\PEAK\profiles",
     [string]$SteamExe = 'C:\Program Files (x86)\Steam\steam.exe'
@@ -80,6 +83,14 @@ if ($Clean) {
     $bepinexCfg = Join-Path $sourceProfile 'BepInEx\config\BepInEx.cfg'
     if (Test-Path $bepinexCfg) { Copy-Item $bepinexCfg (Join-Path $profileDir 'BepInEx\config') }
     Copy-Item $modDll (Join-Path $plugins 'UltimateAscent')
+    foreach ($folder in ($WithMods -split ',' | Where-Object { $_ })) {
+        $from = Join-Path $sourceProfile "BepInEx\plugins\$folder"
+        if (-not (Test-Path $from)) { throw "Profile '$Profile' has no plugin folder '$folder'." }
+        Copy-Item $from (Join-Path $plugins $folder) -Recurse
+        $guess = ($folder -split '-', 2)[-1]
+        Get-ChildItem (Join-Path $sourceProfile 'BepInEx\config') -Filter '*.cfg' | Where-Object { $_.Name -match [regex]::Escape($guess) } |
+            Copy-Item -Destination (Join-Path $profileDir 'BepInEx\config')
+    }
     if ($WithTfa) {
         # True Final Ascent and the libraries it needs, copied from the source profile (only read there).
         foreach ($folder in 'CptPICHU-TrueFinalAscent', 'PEAKModding-PEAKLib_Items', 'PEAKModding-PEAKLib_Core', 'PEAKModding-SoftDependencyFix', 'MonoDetour-MonoDetour', 'MonoDetour-MonoDetour_BepInEx_5') {

@@ -95,9 +95,9 @@ internal sealed partial class Runner
     }
 
     /// <summary>
-    /// Under the ascent at the top right of the climb, the modifiers line: "ALL MODIFIERS ON" with every switch of this
-    /// ascent on; with ascent 14's switch, the cold nights and the hot campfires off (in memory) it names them; just under
-    /// the ascent's letters, lined up with them; back as it was afterwards.
+    /// Under the ascent at the top right of the climb, the modifiers line: none with every switch of this ascent on; with
+    /// ascent 14's switch, the cold nights and the hot campfires off (in memory) it names them; just under the ascent's
+    /// letters, lined up with them; back as it was afterwards.
     /// </summary>
     private IEnumerator ModifiersLineCheck()
     {
@@ -157,7 +157,7 @@ internal sealed partial class Runner
             HostOptions.Invalidate();
         }
         yield return new WaitForSeconds(0.6f);
-        Check("under the ascent at the top right, the line says all modifiers are on when every switch of this ascent is", allOn == "ALL MODIFIERS ON", $"'{allOn}' at ascent {Ascents._currentAscent}");
+        Check("with every switch of this ascent on, there is no modifiers line under the ascent", allOn == "", $"'{allOn}' at ascent {Ascents._currentAscent}");
         Check("with switches off it names them (ascent 14, the cold nights, the hot campfires)", someOff == wanted, $"'{someOff}' (wanted '{wanted}')");
         Check("the line sits just under the ascent's letters, lined up with them", under, where);
         Info("the modifiers line with the config's own switches", $"'{line.Shown}'");
@@ -167,7 +167,9 @@ internal sealed partial class Runner
     /// The bees' checks (17): one as the night begins and one as the day begins (the clock put just before each), every
     /// scout rolled for a moment of their own within that night or day; scouts' moments at least 30 s of the clock apart
     /// (drawn for four); a scout's moment coming as the clock goes past it (outside the Tropics, with no swarm); a clock set
-    /// back before the night begins brings no check.
+    /// back before the night begins brings no check. At most one ambush a day: set upon after the day's first roll, a
+    /// scout gets no roll as the night begins, and rolls again the next day; without an ambush in the day, the night's
+    /// roll stays.
     /// </summary>
     private IEnumerator BeeMoments()
     {
@@ -234,6 +236,22 @@ internal sealed partial class Runner
                         $"{clock.FloatToTimeString(when)} -> {clock.FloatToTimeString(clock.timeOfDay)}: {A17_BeeAmbush.ChecksMade - checks} check(s)");
                 }
             }
+
+            // At most one ambush a day. The day has just begun: the bees set upon the scout (as an ambush in the
+            // day's roll does), so as the night begins there is no roll for them.
+            A17_BeeAmbush.Ambushed(local);
+            int skipped = A17_BeeAmbush.RollsSkipped;
+            yield return BeeCheckAt(clock, nightBegins);
+            bool nightRoll = A17_BeeAmbush.MomentOf(local, out float nightMoment) && !float.IsNaN(nightMoment);
+            Check("set upon after the day's first roll, the scout gets no second roll that night (17)", !nightRoll && A17_BeeAmbush.RollsSkipped > skipped,
+                $"the night's moment {(nightRoll ? clock.FloatToTimeString(nightMoment) : "none")}, rolls left out {A17_BeeAmbush.RollsSkipped - skipped}");
+            yield return BeeCheckAt(clock, dayBegins);
+            bool dayRoll = A17_BeeAmbush.MomentOf(local, out float dayMoment) && !float.IsNaN(dayMoment);
+            Check("the next day the scout rolls again (17)", dayRoll, $"the day's moment {(dayRoll ? clock.FloatToTimeString(dayMoment) : "none")}");
+            // This day's moment comes as the clock goes on to the night, outside the Tropics: no ambush, so the night rolls.
+            yield return BeeCheckAt(clock, nightBegins);
+            bool keptRoll = A17_BeeAmbush.MomentOf(local, out float keptMoment) && !float.IsNaN(keptMoment);
+            Check("without an ambush in the day, the night's roll stays (17)", keptRoll, $"the night's moment {(keptRoll ? clock.FloatToTimeString(keptMoment) : "none")}");
         }
         finally
         {
@@ -261,6 +279,21 @@ internal sealed partial class Runner
         }
         Check("four scouts' moments in a night are always at least 30 s apart, so no two are set upon at once (17)", closest >= apart - 1e-4f,
             $"the closest two of 200 nights' draws {closest * clock.dayLengthInMinutes * 60f / 24f:0.#} s apart (the night {night * clock.dayLengthInMinutes * 60f / 24f:0} s long)");
+    }
+
+    /// <summary>The clock put just before a check (the day or the night beginning), and the check waited for.</summary>
+    private static IEnumerator BeeCheckAt(DayNightManager clock, float begins)
+    {
+        clock.timeOfDay = Mathf.Repeat(begins - 0.03f, 24f);
+        yield return null;
+        yield return null;
+        int checks = A17_BeeAmbush.ChecksMade;
+        A17_BeeAmbush.lastCheckAt = -1000f;
+        float deadline = Time.time + 5f;
+        while (A17_BeeAmbush.ChecksMade == checks && Time.time < deadline)
+        {
+            yield return null;
+        }
     }
 
     /// <summary>

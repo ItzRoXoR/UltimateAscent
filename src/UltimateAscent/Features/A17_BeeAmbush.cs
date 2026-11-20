@@ -13,7 +13,8 @@ namespace UltimateAscent.Features;
 /// begins, every scout has a 50% chance to be ambushed by an angry swarm (no beehive needed) at a moment
 /// of their own picked at random within that day or night (at least 30 s from anyone else's, so two
 /// scouts are not set upon at once); a scout who is not in the Tropics when their moment comes is left
-/// alone. The swarm appears right next to its scout.
+/// alone. A scout the bees set upon after the day's first roll gets no second roll that day: nobody is
+/// ambushed more than once a day (a day and the night after it). The swarm appears right next to its scout.
 /// Escaping works like with a stolen beehive: the swarm is tied to the spot it appeared at (it
 /// follows you up to 120 m from there), so you have to outrun it or run far away from it; once it
 /// loses you, it disperses. It stays angry for 50 s. Bees only ambush in the Tropics:
@@ -75,11 +76,25 @@ internal static class A17_BeeAmbush
     internal static int ChecksMade;
     internal static int MomentsCome;
 
+    /// <summary>For the tests: rolls not made because the bees had already set upon the scout that day.</summary>
+    internal static int RollsSkipped;
+
+    /// <summary>The bees' day: one more as each day begins (a day and the night after it, as the game counts its days).</summary>
+    private static int beeDay;
+
+    /// <summary>The bees' day on which each scout (by their view) was last set upon.</summary>
+    private static readonly Dictionary<int, int> ambushedOn = new Dictionary<int, int>();
+
+    /// <summary>The bees set upon this scout: no more rolls for them until the next day begins.</summary>
+    internal static void Ambushed(Character scout) => ambushedOn[scout.photonView.ViewID] = beeDay;
+
     internal static void Reset()
     {
         lastTime = -1f;
         lastCheckAt = -1000f;
         moments.Clear();
+        beeDay = 0;
+        ambushedOn.Clear();
     }
 
     /// <summary>The checks: as the day begins and as the night begins, in hours.</summary>
@@ -161,7 +176,10 @@ internal static class A17_BeeAmbush
                 MomentsCome++;
                 if (scout.data.fullyConscious && InTropics(scout))
                 {
-                    Spawn(scout);
+                    if (Spawn(scout))
+                    {
+                        Ambushed(scout);
+                    }
                 }
                 else
                 {
@@ -177,6 +195,10 @@ internal static class A17_BeeAmbush
         stretchIsDay = now >= clock.dayStart && now < clock.dayEnd;
         stretchFrom = stretchIsDay ? clock.dayStart : clock.dayEnd;
         stretchTo = stretchIsDay ? clock.dayEnd : clock.dayStart;
+        if (begun && stretchIsDay)
+        {
+            beeDay++;
+        }
         moments.Clear();
         ChecksMade++;
         foreach (Character scout in Scouts())
@@ -191,6 +213,13 @@ internal static class A17_BeeAmbush
     /// <summary>A scout's roll: an ambush at a moment of their own in what is left of the day or night, apart from everyone else's.</summary>
     private static void Roll(DayNightManager clock, Character scout, float now)
     {
+        if (ambushedOn.TryGetValue(scout.photonView.ViewID, out int day) && day == beeDay)
+        {
+            // Set upon already today: the bees leave them alone until the next day begins.
+            moments[scout.photonView.ViewID] = float.NaN;
+            RollsSkipped++;
+            return;
+        }
         if (Random.value >= Chance)
         {
             moments[scout.photonView.ViewID] = float.NaN;
@@ -282,14 +311,15 @@ internal static class A17_BeeAmbush
         return Map.CurrentPlace == Place.Tropics;
     }
 
-    private static void Spawn(Character target)
+    /// <summary>An ambush swarm for the scout; false when none could be made.</summary>
+    private static bool Spawn(Character target)
     {
         string prefab = PrefabName();
         GameObject spawned = PhotonNetwork.Instantiate(prefab, SpawnPoint(target), Quaternion.identity, 0, new object[] { Marker });
         BeeSwarm swarm = spawned != null ? spawned.GetComponent<BeeSwarm>() : null;
         if (swarm == null)
         {
-            return;
+            return false;
         }
         swarm.beehiveID = -1;
         swarm.maxHiveDistance = Leash;
@@ -297,6 +327,7 @@ internal static class A17_BeeAmbush
         swarm.GetAngry(AngrySeconds);
         chases.AddOrUpdate(swarm, new Chase { until = Time.time + MinChaseSeconds });
         Plugin.Log.LogInfo($"Ascent 17: a bee swarm ambushes {target.characterName}.");
+        return true;
     }
 
     /// <summary>

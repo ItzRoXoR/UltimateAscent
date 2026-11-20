@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using HarmonyLib;
 using UltimateAscent.Core;
 using UnityEngine;
 
@@ -143,8 +144,22 @@ internal static class WindDebris
     }
 
     private static readonly List<Piece> pieces = new List<Piece>();
+    /// <summary>The wind storms, as each makes itself known by running (see <see cref="Known"/>): no search of the scene.</summary>
     private static readonly List<WindChillZone> zones = new List<WindChillZone>();
-    private static float zonesFound = float.NegativeInfinity;
+    private static readonly HashSet<WindChillZone> looked = new HashSet<WindChillZone>();
+
+    /// <summary>A wind zone running for the first time: a wind storm is one of the zones the debris looks at.</summary>
+    [HarmonyPatch(typeof(WindChillZone), "Update")]
+    private static class Known
+    {
+        private static void Postfix(WindChillZone __instance)
+        {
+            if (__instance != null && looked.Add(__instance) && __instance.name == "WindStorm")
+            {
+                zones.Add(__instance);
+            }
+        }
+    }
     private static ParticleSystem far;
     private static float farOwed;
 
@@ -208,8 +223,8 @@ internal static class WindDebris
             }
         }
         pieces.Clear();
-        zones.Clear();
-        zonesFound = float.NegativeInfinity;
+        zones.RemoveAll(z => z == null);
+        looked.RemoveWhere(z => z == null);
         if (far != null)
         {
             Object.Destroy(far.gameObject);
@@ -245,12 +260,6 @@ internal static class WindDebris
         if (Compat.Tfa.RestSpares(scout))
         {
             return null;
-        }
-        if (Time.time - zonesFound > 2f)
-        {
-            zonesFound = Time.time;
-            zones.Clear();
-            zones.AddRange(Object.FindObjectsByType<WindChillZone>(FindObjectsSortMode.None).Where(z => z != null && z.name == "WindStorm"));
         }
         foreach (WindChillZone zone in zones)
         {

@@ -14,10 +14,11 @@ namespace UltimateAscent.Features;
 
 /// <summary>
 /// The Auto-Parachute, the game's cut item, comes back as something to wear in the backpack slot
-/// (slot 4) instead of a backpack. Worn, it opens by itself after 1.5 s of falling (the game's own
-/// parachute, which the game still has on every scout) and saves you from the fall. It holds 3
+/// (slot 4) instead of a backpack. Worn, it opens by itself (the game's own parachute, which the game still has on
+/// every scout) and saves you from the fall: 1.4 s after stepping off, 1.6 s after a jump, 2.1 s after a bounce, or
+/// as soon as the scout has fallen 20 m, whichever comes first (<see cref="OpensSooner"/>). It holds 8
 /// charges (shown on its slot); from ascent 15 each save takes 2 (multi-use items lose 2 uses per
-/// use), so it saves twice. With the last charge it is gone.
+/// use), so it saves 8 times below ascent 15 and 4 times from it. With the last charge it is gone.
 /// <para>It spawns where the Jetpack does, as rare (Mythic), on every ascent (the config's "New Items"
 /// switch) and in custom runs (its own switch on the Custom Run screen).</para>
 /// <para>The game knows four things to wear in that slot (backpack, fanny pack, jetpack, rocket pack),
@@ -29,7 +30,7 @@ internal static class AutoParachute
     internal const string PrefabName = "AutoParachute";
     internal const ushort ItemId = 9001;
     internal const BackpackSlot.BackpackType Type = (BackpackSlot.BackpackType)5;
-    internal const int Charges = 3;
+    internal const int Charges = 8;
 
     /// <summary>A save from ascent 15 takes this many charges (multi-use items lose 2 uses per use there).</summary>
     internal const int WorseItemsCost = 2;
@@ -67,7 +68,7 @@ internal static class AutoParachute
         return data != null && data.TryGetDataEntry(DataEntryKey.ItemUses, out OptionableIntItemData uses) && uses.HasData ? uses.Value : Charges;
     }
 
-    private static void SetCharges(ItemInstanceData data, int left)
+    internal static void SetCharges(ItemInstanceData data, int left)
     {
         if (data == null)
         {
@@ -78,6 +79,70 @@ internal static class AutoParachute
         uses.Value = left;
         FloatItemData shown = data.TryGetDataEntry(DataEntryKey.UseRemainingPercentage, out FloatItemData had) ? had : data.RegisterNewEntry<FloatItemData>(DataEntryKey.UseRemainingPercentage);
         shown.Value = Mathf.Clamp01((float)left / Charges);
+    }
+
+    /// <summary>
+    /// The worn parachute opens this long after the scout left the ground by stepping off, after a jump, and after a bounce
+    /// (the game's parachute: about 1.6, 1.9 and 2.1 s), or once they have fallen this far, whichever comes first.
+    /// </summary>
+    internal const float StepOffSeconds = 1.4f;
+    internal const float JumpSeconds = 1.6f;
+    internal const float BounceSeconds = 2.1f;
+    internal const float OpenAfterFall = 20f;
+
+    /// <summary>The highest the local scout has been since they last stood or held on to something (for the fall).</summary>
+    private static float airTop = float.NegativeInfinity;
+
+    /// <summary>The local scout's height at the last physics step.</summary>
+    private static float lastHeight = float.NegativeInfinity;
+
+    /// <summary>Higher than this in one physics step is no climb nor launch but a warp: the fall is counted from there.</summary>
+    private const float WarpStep = 3f;
+
+    /// <summary>For the tests: how far the local scout has fallen from the highest point since they last stood or held on.</summary>
+    internal static float Fallen(Character scout) => scout != null && !float.IsNegativeInfinity(airTop) ? Mathf.Max(0f, airTop - scout.Center.y) : 0f;
+
+    /// <summary>
+    /// The worn parachute's own moments to open, on the scout's own game, besides the game's (which looks only at how long
+    /// the fall has lasted): 1.4 s after stepping off (counted, as the game counts it, only while falling once the first
+    /// second is over), 1.6 s after a jump, never within 2.1 s of a bounce; or, whatever the time, once the scout is 20 m
+    /// below the highest point since they last stood or held on. Not while climbing or holding on, as with the game's, nor
+    /// while carried by another scout. A warp starts the count afresh where it lands (warping, the scout's middle is read
+    /// metres above where they come out).
+    /// </summary>
+    [HarmonyPatch(typeof(Character), "UpdateVariablesFixed")]
+    private static class OpensSooner
+    {
+        private static void Postfix(Character __instance)
+        {
+            if (!__instance.IsLocal || __instance.data == null || __instance.refs == null || __instance.refs.balloons == null)
+            {
+                return;
+            }
+            CharacterData data = __instance.data;
+            float height = __instance.Center.y;
+            bool warped = __instance.warping || height - lastHeight > WarpStep;
+            lastHeight = height;
+            if (data.isGrounded || data.isClimbingAnything || data.isCarried || data.dead || warped)
+            {
+                airTop = height;
+                return;
+            }
+            airTop = Mathf.Max(airTop, height);
+            CharacterBalloons balloons = __instance.refs.balloons;
+            if (balloons._isParachuteOpen || !data.hasParachute || !Wears(__instance) || CarriesGameParachute(__instance) || ChargesLeft(__instance.player.backpackSlot.data) <= 0)
+            {
+                return;
+            }
+            bool jumped = data.sinceGrounded - data.sinceJump > -0.05f;
+            float falling = Mathf.Min(data.sinceJump, data.sinceGrounded);
+            bool afterBounce = Time.time - data.lastBouncedTime < BounceSeconds;
+            bool longEnough = !afterBounce && falling >= (jumped ? JumpSeconds : StepOffSeconds);
+            if (longEnough || airTop - height >= OpenAfterFall)
+            {
+                balloons.SetParachute(shouldOpen: true);
+            }
+        }
     }
 
     /// <summary>What one save costs here and now.</summary>

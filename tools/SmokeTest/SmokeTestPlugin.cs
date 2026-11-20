@@ -178,6 +178,7 @@ internal sealed partial class Runner : MonoBehaviour
         harmony.CreateClassProcessor(typeof(CustomRunSpawn)).Patch();
         harmony.CreateClassProcessor(typeof(ForceRecorder)).Patch();
         harmony.CreateClassProcessor(typeof(FallRecorder)).Patch();
+        harmony.CreateClassProcessor(typeof(BreakRecorder)).Patch();
         PatchRoundRecorders(harmony);
         log.LogInfo($"Smoke test started (ascent {target}).");
         StartCoroutine(Guard("smoke test", Main()));
@@ -725,6 +726,10 @@ internal sealed partial class Runner : MonoBehaviour
         {
             yield return Guard("a custom Mini Run on the tested ascent (minirun)", MiniRunSetup());
         }
+        if (PerfVanilla)
+        {
+            Step("the mod switched off (perfvanilla)", ModOff);
+        }
         Step("departure", Depart);
 
         yield return Until("the island", 300f, () => Rules.InRun && !LoadingScreenHandler.loading && MapHandler.ExistsAndInitialized && Local != null && Local.data != null);
@@ -758,6 +763,9 @@ internal sealed partial class Runner : MonoBehaviour
 
         (string name, Func<IEnumerator> run)[] steps =
         {
+            // First, as the scout wakes on the beach: the frame rate there and in the Tropics.
+            ("the frame rate on the Shore and in the Tropics (perf, only when asked)", () => OnlyWhenAsked("perf", PerfCheck)),
+            ("Item Stats' numbers for the temporary slot on the Shore and in the next biome (tempslot)", TempSlotCheck),
             // First: on the open beach where the climb starts (its stage needs open ground; it puts the scout back there).
             ("the Scoutmaster pulls scouts off holds, and finds a way up to one (smroutes, 17)", ScoutmasterRouteChecks),
             ("storms (25)", () => Now(CheckStorms)),
@@ -886,6 +894,7 @@ internal sealed partial class Runner : MonoBehaviour
             ("ascent 22's episodes (22)", Ascent22Episodes),
             ("warps go through the host (hostwarp)", HostWarpCheck),
             ("more egg nests in the Caldera or the Gloom (morenests)", MoreNestsCheck),
+            ("eggs break into shell pieces in the new nests and the map's own (eggbreak)", EggBreakCheck),
             ("the Gloom's food: banana vines and cattail Hot Dogs (gloomfood)", GloomFoodCheck),
             ("the caldera's last stretch ablaze (17)", CalderaStretchCheck),
             ("the caldera's storms (25)", CalderaStormsCheck),
@@ -1125,6 +1134,10 @@ internal sealed partial class Runner : MonoBehaviour
         yield return new WaitForSecondsRealtime(0.3f);
         Check("a click ticks Blind Mode and Hot Mode", ChallengeModes.Blind && ChallengeModes.Hot && ChallengeModesUi.BlindBox.isOn && ChallengeModesUi.HotBox.isOn,
             $"Blind Mode {ChallengeModes.Blind} (shown {ChallengeModesUi.BlindBox.isOn}), Hot Mode {ChallengeModes.Hot} (shown {ChallengeModesUi.HotBox.isOn})");
+        yield return new WaitForSecondsRealtime(0.2f);
+        object published = Net.GetRoom(Net.Prefix + "modes");
+        Check("the host's Blind Mode and Hot Mode are in the room for the other players", published is int modes && modes == 3 && !ChallengeModes.FromHost
+            && ChallengeModesUi.BlindBox.interactable && ChallengeModesUi.HotBox.interactable, $"in the room {published ?? "nothing"}; the boxes can be changed {ChallengeModesUi.BlindBox.interactable}/{ChallengeModesUi.HotBox.interactable}");
         Screenshot("challenge-boxes");
         yield return new WaitForSecondsRealtime(1f);
         // True Final Ascent puts its light/dark switch left of the airline's logo (its own rule, worked out here: the
@@ -4154,18 +4167,24 @@ internal sealed partial class Runner : MonoBehaviour
             int pools = 0;
             int matching = 0;
             bool elsewhere = false;
+            List<string> unlike = new List<string>();
             foreach (KeyValuePair<SpawnPool, Dictionary<ushort, int>> pool in LootData.AllSpawnWeightData)
             {
                 bool hasJetpack = pool.Value.ContainsKey(jetpack.itemID);
                 bool hasParachute = pool.Value.TryGetValue(template.itemID, out int weight);
                 pools += hasJetpack ? 1 : 0;
-                matching += hasJetpack && hasParachute && weight == mythic ? 1 : 0;
+                matching += hasJetpack && hasParachute && weight == pool.Value[jetpack.itemID] ? 1 : 0;
+                if (hasJetpack && !(hasParachute && weight == pool.Value[jetpack.itemID]))
+                {
+                    unlike.Add($"{pool.Key} (Jetpack {pool.Value[jetpack.itemID]}, parachute {(hasParachute ? weight.ToString() : "none")})");
+                }
                 elsewhere |= hasParachute && !hasJetpack;
             }
             Backpack wearable = template as Backpack;
-            Check("the Auto-Parachute is worn in slot 4, has 3 charges and spawns where the Jetpack does, as rarely (Mythic, 9)",
+            Check("the Auto-Parachute is worn in slot 4, has its charges and spawns where the Jetpack does, as rarely (its weight in each of the Jetpack's pools, Mythic in most, 9)",
                 wearable != null && wearable.backpackType == AutoParachute.Type && template.totalUses == AutoParachute.Charges && pools > 0 && matching == pools && !elsewhere && template.IsValidToSpawn(),
-                $"slot-4 kind {(wearable != null ? ((int)wearable.backpackType).ToString() : "none")}, charges {template.totalUses}, in {matching} of the Jetpack's {pools} pools at weight {mythic}, elsewhere {elsewhere}, may spawn {template.IsValidToSpawn()}, name '{LocalizedText.GetText("NAME_" + template.UIData.itemName)}'");
+                $"slot-4 kind {(wearable != null ? ((int)wearable.backpackType).ToString() : "none")}, charges {template.totalUses}, in {matching} of the Jetpack's {pools} pools at weight {mythic}, elsewhere {elsewhere}, may spawn {template.IsValidToSpawn()}, name '{LocalizedText.GetText("NAME_" + template.UIData.itemName)}'"
+                + (unlike.Count > 0 ? "; not like the Jetpack in " + string.Join(", ", unlike) : ""));
         });
         Character local = Local;
         Vector2 look = local.data.lookValues;
@@ -4212,7 +4231,7 @@ internal sealed partial class Runner : MonoBehaviour
         }
         yield return new WaitForSeconds(0.3f);
         BackpackSlot slot = local.player.backpackSlot;
-        Check("put on, the Auto-Parachute sits in slot 4 with 3 charges",
+        Check("put on, the Auto-Parachute sits in slot 4 with 8 charges (4 saves from ascent 15)",
             slot.backpackType == AutoParachute.Type && AutoParachute.ChargesLeft(slot.data) == AutoParachute.Charges && local.data.hasParachute,
             $"slot 4: kind {(int)slot.backpackType} ({slot.GetPrefabName()}), charges {AutoParachute.ChargesLeft(slot.data)}, the game sees a parachute {local.data.hasParachute}");
         if (slot.backpackType != AutoParachute.Type)
@@ -4226,10 +4245,12 @@ internal sealed partial class Runner : MonoBehaviour
         try
         {
             rule.Value = false;
-            yield return ParachuteFall("Ascent 15 off: one charge a save", AutoParachute.Charges - 1, true);
+            yield return ParachuteFall("Ascent 15 off: one charge a save", AutoParachute.Charges - 1, true, byFall: false);
             yield return DropAndWearAgain(AutoParachute.Charges - 1);
             rule.Value = true;
-            yield return ParachuteFall("ascent 15: two charges a save", 0, false);
+            // Two charges left: ascent 15's save takes both, and the parachute is gone.
+            AutoParachute.SetCharges(local.player.backpackSlot.data, AutoParachute.WorseItemsCost);
+            yield return ParachuteFall("ascent 15: two charges a save", 0, false, byFall: true);
         }
         finally
         {
@@ -4280,9 +4301,16 @@ internal sealed partial class Runner : MonoBehaviour
         }
     }
 
-    /// <summary>One fall from 30 m with the parachute on: it opens by itself and the landing hurts nothing.</summary>
-    private IEnumerator ParachuteFall(string how, int chargesAfter, bool picture)
+    /// <summary>
+    /// One fall from 30 m with the parachute on: it opens by itself and the landing hurts nothing. Its moment: 1.4 s after
+    /// the scout left the ground, as after stepping off; or, <paramref name="byFall"/>, with the time held off (a bounce
+    /// marked every frame, which keeps the time from counting, the game's too), once the scout has fallen 20 m.
+    /// </summary>
+    private IEnumerator ParachuteFall(string how, int chargesAfter, bool picture, bool byFall)
     {
+        float leftAt = -1f;
+        float openedAfter = -1f;
+        float fallenThen = -1f;
         Character local = Local;
         Protect(false);
         Meter injury = new Meter(Status.Injury);
@@ -4293,17 +4321,45 @@ internal sealed partial class Runner : MonoBehaviour
         float folded = -1f;
         try
         {
+            Info($"the scout before the fall ({how})", $"grounded {local.data.isGrounded}, off the ground {local.data.sinceGrounded:0.00} s, since a jump {local.data.sinceJump:0.00} s, fallen {AutoParachute.Fallen(local):0.0} m, open {local.refs.balloons._isParachuteOpen}");
+            if (byFall)
+            {
+                local.data.lastBouncedTime = Time.time;
+            }
             local.photonView.RPC("WarpPlayerRPC", RpcTarget.All, local.Center + Vector3.up * 30f, false);
-            yield return new WaitForSeconds(0.5f);
+            // Timed from when the game counts the scout off the ground (a moment after the warp).
+            leftAt = -1f;
             float start = Time.time;
             bool airborne = false;
+            List<string> fall = new List<string>();
+            float nextNote = 0f;
             while (Time.time - start < 30f)
             {
                 airborne |= !local.data.isGrounded;
+                if (leftAt < 0f && !local.data.isGrounded && local.data.sinceGrounded > 0f)
+                {
+                    leftAt = Time.time - local.data.sinceGrounded;
+                }
+                if (byFall && !opened)
+                {
+                    local.data.lastBouncedTime = Time.time;
+                }
+                if (!opened && Time.time - start >= nextNote)
+                {
+                    nextNote += 0.1f;
+                    fall.Add($"{Time.time - start:0.0}s y{local.Center.y:0.0} g{(local.data.isGrounded ? 1 : 0)} sg{local.data.sinceGrounded:0.00} sj{local.data.sinceJump:0.00} f{AutoParachute.Fallen(local):0.0}");
+                }
                 if (!opened && local.refs.balloons._isParachuteOpen)
                 {
                     opened = true;
                     openedAt = Time.time - start;
+                    openedAfter = leftAt >= 0f ? Time.time - leftAt : -1f;
+                    fallenThen = AutoParachute.Fallen(local);
+                }
+                if (opened && fall != null)
+                {
+                    Info($"the fall until the parachute opened ({how})", string.Join("; ", fall));
+                    fall = null;
                 }
                 if (opened && picture && Time.time - start > openedAt + 1f)
                 {
@@ -4341,6 +4397,18 @@ internal sealed partial class Runner : MonoBehaviour
         int left = slot.backpackType == AutoParachute.Type ? AutoParachute.ChargesLeft(slot.data) : 0;
         Check($"the worn Auto-Parachute opens by itself and the fall hurts nothing ({how})", opened && injury.Total <= 0f && drowsy.Total <= 0f && left == chargesAfter,
             $"opened {opened} after {openedAt:0.0} s, landed after {landedAt:0.0} s, {injury.Total * 100f:0.#} injury, {drowsy.Total * 100f:0.#} drowsiness, {left} charges left (expected {chargesAfter})");
+        if (byFall)
+        {
+            Check("with the time held off, the Auto-Parachute opens once the scout has fallen 20 m",
+                opened && fallenThen >= AutoParachute.OpenAfterFall - 0.5f && fallenThen <= AutoParachute.OpenAfterFall + 1.5f,
+                $"opened {openedAfter:0.00} s after leaving the ground, {fallenThen:0.0} m down");
+        }
+        else
+        {
+            Check("the Auto-Parachute opens 1.4 s after the scout left the ground (as after stepping off), before 20 m of fall",
+                opened && Mathf.Abs(openedAfter - AutoParachute.StepOffSeconds) <= 0.12f && fallenThen < AutoParachute.OpenAfterFall,
+                $"opened {openedAfter:0.00} s after leaving the ground, {fallenThen:0.0} m down");
+        }
         float foldTarget = AutoParachute.GameFoldSeconds / AutoParachute.FoldSpeed;
         Check($"after the landing the canopy folds away 3 times as fast as in the game ({how})", folded > 0f && folded <= foldTarget + 0.25f,
             folded < 0f ? "still out 3 s after the landing" : $"gone {folded:0.00} s after the landing (target {foldTarget:0.00} s; the game: {AutoParachute.GameFoldSeconds:0} s)");

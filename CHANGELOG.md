@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.6.6
+
+* Multiplayer: the host's Blind Mode and Hot Mode count for every player (before, each player's own boxes counted for
+  them only). The other players' boarding passes show the host's ticks, dimmed, and cannot change them; their own ticks
+  are kept for when they host.
+* The line under the ascent at the top right only names the modifiers that are off (**MODIFIERS OFF: ...**); with all of
+  them on there is no line (before: **ALL MODIFIERS ON**).
+* Bee ambushes (17): a scout ambushed in the day's first roll gets no second roll that day (a day and the night after
+  it), so nobody is ambushed more than once a day. Without an ambush in the first roll, the second stays.
+* The Auto-Parachute holds 8 charges (was 3): 8 saves below ascent 15, 4 from it (a save takes two there).
+* The Auto-Parachute opens sooner: 1.4 s after you step off (was about 1.6 s), 1.6 s after a jump (1.9 s), 2.1 s after
+  a bounce, or, whatever the time, as soon as you have fallen 20 m from the highest point since you last stood or held
+  on; whichever comes first.
+* Snakes (17) are easier to hit with a Stone: a hard throw (one that shatters) hits a snake it passes within 0.8 m of,
+  its head or anywhere along its body (before: only a 0.35 m sphere round its head, about 0.5 m with the stone's
+  size). The hit is told on the thrower's own game: before, only the host's game could stun it, and a guest's Stone
+  could shatter on a snake without stunning it.
+* Only the Gloom's banana vines bear fruit 40% of the time, as 1.6.5 meant: the Tropics' (some 120 of them) had it too,
+  some 115 bananas more there than the game gives. They keep the game's 10% again.
+* With Item Stats: holding a Wonderberry made Item Stats fail on every redraw of the inventory (it reads a sugar
+  rush's crash without looking whether there is one, and the Wonderberry's has none), so the slots after the first, the
+  temporary slot among them, were left as they were last drawn. While Item Stats reads, such a rush now has a crash of
+  nothing, and it shows the Wonderberry's numbers (drowsiness +0%). The numbers Item Stats draws by the temporary slot
+  are also watched: one whose icon shows without its number is written to the log once, with what draws it.
+* Performance, the Tropics' snakes: a snake whose head lay a little below the ground added a point to its body's track
+  every frame, for good (the point is laid on the ground, so the head never seemed to have reached it). The tracks grew
+  by about 60 points a second each, and every frame each snake walked its whole track: the longer the climb, the
+  slower the game. A track now grows only as the head moves on. An idle snake (asleep, wandering, going home) out of
+  the camera's view is not posed (it only keeps its track, so it lies along the way it went when it comes into sight),
+  one more than 60 m off is posed every third frame; a snake after a scout is always posed. The pose does less
+  arithmetic. Its eyes, fangs and tongue cast no shadows of their own.
+* Performance, the beach's crabs: a crab out of sight leaves its legs and claws as they are, and one far enough off to
+  be a speck on the screen (some 85 m) is not drawn (each crab is two dozen parts).
+* Performance: the Roots' wind debris and the Caldera's lava tide no longer search the whole map every 2 s (a stutter
+  on every ascent from 18).
+
 ## 1.6.5
 
 * Ascent 15: food restores half its hunger again (1.6.4: 75%); what falls between the bar's steps of 2.5 is still

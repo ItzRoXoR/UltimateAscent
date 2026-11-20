@@ -11,10 +11,11 @@ namespace UltimateAscent.Features;
 /// <summary>
 /// The Blind Mode and Hot Mode boxes, in the boarding pass's blue header to the right of its title, one above the
 /// other, in the header's own style: a white box in the shape of the pass's buttons with the pass's blue tick, the
-/// name beside it in the title's white lettering, and the Custom Run screen's click and hover sounds. Every player
-/// can open the boarding pass and tick their own. Each row takes the click over its box and name only, clear of True
-/// Final Ascent's light/dark switch at the header's right end. On ascent 23 and above the Hot Mode box shows ticked and cannot
-/// be changed (its name dims): that ascent's own sun already does it.
+/// name beside it in the title's white lettering, and the Custom Run screen's click and hover sounds. The host (or a
+/// player alone) ticks them; the other players' passes show the host's boxes, dimmed, and cannot change them. Each row
+/// takes the click over its box and name only, clear of True Final Ascent's light/dark switch at the header's right end.
+/// On ascent 23 and above the Hot Mode box shows ticked and cannot be changed (its name dims): that ascent's own sun
+/// already does it.
 /// </summary>
 internal static class ChallengeModesUi
 {
@@ -28,8 +29,12 @@ internal static class ChallengeModesUi
     private static GameObject boxes;
     private static Toggle blind;
     private static Toggle hot;
+    private static TMP_Text blindLabel;
+    private static Image blindBox;
     private static TMP_Text hotLabel;
     private static Image hotBox;
+    private static BoardingPass shownOn;
+    private static float nextFollow;
     private static SFX_Instance clickSound;
     private static SFX_Instance hoverSound;
 
@@ -60,13 +65,33 @@ internal static class ChallengeModesUi
         {
             return;
         }
+        shownOn = pass;
         boxes.SetActive(ChallengeModes.Offered);
+        bool fromHost = ChallengeModes.FromHost;
+        blind.interactable = !fromHost;
         blind.SetIsOnWithoutNotify(ChallengeModes.Blind);
+        Dim(blindLabel, blindBox, fromHost);
         bool byAscent = ChallengeModes.SunByAscent(CustomRunAscent.OnPass(pass));
-        hot.interactable = !byAscent;
+        hot.interactable = !byAscent && !fromHost;
         hot.SetIsOnWithoutNotify(byAscent || ChallengeModes.Hot);
-        hotLabel.alpha = byAscent ? 0.55f : 1f;
-        hotBox.color = new Color(1f, 1f, 1f, byAscent ? 0.7f : 1f);
+        Dim(hotLabel, hotBox, byAscent || fromHost);
+    }
+
+    private static void Dim(TMP_Text label, Image box, bool fixedBox)
+    {
+        label.alpha = fixedBox ? 0.55f : 1f;
+        box.color = new Color(1f, 1f, 1f, fixedBox ? 0.7f : 1f);
+    }
+
+    /// <summary>While the pass is open, its boxes follow the host's (a host who ticks one, or a new host).</summary>
+    internal static void Follow()
+    {
+        if (!Shown || shownOn == null || Time.unscaledTime < nextFollow)
+        {
+            return;
+        }
+        nextFollow = Time.unscaledTime + 0.25f;
+        Show(shownOn);
     }
 
     private static GameObject Make(BoardingPass pass)
@@ -98,7 +123,7 @@ internal static class ChallengeModesUi
         // light/dark switch, which a row reaching across would cover and take the click from.
         rows.childForceExpandWidth = false;
         rows.childForceExpandHeight = true;
-        blind = Box(holder.transform, buttonLook, tickLook, title, pass.ascentTitle.color, Russian ? "СЛЕПОЙ РЕЖИМ" : "BLIND MODE", on => ChallengeModes.Blind = on, out _, out _);
+        blind = Box(holder.transform, buttonLook, tickLook, title, pass.ascentTitle.color, Russian ? "СЛЕПОЙ РЕЖИМ" : "BLIND MODE", on => ChallengeModes.Blind = on, out blindLabel, out blindBox);
         hot = Box(holder.transform, buttonLook, tickLook, title, pass.ascentTitle.color, Russian ? "ЖАРКИЙ РЕЖИМ" : "HOT MODE", on => ChallengeModes.Hot = on, out hotLabel, out hotBox);
         return holder;
     }

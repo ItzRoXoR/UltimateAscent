@@ -23,7 +23,7 @@ public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "UltimateAscent";
     public const string Name = "Ultimate Ascent";
-    public const string Version = "1.6.5";
+    public const string Version = "1.6.6";
 
     internal static ManualLogSource Log;
     internal static Plugin Instance;
@@ -152,7 +152,7 @@ public sealed class Plugin : BaseUnityPlugin
         WrapAround = Config.Bind("Boarding Pass", "Wrap Around", true,
             "The ascent arrows wrap around: left from Tenderfoot jumps to the end of the list (True Final Ascent's FINAL ASCENT if installed, otherwise your highest unlocked ascent), right from the end of the list goes back to Tenderfoot.");
         BoardingPassExtras = Config.Bind("Boarding Pass", "Boarding Pass Extras", true,
-            "The mod's additions to the boarding pass: the Blind Mode and Hot Mode boxes in its header and the map picker on its ascent card. Off: none of them shows, Blind Mode and Hot Mode stay off (your ticks are kept for when this is on again) and every climb is on today's map. Each player's own.");
+            "The mod's additions to the boarding pass: the Blind Mode and Hot Mode boxes in its header and the map picker on its ascent card. Off: none of them shows, Blind Mode and Hot Mode stay off (your ticks are kept for when this is on again) and every climb is on today's map. Each player's own; in multiplayer the host's Blind Mode and Hot Mode count for everyone.");
         BoardingPassExtras.SettingChanged += (_, _) => RefreshOpenPass("Boarding Pass Extras");
         MapBiomes = Config.Bind("Boarding Pass", "Map Biomes", false,
             "The map picker shows each map's biomes after its number, by the first letters of their names: MAP 90 (STMC) is Shore, Tropics, Mesa and Caldera (R: Roots, A: Alpine, G: the Gloom). Today's map shows its number only. Each player's own.");

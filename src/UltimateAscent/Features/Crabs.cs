@@ -35,6 +35,10 @@ namespace UltimateAscent.Features;
 /// </summary>
 internal static class Crabs
 {
+    /// <summary>A crab is not drawn once it is smaller than this share of the screen's height; its size for that (a shell and legs).</summary>
+    private const float CullBelow = 0.0025f;
+    private const float DrawnSize = 0.35f;
+
     internal const string PrefabName = "UA_Crab";
     internal const ushort ItemId = 9007;
     internal const string NameKey = "NAME_CRAB";
@@ -198,6 +202,12 @@ internal static class Crabs
         }
         CrabLook look = root.AddComponent<CrabLook>();
         look.Build(brain, model);
+        // Far off, a crab is a speck: not drawn once it is smaller than this share of the screen's height (some 85 m
+        // off), for the two dozen parts it is drawn with. The size is given (the template's parts have no bounds yet).
+        LODGroup lod = root.AddComponent<LODGroup>();
+        lod.SetLODs(new[] { new LOD(CullBelow, look.crabRoot.GetComponentsInChildren<Renderer>(true)) });
+        lod.localReferencePoint = new Vector3(0f, 0.08f, 0f);
+        lod.size = DrawnSize;
         BugPhobia phobia = root.GetComponent<BugPhobia>();
         if (phobia != null)
         {
@@ -788,6 +798,8 @@ internal sealed class CrabLook : MonoBehaviour
     private float openIdle;
     private float nextIdleClaw;
     private int cookedShown;
+    /// <summary>The shell's renderer: whether the crab was drawn last frame.</summary>
+    private Renderer shellLook;
     private AudioSource scuttleSource;
     private AudioSource voice;
 
@@ -858,6 +870,7 @@ internal sealed class CrabLook : MonoBehaviour
         armRest = arms.Select(t => t != null ? t.localRotation : Quaternion.identity).ToArray();
         handRest = hands.Select(t => t != null ? t.localRotation : Quaternion.identity).ToArray();
         lastPosition = transform.position;
+        shellLook = crabBody != null ? crabBody.GetComponent<Renderer>() : null;
         yaw = 0f;
         nextIdleClaw = Time.time + Random.Range(1f, 5f);
         nextClick = Time.time + Random.Range(2f, 8f);
@@ -988,93 +1001,97 @@ internal sealed class CrabLook : MonoBehaviour
         wasAttacking = attacking;
         float sinceSnap = now - snapAt;
 
-        // Facing: sideways while it scuttles (one side or the other leading), turned to its scout near them or held.
-        bool near = target != null && Vector3.Distance(transform.position, target.Center) < 2.6f;
-        float wantYaw = held || attacking || near ? 0f : speed > 0.08f ? sideways : yaw;
-        if (speed <= 0.08f && Mathf.Abs(Mathf.DeltaAngle(yaw, sideways)) < 1f && Random.value < dt * 0.3f)
+        // Out of sight (out of view, or too far off to be drawn), its limbs are left as they are; it is still heard.
+        if (held || shellLook == null || shellLook.isVisible)
         {
-            sideways = -sideways;
-        }
-        yaw = Mathf.MoveTowardsAngle(yaw, wantYaw, 600f * dt);
-        crabRoot.localRotation = Quaternion.Euler(0f, yaw, 0f);
+            // Facing: sideways while it scuttles (one side or the other leading), turned to its scout near them or held.
+            bool near = target != null && Vector3.Distance(transform.position, target.Center) < 2.6f;
+            float wantYaw = held || attacking || near ? 0f : speed > 0.08f ? sideways : yaw;
+            if (speed <= 0.08f && Mathf.Abs(Mathf.DeltaAngle(yaw, sideways)) < 1f && Random.value < dt * 0.3f)
+            {
+                sideways = -sideways;
+            }
+            yaw = Mathf.MoveTowardsAngle(yaw, wantYaw, 600f * dt);
+            crabRoot.localRotation = Quaternion.Euler(0f, yaw, 0f);
 
-        // Legs: an alternating gait (a stride every 0.12 m), flailing while held.
-        phase += speed / 0.12f * Mathf.PI * 2f * dt;
-        float going = Mathf.Clamp01(speed / 0.6f);
-        for (int i = 0; i < 8; i++)
-        {
-            float side = i < 4 ? 1f : -1f;
-            int j = i % 4;
-            float legPhase = phase + ((j + (i < 4 ? 0 : 1)) % 2) * Mathf.PI;
-            float lift, sweep, bend;
-            if (held)
+            // Legs: an alternating gait (a stride every 0.12 m), flailing while held.
+            phase += speed / 0.12f * Mathf.PI * 2f * dt;
+            float going = Mathf.Clamp01(speed / 0.6f);
+            for (int i = 0; i < 8; i++)
             {
-                lift = 18f + 22f * Mathf.Sin(now * 19f + i * 1.7f);
-                sweep = 14f * Mathf.Sin(now * 13f + i * 2.3f);
-                bend = 20f + 18f * Mathf.Sin(now * 16f + i * 0.9f);
-            }
-            else
-            {
-                lift = going * 26f * Mathf.Max(0f, Mathf.Sin(legPhase)) + (asleep ? 0f : 2f * Mathf.Sin(now * 1.3f + i));
-                sweep = going * 12f * Mathf.Cos(legPhase);
-                bend = going * 14f * Mathf.Cos(legPhase);
-            }
-            hips[i].localRotation = hipRest[i] * Quaternion.Euler(0f, sweep, side * lift);
-            knees[i].localRotation = kneeRest[i] * Quaternion.Euler(0f, 0f, -side * bend);
-        }
-        crabBody.transform.localPosition = new Vector3(0f, going * 0.005f * Mathf.Abs(Mathf.Sin(phase)), 0f);
-
-        // Claws: now and then opening a little; raised and open going for a scout; the big one rising and opening as it
-        // winds up to pinch (over the scorpion's 1 s), snapping shut as it pinches; snapping away while held.
-        if (now >= nextIdleClaw)
-        {
-            nextIdleClaw = now + Random.Range(2f, 6f);
-            openIdle = Random.value < 0.6f ? Random.Range(10f, 25f) : 0f;
-        }
-        for (int c = 0; c < 2; c++)
-        {
-            float raise, open;
-            if (held)
-            {
-                raise = 25f + 10f * Mathf.Sin(now * 7f + c);
-                open = Mathf.Max(0f, Mathf.Sin(now * 9f + c * 2f)) * 40f;
-            }
-            else if (target != null)
-            {
-                raise = 22f;
-                open = 28f;
-                if (c == 0 && attacking)
+                float side = i < 4 ? 1f : -1f;
+                int j = i % 4;
+                float legPhase = phase + ((j + (i < 4 ? 0 : 1)) % 2) * Mathf.PI;
+                float lift, sweep, bend;
+                if (held)
                 {
-                    raise = Mathf.Lerp(22f, 45f, Mathf.Clamp01(windUp / 0.8f));
-                    open = Mathf.Lerp(28f, 45f, Mathf.Clamp01(windUp / 0.8f));
+                    lift = 18f + 22f * Mathf.Sin(now * 19f + i * 1.7f);
+                    sweep = 14f * Mathf.Sin(now * 13f + i * 2.3f);
+                    bend = 20f + 18f * Mathf.Sin(now * 16f + i * 0.9f);
+                }
+                else
+                {
+                    lift = going * 26f * Mathf.Max(0f, Mathf.Sin(legPhase)) + (asleep ? 0f : 2f * Mathf.Sin(now * 1.3f + i));
+                    sweep = going * 12f * Mathf.Cos(legPhase);
+                    bend = going * 14f * Mathf.Cos(legPhase);
+                }
+                hips[i].localRotation = hipRest[i] * Quaternion.Euler(0f, sweep, side * lift);
+                knees[i].localRotation = kneeRest[i] * Quaternion.Euler(0f, 0f, -side * bend);
+            }
+            crabBody.transform.localPosition = new Vector3(0f, going * 0.005f * Mathf.Abs(Mathf.Sin(phase)), 0f);
+
+            // Claws: now and then opening a little; raised and open going for a scout; the big one rising and opening as it
+            // winds up to pinch (over the scorpion's 1 s), snapping shut as it pinches; snapping away while held.
+            if (now >= nextIdleClaw)
+            {
+                nextIdleClaw = now + Random.Range(2f, 6f);
+                openIdle = Random.value < 0.6f ? Random.Range(10f, 25f) : 0f;
+            }
+            for (int c = 0; c < 2; c++)
+            {
+                float raise, open;
+                if (held)
+                {
+                    raise = 25f + 10f * Mathf.Sin(now * 7f + c);
+                    open = Mathf.Max(0f, Mathf.Sin(now * 9f + c * 2f)) * 40f;
+                }
+                else if (target != null)
+                {
+                    raise = 22f;
+                    open = 28f;
+                    if (c == 0 && attacking)
+                    {
+                        raise = Mathf.Lerp(22f, 45f, Mathf.Clamp01(windUp / 0.8f));
+                        open = Mathf.Lerp(28f, 45f, Mathf.Clamp01(windUp / 0.8f));
+                    }
+                }
+                else
+                {
+                    raise = 6f;
+                    open = openIdle * (0.5f + 0.5f * Mathf.Sin(now * 1.7f + c));
+                }
+                float jab = 0f;
+                if (sinceSnap < 0.35f && c == 0)
+                {
+                    // The snap: shut at once, the claw jabbing forward and back.
+                    open = 0f;
+                    jab = Mathf.Sin(Mathf.Clamp01(sinceSnap / 0.35f) * Mathf.PI) * 25f;
+                    raise = Mathf.Lerp(raise, 0f, Mathf.Clamp01(sinceSnap / 0.12f));
+                }
+                arms[c].localRotation = armRest[c] * Quaternion.Euler(-raise - jab * 0.3f, 0f, 0f);
+                hands[c].localRotation = handRest[c] * Quaternion.Euler(-jab * 0.5f, 0f, 0f);
+                fingers[c].localRotation = Quaternion.Euler(-open, 0f, 0f);
+                if (c == 0)
+                {
+                    ClawOpen = open;
                 }
             }
-            else
+            foreach (Transform flash in flashes)
             {
-                raise = 6f;
-                open = openIdle * (0.5f + 0.5f * Mathf.Sin(now * 1.7f + c));
-            }
-            float jab = 0f;
-            if (sinceSnap < 0.35f && c == 0)
-            {
-                // The snap: shut at once, the claw jabbing forward and back.
-                open = 0f;
-                jab = Mathf.Sin(Mathf.Clamp01(sinceSnap / 0.35f) * Mathf.PI) * 25f;
-                raise = Mathf.Lerp(raise, 0f, Mathf.Clamp01(sinceSnap / 0.12f));
-            }
-            arms[c].localRotation = armRest[c] * Quaternion.Euler(-raise - jab * 0.3f, 0f, 0f);
-            hands[c].localRotation = handRest[c] * Quaternion.Euler(-jab * 0.5f, 0f, 0f);
-            fingers[c].localRotation = Quaternion.Euler(-open, 0f, 0f);
-            if (c == 0)
-            {
-                ClawOpen = open;
-            }
-        }
-        foreach (Transform flash in flashes)
-        {
-            if (flash != null && clawTip != null)
-            {
-                flash.position = clawTip.position;
+                if (flash != null && clawTip != null)
+                {
+                    flash.position = clawTip.position;
+                }
             }
         }
 

@@ -18,7 +18,7 @@ namespace UltimateAscent.Features;
 /// <item>Orange Spacesuit and Orange Helmet: the Astronaut suit and the Astronaut helmet worn together for the whole climb, with the sun that
 /// incinerates held items: Hot Mode on (below ascent 23), or ascent 23's own sun (its rule on).</item>
 /// <item>Pain Sash: ascent 25 won in the Nadir (with every modifier on, the game's ascent 8 rule among them, the Nadir is
-/// the only way to win), every modifier the climb's "ALL MODIFIERS ON" line counts on for the whole climb.</item>
+/// the only way to win), none of the switches the climb's modifiers line names off for the whole climb.</item>
 /// <item>Burnt Skin: the same on ascent 23, 24 or 25.</item>
 /// </list>
 /// What is unlocked stays in the mod's save. The run's statistics show each new cosmetic as a small icon where
@@ -145,7 +145,7 @@ internal static class CosmeticUnlocks
     /// <summary>Every modifier was on for the whole climb so far (for the tests).</summary>
     internal static bool AllModifiersAllClimb => allModifiersAllClimb;
 
-    /// <summary>Every modifier the climb's "ALL MODIFIERS ON" line counts is on (the host's switches).</summary>
+    /// <summary>Every switch the climb's modifiers line would name is on (the host's switches): the line is not shown.</summary>
     internal static bool AllModifiersOn() => ModifiersLabel.Off().Count == 0;
 
     /// <summary>The challenges' state in this climb, for the tests.</summary>

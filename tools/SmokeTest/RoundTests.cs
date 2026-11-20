@@ -2809,8 +2809,10 @@ internal sealed partial class Runner
         A17_BeeAmbush.HeldOff = true;
         try
         {
-            // A ground snake: the scout 3 m from it, waiting for its bite.
-            Snake ground = snakes.Where(s => !s.IsTree && AboveGround(s.Head) < 0.5f).OrderBy(s => Vector3.Distance(s.Head, local.Center)).FirstOrDefault();
+            // A ground snake on the Tropics' own ground (by the beach, the scout could stand where it does not follow): the
+            // scout 3 m from it, waiting for its bite.
+            Snake ground = snakes.Where(s => !s.IsTree && AboveGround(s.Head) < 0.5f && Map.TryGetGroundBiome(s.Head + Vector3.up * 0.5f, out Biome.BiomeType b) && b == Biome.BiomeType.Tropics)
+                .OrderBy(s => Vector3.Distance(s.Head, local.Center)).FirstOrDefault();
             Info("the ground snakes", string.Join("; ", snakes.Where(s => !s.IsTree).Select(s => $"{s.Doing} at {s.Head:F0}, {AboveGround(s.Head):0.0} m above the ground, {Vector3.Distance(s.Head, s.Home):0} m from its spot")));
             // Only the snake under test goes for the scout (another near it would bite too, and every bite is counted).
             foreach (Snake other in snakes.Where(s => s != ground))
@@ -2845,6 +2847,9 @@ internal sealed partial class Runner
                 local.data.lookValues = new Vector2(Quaternion.LookRotation(new Vector3(toSnake.x, 0f, toSnake.z)).eulerAngles.y, -15f);
                 yield return new WaitForSeconds(0.5f);
                 Screenshot("snake-ground");
+                Info("the ground snake as the scout stands by it", $"{ground.Doing}, unaware {ground.Unaware}, puppet {ground.Puppet}, sight {ground.sight:0.#} m, next look in {ground.nextLook - Time.time:0.0} s, "
+                    + $"{Vector3.Distance(ground.Head, local.Center):0.0} m off, sees the scout {ground.Sees(local)}, the scout out of the Tropics {Snake.OutOfTropics(local)}, hunts them {ground.Hunts(local)}; "
+                    + $"the scout up {local.data.fullyConscious}, warping {local.warping}, ground {GroundBiome(local)}");
                 ClearStatuses(afflictions);
                 int bitesBefore = Snakes.BitesTaken;
                 int biteSoundsBefore = Snakes.BiteSounds;
