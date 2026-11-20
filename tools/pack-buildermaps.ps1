@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Packs the Builder maps (built with True Final Ascent's Builder, see the mod's README) into their own zip for the
+  Packs the Builder maps (built with True Final Ascent's Builder, see the mod's docs/boarding-pass.md) into their own zip for the
   release, apart from the mod's: artifacts\UltimateAscent-BuilderMaps-<version>.zip. Its layout is a Thunderstore
   package (manifest.json, icon.png, README.md and the maps in BuilderMaps\), so r2modman can import it as a local mod;
   by hand, its BuilderMaps folder goes anywhere under BepInEx\plugins.
