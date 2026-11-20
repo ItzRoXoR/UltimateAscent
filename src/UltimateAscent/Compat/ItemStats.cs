@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Text;
 using BepInEx.Bootstrap;
 using HarmonyLib;
@@ -56,6 +57,87 @@ internal static class ItemStats
             return __exception;
         }
     }
+
+    /// <summary>
+    /// The game draws the inventory's slots every frame (GUIManager.Update, UpdateItems), and Item Stats rebuilds its numbers
+    /// on every slot each time: some 70 labels set to "0" and written again, its icons switched off and on, a search of the
+    /// scene by path, every frame (4-5 ms a frame on the Shore, measured with Item Stats alone: 82 FPS without it, 58-62
+    /// with it). Its rebuild of a slot is skipped while nothing it reads there has changed: the slot's item, the held
+    /// item, how cooked it is, the slot's name shown, the scout a skeleton, the ascent's weight modifier; at least twice
+    /// a second it rebuilds anyway, for anything else (its settings, an item's numbers changed in place).
+    /// </summary>
+    [HarmonyPatch]
+    private static class OnlyWhenChanged
+    {
+        private const float RefreshSeconds = 0.5f;
+
+        private static MethodBase target;
+
+        private struct Seen
+        {
+            internal int item;
+            internal int held;
+            internal int cooked;
+            internal bool named;
+            internal bool skeleton;
+            internal int weight;
+            internal float at;
+        }
+
+        private static readonly Dictionary<int, Seen> seen = new Dictionary<int, Seen>();
+
+        private static bool Prepare()
+        {
+            if (!Present)
+            {
+                return false;
+            }
+            target ??= AccessTools.Method(AccessTools.TypeByName("ItemStats.ItemStats"), "SetItemPatch");
+            if (target == null)
+            {
+                Plugin.Log.LogWarning("Item Stats: its slot rebuild was not found; it keeps rebuilding every frame.");
+            }
+            return target != null;
+        }
+
+        private static MethodBase TargetMethod() => target;
+
+        // Item Stats' own parameter is named __instance, so it is taken by position here.
+        private static bool Prefix(object[] __args)
+        {
+            if (!SkipUnchanged || __args == null || __args.Length == 0 || !(__args[0] is InventoryItemUI slot) || slot == null)
+            {
+                return true;
+            }
+            Character local = Character.localCharacter;
+            Item held = local != null && local.data != null ? local.data.currentItem : null;
+            Seen now = new Seen
+            {
+                item = slot._itemPrefab != null ? slot._itemPrefab.GetInstanceID() : 0,
+                held = held != null ? held.GetInstanceID() : 0,
+                cooked = held != null && held.cooking != null ? held.cooking.timesCookedLocal : 0,
+                named = slot.nameText != null && slot.nameText.enabled,
+                skeleton = local != null && local.data != null && local.data.isSkeleton,
+                weight = Ascents.itemWeightModifier,
+                at = Time.unscaledTime,
+            };
+            int id = slot.GetInstanceID();
+            if (seen.TryGetValue(id, out Seen last) && last.item == now.item && last.held == now.held && last.cooked == now.cooked
+                && last.named == now.named && last.skeleton == now.skeleton && last.weight == now.weight && now.at - last.at < RefreshSeconds)
+            {
+                Skipped++;
+                return false;
+            }
+            seen[id] = now;
+            Rebuilt++;
+            return true;
+        }
+    }
+
+    /// <summary>For the tests: Item Stats' slot rebuilds skipped (nothing changed) and let through; whether the skipping is on.</summary>
+    internal static int Skipped;
+    internal static int Rebuilt;
+    internal static bool SkipUnchanged = true;
 
     /// <summary>For the tests: redraws of a slot that failed, and the temporary slot's numbers found not drawn.</summary>
     internal static int Failures;

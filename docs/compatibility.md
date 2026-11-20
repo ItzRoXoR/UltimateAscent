@@ -37,7 +37,10 @@
   fuel, the Toxic Drink's poison, Scout's Generosity's price for the Warp Compass and the Toxic Drink)
   instead of the game's numbers; Item Stats also shows the Lightweight Parasol weighing nothing
   in custom runs. From ascent 17 Effect Preview shows no cooking stages, since cooking ruins the food
-  at once.
+  at once. Item Stats on its own rebuilds all its numbers on every inventory slot every frame (the game redraws
+  the slots every frame), which costs 4–5 ms a frame (on the Shore 82 FPS without it, about 60 with it); with
+  Ultimate Ascent it rebuilds a slot only when what it shows there changes (the held item, its cooking, the slot's
+  name shown) and at least twice a second, which gives back nearly all of that (measured: 3.9 ms a frame).
 * **PlayersInfo 0.2.5** — supported: its countdowns next to the statuses (how long until one wears
   off) follow the ascent's recovery (slow heat in the Caldera and the Kiln, slow drowsiness in the
   Gloom and the Citadel, no drowsiness recovery at night from ascent 22), for your teammates too;

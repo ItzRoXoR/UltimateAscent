@@ -61,11 +61,23 @@ does not glare. Scout's Generosity clones it at a mystical item's cost. In a **c
 switch among the Custom Run screen's mystical items; in regular runs the config's *New Items* switch keeps it out.
 
 **Lanterns.** On every ascent the Lantern turns up in the suitcases of the Shore, the Tropics, the Roots, the
-Alpine and the Mesa, and nowhere else (the game: only the Tropics' and the Alpine's). In the Alpine's it is as common
-as in the game (Epic); in the Shore's, the Tropics' and the Roots' half as common, in the Mesa's a third.
+Alpine and the Mesa, and nowhere else (the game: only the Tropics' and the Alpine's), and in the Alpine's Explorer's
+Luggage. In the Alpine two turn up on average (see the Alpine's loot below); in the Shore's, the Tropics' and the
+Roots' suitcases half as often as in the game's Alpine (Epic), in the Mesa's a third.
+
+**The Alpine's loot.** On every ascent the whole Alpine, every suitcase opened, holds on average **4 Portable
+Stoves, 2 Lanterns, 7 Heat Packs, 4 Fortified Milks and 3 Torches** (the game: about 1, 1.4, 6.5, 1.4 and none;
+before this, about 0.65 Torches), whatever the map: their odds in the Alpine's suitcases are worked out from that map's own
+suitcases (how many there are, how many items each holds, ascent 10's lighter ones). A suitcase holds as many items
+as before, so the Alpine's other items turn up about a quarter less often. The **Explorer's Luggage** in the Alpine holds these four too, each at its rarity's weight as
+the game weighs items (with the Torch, which goes wherever the Lantern does): a Heat Pack is in about 4 in 10 of them,
+each of the others in about 1 in 12 to 1 in 16. The **Ancient Luggage** in the Alpine gives the **Faerie Lantern** and the
+**Cure-All** twice as often a pick as the game's (the rest keep their odds against each other). Elsewhere the
+suitcases are the game's.
 
 **Torch.** The game's Torch (three hang in the Mesa's Tomb) turns up in suitcases on every ascent wherever
-the Lantern does, equally often in each of them (half as often as the Lantern in the Alpine's). It is a weapon too: lit, the second use button (right
+the Lantern does, at the same weight in each of them (half the Lantern's Epic weight), but in the Alpine three on
+average (see the Alpine's loot). It is a weapon too: lit, the second use button (right
 mouse) swings it like the Stick (33% stamina) and knocks down every scout and zombie it reaches for **2 s**;
 the scouts it hits take **10 heat** (20 from ascent 15), zombies none. A swing burns 4 s of its 40 s of fuel,
 so a full Torch gives 10 swings, 40 s of light or a mix; unlit it cannot swing. Lit, it warms like the

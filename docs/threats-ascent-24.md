@@ -1,7 +1,7 @@
 # Threats at ascent 24
 
 Every value below is from PEAK 3.0.0 (read from the game code and the game data) and from
-Ultimate Ascent 1.6.6's rules. Status amounts use the stamina bar's scale: **100 = the whole bar**. A rule
+Ultimate Ascent 1.6.7's rules. Status amounts use the stamina bar's scale: **100 = the whole bar**. A rule
 marked *(17)* comes from that ascent; ascent 24 contains every ascent up to 24. Ultimate Ascent's
 numbers are what lands on the bar, ascent 14's boost included; below ascent 14 the same rules land
 them without that boost, so they are always lower there. Distances are the game's own units,
@@ -70,7 +70,7 @@ nothing below the minimum factor. "Knocked down" is ragdoll time.
 ### Bees
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
-| Swarms | one per beehive | the same, plus **ambushes**: as every day and every night begins, each scout has a **50%** chance of one at a moment of their own within it (at random, at least 30 s from anyone else's, so never two at once), if they are in the Tropics then, and never more than one a day (ambushed in the day's first roll, no second roll that day); the swarm appears 3–3.5 m away, angry, and chases that scout for at least 12 s however far they run (then up to 120 m from where it appeared); and **20 swarms without hives** hover over the peak's grassy hill (8 m apart), calm until a scout comes near, then angry like an ambush swarm, dispersing once they have lost you *(17)* |
+| Swarms | one per beehive | the same, plus **ambushes**: as every day and every night begins, each scout has a **50%** chance of one at a moment of their own within it (at random, at least 30 s from anyone else's, so never two at once), if they are in the Tropics then, and never more than one a day (ambushed in the day's first roll, no second roll that day), and none once the Tropics' campfire is lit (also by that fire; a swarm still out then disperses); the swarm appears 3–3.5 m away, angry, and chases that scout for at least 12 s however far they run (then up to 120 m from where it appeared); and **20 swarms without hives** hover over the peak's grassy hill (8 m apart), calm until a scout comes near, then angry like an ambush swarm, dispersing once they have lost you *(17)* |
 | Poison | calm 3/s, angry 6/s, +5 when you enter the swarm (1 s cooldown) | **calm 8/s, angry 12/s**; +7.5 on entering (the game's 5 × 1.75 *(14)*) |
 | Sting radius | 1.3 m; stops once your bar is full | **2 m**; same |
 | Aggro / lose interest | attack within 5 m (7 m angry); give up beyond 6 m (7 m angry); never more than 20 m from the hive | the same distances to the scout, but a swarm chases up to **120 m** from its hive (an ambush swarm from where it appeared) |

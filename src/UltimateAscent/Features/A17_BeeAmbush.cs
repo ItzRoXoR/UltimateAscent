@@ -14,7 +14,9 @@ namespace UltimateAscent.Features;
 /// of their own picked at random within that day or night (at least 30 s from anyone else's, so two
 /// scouts are not set upon at once); a scout who is not in the Tropics when their moment comes is left
 /// alone. A scout the bees set upon after the day's first roll gets no second roll that day: nobody is
-/// ambushed more than once a day (a day and the night after it). The swarm appears right next to its scout.
+/// ambushed more than once a day (a day and the night after it). Once the Tropics' campfire is lit (the climb counts as
+/// the next place from then on) the bees leave everyone alone, also those still on Tropics ground by that campfire, and the
+/// swarms still out disperse. The swarm appears right next to its scout.
 /// Escaping works like with a stolen beehive: the swarm is tied to the spot it appeared at (it
 /// follows you up to 120 m from there), so you have to outrun it or run far away from it; once it
 /// loses you, it disperses. It stays angry for 50 s. Bees only ambush in the Tropics:
@@ -79,6 +81,13 @@ internal static class A17_BeeAmbush
     /// <summary>For the tests: rolls not made because the bees had already set upon the scout that day.</summary>
     internal static int RollsSkipped;
 
+    /// <summary>For the tests: ambush moments passed over because the Tropics' campfire was lit, and swarms called off then.</summary>
+    internal static int MomentsAfterFire;
+    internal static int CalledOff;
+
+    /// <summary>The ambush swarms this game sent (the host's), until the Tropics' campfire calls them off.</summary>
+    private static readonly List<BeeSwarm> sent = new List<BeeSwarm>();
+
     /// <summary>The bees' day: one more as each day begins (a day and the night after it, as the game counts its days).</summary>
     private static int beeDay;
 
@@ -95,6 +104,48 @@ internal static class A17_BeeAmbush
         moments.Clear();
         beeDay = 0;
         ambushedOn.Clear();
+        sent.Clear();
+        fireSeen = false;
+    }
+
+    /// <summary>
+    /// The Tropics' campfire is lit: the climb has gone on to a place past the Shore and the Tropics (lighting the
+    /// campfire takes it there, while the scouts still sit by the fire on Tropics ground).
+    /// </summary>
+    internal static bool TropicsFireLit
+    {
+        get
+        {
+            Place place = Map.CurrentPlace;
+            return place != Place.Shore && place != Place.Tropics && place != Place.Unknown;
+        }
+    }
+
+    /// <summary>The climb was past the Tropics' campfire last frame (the call-off is made once, as it is lit).</summary>
+    private static bool fireSeen;
+
+    /// <summary>The Tropics' campfire is lit: the ambush swarms still out disperse (once, as it is lit).</summary>
+    private static void CallOff()
+    {
+        if (fireSeen)
+        {
+            return;
+        }
+        fireSeen = true;
+        if (sent.Count == 0)
+        {
+            return;
+        }
+        foreach (BeeSwarm swarm in sent)
+        {
+            if (swarm != null && swarm.photonView != null && swarm.photonView.IsMine && !swarm.dispersing)
+            {
+                swarm.Disperse();
+                CalledOff++;
+            }
+        }
+        sent.Clear();
+        Plugin.Debug("Ascent 17: the Tropics' campfire is lit; the ambush swarms still out disperse.");
     }
 
     /// <summary>The checks: as the day begins and as the night begins, in hours.</summary>
@@ -143,6 +194,21 @@ internal static class A17_BeeAmbush
         float now = clock.timeOfDay % 24f;
         float before = lastTime;
         lastTime = now;
+        if (TropicsFireLit)
+        {
+            // After the Tropics' campfire no more ambushes, also for those still by it on Tropics ground.
+            CallOff();
+            foreach (Character scout in Scouts())
+            {
+                if (moments.TryGetValue(scout.photonView.ViewID, out float moment) && !float.IsNaN(moment) && !float.IsInfinity(moment))
+                {
+                    moments[scout.photonView.ViewID] = float.NaN;
+                    MomentsAfterFire++;
+                }
+            }
+            return;
+        }
+        fireSeen = false;
         if (HeldOff)
         {
             // Held off for a test: moments going by meanwhile are passed over, not all brought at once afterwards.
@@ -326,6 +392,8 @@ internal static class A17_BeeAmbush
         swarm.currentAggroCharacter = target;
         swarm.GetAngry(AngrySeconds);
         chases.AddOrUpdate(swarm, new Chase { until = Time.time + MinChaseSeconds });
+        sent.RemoveAll(s => s == null);
+        sent.Add(swarm);
         Plugin.Log.LogInfo($"Ascent 17: a bee swarm ambushes {target.characterName}.");
         return true;
     }

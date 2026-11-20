@@ -765,6 +765,7 @@ internal sealed partial class Runner : MonoBehaviour
         {
             // First, as the scout wakes on the beach: the frame rate there and in the Tropics.
             ("the frame rate on the Shore and in the Tropics (perf, only when asked)", () => OnlyWhenAsked("perf", PerfCheck)),
+            ("the Shore's frame rate part by part; takes the mod's patches off, so run it alone (perfshore, only when asked)", () => OnlyWhenAsked("perfshore", PerfShoreStages)),
             ("Item Stats' numbers for the temporary slot on the Shore and in the next biome (tempslot)", TempSlotCheck),
             // First: on the open beach where the climb starts (its stage needs open ground; it puts the scout back there).
             ("the Scoutmaster pulls scouts off holds, and finds a way up to one (smroutes, 17)", ScoutmasterRouteChecks),
@@ -860,6 +861,7 @@ internal sealed partial class Runner : MonoBehaviour
             ("the Roots wind's debris and the Spruce Branch (winddebris, 18)", WindDebrisChecks),
             ("the game's bugs, fixed on every ascent (gamebugs)", GameBugChecks),
             ("the game's lava bugs, fixed on every ascent (gamebugslava)", GameBugLavaChecks),
+            ("no bee ambushes after the Tropics' campfire (beecampfire, 17)", BeesAfterCampfire),
             ("Alpine (18, 23)", Alpine),
             ("ascent 18 weather: Gloom fog, tornado grip, Mesa sun (18, 25)", Weather18),
             ("Alpine snowfall", AlpineSnow),
@@ -888,6 +890,7 @@ internal sealed partial class Runner : MonoBehaviour
             ("every lava on the map (lavaprobe, only when asked)", () => OnlyWhenAsked("lavaprobe", LavaProbe)),
             ("the egg nests and their ground, read from the map (nestprobe, only when asked)", () => OnlyWhenAsked("nestprobe", NestProbe)),
             ("the bananas and the Hot Dog, read from the game (foodprobe, only when asked)", () => OnlyWhenAsked("foodprobe", FoodProbe)),
+            ("the Alpine's spawn odds, read from the game (lootodds, only when asked)", () => OnlyWhenAsked("lootodds", LootOddsProbe)),
             ("zombies at the peak: its top, its statue, its rocks (peakzombies, 17)", PeakZombiesCheck),
             ("waiting bee swarms on the peak's hill (17)", WaitingBeesCheck),
             ("a parasol under lowgravity", ParasolLowGravityCheck),

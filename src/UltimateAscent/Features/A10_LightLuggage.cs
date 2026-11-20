@@ -12,14 +12,20 @@ namespace UltimateAscent.Features;
 [HarmonyPatch(typeof(Spawner), nameof(Spawner.SpawnItems))]
 internal static class A10_LightLuggage
 {
+    /// <summary>A big or Explorer's suitcase this rule lightens (on the ascents it holds).</summary>
+    internal static bool Lightens(Spawner spawner)
+    {
+        if (!Rules.Enabled(Lvl.LightLuggage) || spawner == null)
+        {
+            return false;
+        }
+        string name = spawner.gameObject.name;
+        return !(spawner is RespawnChest) && spawner is Luggage && (name.StartsWith("LuggageBig") || name.StartsWith("LuggageEpic")) && !Compat.Tfa.Spawned(spawner);
+    }
+
     private static void Prefix(Spawner __instance, ref List<Transform> spawnSpots)
     {
-        if (!Rules.Enabled(Lvl.LightLuggage) || spawnSpots == null || spawnSpots.Count < 2)
-        {
-            return;
-        }
-        string name = __instance.gameObject.name;
-        if (__instance is RespawnChest || !(__instance is Luggage) || !(name.StartsWith("LuggageBig") || name.StartsWith("LuggageEpic")) || Compat.Tfa.Spawned(__instance))
+        if (spawnSpots == null || spawnSpots.Count < 2 || !Lightens(__instance))
         {
             return;
         }

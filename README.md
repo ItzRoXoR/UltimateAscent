@@ -5,9 +5,11 @@ each one keeps every rule of the ascents below it. They combine **13 Downright D
 Ascents** and add rules of their own: fiercer hazards, harsher weather, worse items and much more. Along with them come
 new items, new creatures (crabs on the beach, snakes in the Tropics, mountain goats in the Alps), challenges that unlock
 cosmetics, a map picker, and fixes for many of the game's own bugs, on every ascent. It works with **True Final
-Ascent**, whose FINAL ASCENT plays by the ascent you pick, and an optional pack of 300 Builder maps. Everybody in a
-lobby needs the same version. Built for **PEAK 3.1.0** with BepInEx 5.4.23 and True Final Ascent 3.0.4; import the
-release zip in r2modman to install it.
+Ascent**, whose FINAL ASCENT plays by the ascent you pick, and an optional pack of 300 Builder maps. It also supports
+**Item Stats**, **Effect Preview** and **PlayersInfo**, which then show the ascent's own numbers: what items do and how
+long statuses last ([compatibility](https://github.com/ItzRoXoR/UltimateAscent/blob/main/docs/compatibility.md)).
+Everybody in a lobby needs the same version. Built for **PEAK 3.1.0** with BepInEx 5.4.23, True Final Ascent 3.0.4,
+Item Stats 0.6.1, Effect Preview 1.2.0 and PlayersInfo 0.2.5; import the release zip in r2modman to install it.
 
 ## Documentation
 

@@ -9,7 +9,8 @@ namespace UltimateAscent.Features;
 /// <summary>
 /// The Lantern turns up in the suitcases of the Shore, the Tropics, the Roots, the Alpine and the Mesa, and nowhere
 /// else, on every ascent (custom runs and TFA's FINAL ASCENT too; the user's). The game puts it only in the Tropics'
-/// and the Alpine's, at its rarity's weight (Epic: 20). The Alpine's keep that weight (as in the game); the Shore's,
+/// and the Alpine's, at its rarity's weight (Epic: 20). The Alpine's table keeps that weight (as in the game; the Alpine's
+/// suitcases themselves pick from their own copy, see <see cref="AlpineLoot"/>); the Shore's,
 /// the Tropics' and the Roots' get half of it, the Mesa's a third. The game builds its loot tables from the items' own
 /// data: before a pick the Lantern's own spawn places are set to these, and after each rebuild its weight in each table
 /// is set (the Mesa's table taken three times over, so that its third is exact in whole weights). The Torch turns up

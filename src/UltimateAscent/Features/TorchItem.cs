@@ -22,8 +22,9 @@ namespace UltimateAscent.Features;
 /// it is pushed. Below ascent 17 the push also burns it, as the bell towers do in the game (from 17 they no longer
 /// burn it, see <see cref="A17_GloomGhost"/>).</item>
 /// <item>It turns up in suitcases wherever the Lantern does and nowhere else, equally often in each (weight 10, half
-/// the Lantern's full weight; set with the Lantern's, see <see cref="MoreLanterns"/>): on every ascent with the config's
-/// "New Items" on; in custom runs it has its own switch, after the Lantern's.</item>
+/// the Lantern's full weight; set with the Lantern's, see <see cref="MoreLanterns"/>), but three on average in the
+/// Alpine's (see <see cref="AlpineLoot"/>): on every ascent with the config's "New Items" on; in custom runs it has its
+/// own switch, after the Lantern's.</item>
 /// </list>
 /// </summary>
 internal static class TorchItem

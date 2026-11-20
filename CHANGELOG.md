@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.6.7
+
+* Frame rate with Item Stats: Item Stats rebuilt all its numbers on every inventory slot every frame (the game redraws
+  the slots every frame), 4–5 ms a frame (on the Shore 82 FPS without it, about 60 with it). It now rebuilds a slot
+  only when what it shows there changes, and at least twice a second: with the player's mod set the Shore went from
+  58 to 76 FPS. Ultimate Ascent's own share there is about 0.6 ms a frame (crabs 0.24, Lookers 0.29, Stones and Sticks
+  0.16, its per-frame rules 0.08).
+* The Alpine's loot, on every ascent: the whole Alpine (every suitcase opened) holds on average 4 Portable Stoves, 2
+  Lanterns, 7 Heat Packs, 4 Fortified Milks and 3 Torches (before: about 1, 1.4, 6.5, 1.4 and 0.65), on every map: the
+  odds in the Alpine's suitcases are worked out from that map's own suitcases. The Alpine's other items turn up about a
+  quarter less often. The Explorer's Luggage in the Alpine holds the four too (at their rarity's weight, the Torch beside the
+  Lantern), and the Ancient Luggage in the Alpine gives the Faerie Lantern and the Cure-All twice as often. The game's
+  own loot tables are untouched; elsewhere nothing changes.
+* Bee ambushes (17): none once the Tropics' campfire is lit. Before, the scouts sitting by it were still on Tropics
+  ground and could be ambushed there through the night; now the bees leave everyone alone from the lighting on, and a
+  swarm still out on a scout then disperses.
+
 ## 1.6.6
 
 * Multiplayer: the host's Blind Mode and Hot Mode count for every player (before, each player's own boxes counted for
