@@ -1,7 +1,7 @@
 # Threats at ascent 24
 
 Every value below is from PEAK 3.0.0 (read from the game code and the game data) and from
-Ultimate Ascent 1.6.7's rules. Status amounts use the stamina bar's scale: **100 = the whole bar**. A rule
+Ultimate Ascent 1.6.8's rules. Status amounts use the stamina bar's scale: **100 = the whole bar**. A rule
 marked *(17)* comes from that ascent; ascent 24 contains every ascent up to 24. Ultimate Ascent's
 numbers are what lands on the bar, ascent 14's boost included; below ascent 14 the same rules land
 them without that boost, so they are always lower there. Distances are the game's own units,
@@ -337,7 +337,7 @@ needle and is knocked down again and again. The needles are 24 cm long and 1.5 c
 | | Game | Ultimate Ascent at 24 |
 |---|---|---|
 | Shot | fires along its line up to 80 m at the first scout in it; 3 shots, 8 s apart, then empty for good; a swinging spike ball crossing its line sets it off too; a loose thing in its line (a dropped backpack) takes the shot instead of the scout behind it | **never runs out**, fires every **0.5 s**; spike balls no longer set it off *(9)*; a loose thing still shields the scout behind it |
-| Warning line | green dust from the opening to where the arrow would land | only **1 m** out of the opening |
+| Warning line | green dust from the opening to where the arrow would land | only **5 m** out of the opening, but all the way for **3 s in every 20** (the same moment for everyone) |
 | A trap inside a platform | shoots straight through the platform it is set in (a look along its line starts inside it and does not see it) | holds its fire and shows no line, on every ascent |
 | Hit | 1 arrow = **7.5** on the bar (Arrow), knockback 30 | 1 arrow = **15**, knockback **60** |
 | Pulling an arrow out | 12.5 injury | **25 injury** |

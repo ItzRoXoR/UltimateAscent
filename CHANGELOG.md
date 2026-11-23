@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.6.8
+
+* Citadel arrow traps (17): their green warning line reaches 5 m out of the opening (was 1 m), and for 3 s in every
+  20 it reaches all the way to where the arrow would land, at the same moment for every player.
+* With Item Stats: its numbers by a slot no longer vanish for the rest of the game (the "icons but no numbers" on the
+  temporary slot). Item Stats makes a slot's first number by copying the slot's name; made while that part of the HUD
+  was hidden, the copy was not set up yet, setting its outline threw, and the copy (off, like the name) was never
+  switched on, nor was any number copied from it later. A number it leaves off is now switched on with the outline,
+  alignment and colour it meant to give it, also in a game where it has already happened, and its throw no longer cuts
+  the game's drawing of the inventory short.
+* A new icon, and the README is the mod's page text.
+
 ## 1.6.7
 
 * Frame rate with Item Stats: Item Stats rebuilt all its numbers on every inventory slot every frame (the game redraws

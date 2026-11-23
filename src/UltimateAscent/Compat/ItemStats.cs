@@ -65,6 +65,13 @@ internal static class ItemStats
     /// with it). Its rebuild of a slot is skipped while nothing it reads there has changed: the slot's item, the held
     /// item, how cooked it is, the slot's name shown, the scout a skeleton, the ascent's weight modifier; at least twice
     /// a second it rebuilds anyway, for anything else (its settings, an item's numbers changed in place).
+    /// <para>And its numbers are kept drawn. Item Stats makes a slot's first number by copying the slot's name, then sets
+    /// its outline and switches it on; when the slot's name is hidden at that moment (the temporary slot's often is) the
+    /// copy is off too, setting its outline on it throws, and it is never switched on: that number, and every number
+    /// copied from it later, stays invisible on that slot for the rest of the game (only the icons show), and the throw
+    /// cut the game's drawing of the rest of the inventory short that frame. After each rebuild a number left off is
+    /// switched on with the outline, alignment and colour Item Stats meant to give it, and its throw is caught there
+    /// (logged once).</para>
     /// </summary>
     [HarmonyPatch]
     private static class OnlyWhenChanged
@@ -103,8 +110,9 @@ internal static class ItemStats
         private static MethodBase TargetMethod() => target;
 
         // Item Stats' own parameter is named __instance, so it is taken by position here.
-        private static bool Prefix(object[] __args)
+        private static bool Prefix(object[] __args, out bool __state)
         {
+            __state = true;
             if (!SkipUnchanged || __args == null || __args.Length == 0 || !(__args[0] is InventoryItemUI slot) || slot == null)
             {
                 return true;
@@ -126,13 +134,92 @@ internal static class ItemStats
                 && last.named == now.named && last.skeleton == now.skeleton && last.weight == now.weight && now.at - last.at < RefreshSeconds)
             {
                 Skipped++;
+                __state = false;
                 return false;
             }
             seen[id] = now;
             Rebuilt++;
             return true;
         }
+
+        /// <summary>After a rebuild (one that threw too): its numbers left off are switched on; its throw is caught.</summary>
+        private static Exception Finalizer(Exception __exception, object[] __args, bool __state)
+        {
+            InventoryItemUI slot = __args != null && __args.Length > 0 ? __args[0] as InventoryItemUI : null;
+            if (__state && slot != null && RepairNumbers)
+            {
+                Repair(slot);
+            }
+            if (__exception == null)
+            {
+                return null;
+            }
+            if (!RepairNumbers)
+            {
+                return __exception;
+            }
+            Caught++;
+            if (slot != null)
+            {
+                // Rebuilt again next frame, with the number now on.
+                seen.Remove(slot.GetInstanceID());
+            }
+            Item held = Character.localCharacter != null ? Character.localCharacter.data.currentItem : null;
+            if (failed.Add("rebuild:" + __exception.GetType().Name + ":" + __exception.TargetSite?.Name))
+            {
+                Plugin.Log.LogWarning($"Item Stats failed building its numbers on a slot (holding {(held != null ? held.gameObject.name : "nothing")}); caught, and its numbers there switched on: {__exception.GetType().Name} in {__exception.TargetSite?.DeclaringType?.Name}.{__exception.TargetSite?.Name}");
+            }
+            return null;
+        }
+
+        /// <summary>The slot's numbers that Item Stats left off: on, with the outline, alignment and colour it gives them.</summary>
+        private static void Repair(InventoryItemUI slot)
+        {
+            Transform holder = slot.fuelBar != null ? slot.fuelBar.transform.parent : null;
+            if (holder == null)
+            {
+                return;
+            }
+            foreach (Transform stat in holder)
+            {
+                if (!stat.name.EndsWith("Stat"))
+                {
+                    continue;
+                }
+                foreach (TextMeshProUGUI number in stat.GetComponentsInChildren<TextMeshProUGUI>(true))
+                {
+                    if (number.enabled)
+                    {
+                        continue;
+                    }
+                    number.enabled = true;
+                    number.alignment = (TextAlignmentOptions)516;
+                    Image icon = stat.GetComponent<Image>();
+                    if (icon != null)
+                    {
+                        number.color = icon.color;
+                    }
+                    if (number.isActiveAndEnabled)
+                    {
+                        try
+                        {
+                            number.outlineWidth = 0.1f;
+                        }
+                        catch (Exception)
+                        {
+                            // Only the outline; the number shows without it.
+                        }
+                    }
+                    Repaired++;
+                }
+            }
+        }
     }
+
+    /// <summary>For the tests: numbers Item Stats had left off and the mod switched on, its rebuilds that threw and were caught; the repair on.</summary>
+    internal static int Repaired;
+    internal static int Caught;
+    internal static bool RepairNumbers = true;
 
     /// <summary>For the tests: Item Stats' slot rebuilds skipped (nothing changed) and let through; whether the skipping is on.</summary>
     internal static int Skipped;

@@ -1,8 +1,8 @@
 {
     "name": "UltimateAscent",
-    "version_number": "1.6.7",
+    "version_number": "1.6.8",
     "website_url": "",
-    "description": "Ascents 9-25 on the vanilla boarding pass: 13 Downright Dastardly Ascents + More Ascents combined, True Final Ascent compatible.",
+    "description": "Seventeen new insanely difficult ascents, and some new items and creatures!",
     "dependencies": [
         "BepInEx-BepInExPack_PEAK-5.4.75301"
     ]

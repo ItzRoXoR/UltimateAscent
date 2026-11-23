@@ -30,8 +30,9 @@ namespace UltimateAscent.Features;
 /// 35% share of the ordinary chests in the Citadel are mimics too, picked anew for each climb (the same ones for
 /// every player): they release the same gas when opened, and keep their loot like the game's own mimics.</item>
 /// <item>Napberries pulse once a second (the game: twice every 3 s).</item>
-/// <item>An arrow trap's green warning line reaches only 1 m out of its opening (the game: all the way to where
-/// the arrow would land).</item>
+/// <item>An arrow trap's green warning line reaches only 5 m out of its opening (the game: all the way to where
+/// the arrow would land), except for 3 s in every 20, when it reaches all the way; the same moment for every player
+/// (the room's clock).</item>
 /// </list>
 /// </summary>
 internal static class A17_Traps
@@ -373,7 +374,21 @@ internal static class A17_Traps
     }
 
     /// <summary>How far an arrow trap's warning line reaches out of its opening (where the line leaves the trap's housing).</summary>
-    internal const float WarningLineReach = 1f;
+    internal const float WarningLineReach = 5f;
+
+    /// <summary>Every 20 s the warning lines reach all the way, for 3 s.</summary>
+    internal const float FullLineEvery = 20f;
+    internal const float FullLineSeconds = 3f;
+
+    /// <summary>Seconds into the warning lines' cycle, by the room's clock (the same for every player).</summary>
+    internal static float LinePhase => (float)((Photon.Pun.PhotonNetwork.InRoom ? Photon.Pun.PhotonNetwork.Time : Time.timeAsDouble) % FullLineEvery);
+
+    /// <summary>The warning lines reach all the way now (the first 3 s of each 20).</summary>
+    internal static bool FullLineNow => LinePhase < FullLineSeconds;
+
+    /// <summary>The lines were drawn whole at the last look (the rule off or the full stretch); when the next look is due.</summary>
+    private static bool linesWhole;
+    private static float nextLines;
 
     /// <summary>The arrow traps in the level, and whether their warning line is cut short now.</summary>
     private static readonly System.Collections.Generic.Dictionary<ArrowShooter, bool> arrowTraps = new System.Collections.Generic.Dictionary<ArrowShooter, bool>();
@@ -396,8 +411,8 @@ internal static class A17_Traps
     }
 
     /// <summary>
-    /// The line ends 1 m past the trap's mouth (it starts inside the housing, behind the muzzle: cut a fixed length from
-    /// there, little or nothing of it showed), never past the game's end.
+    /// The line ends 5 m past the trap's mouth (it starts inside the housing, behind the muzzle: cut a fixed length from
+    /// there, less of it showed), never past the game's end.
     /// </summary>
     private static bool Shorten(ArrowShooter trap)
     {
@@ -416,16 +431,21 @@ internal static class A17_Traps
         return true;
     }
 
-    /// <summary>The game's mimic chests look like the ordinary small chest (each player's game dresses its own, once the level is there).</summary>
-    internal static void Tick()
+    /// <summary>
+    /// The warning lines: cut short while the rule is on, but drawn whole (the game's way) for the first 3 s of every 20
+    /// and when the rule is switched off. Looked at 4 times a second, and as the stretch begins or ends; a line the game
+    /// draws whole again after a reload is cut at the next look.
+    /// </summary>
+    private static void Lines()
     {
-        if (!Map.Ready || Time.time < nextDisguise)
+        bool on = On;
+        bool whole = !on || FullLineNow;
+        if (whole == linesWhole && Time.time < nextLines)
         {
             return;
         }
-        nextDisguise = Time.time + 2f;
-        // The warning lines: cut short while the rule is on; drawn whole again (the game's way) when it is switched off.
-        bool on = On;
+        linesWhole = whole;
+        nextLines = Time.time + 0.25f;
         foreach (System.Collections.Generic.KeyValuePair<ArrowShooter, bool> trap in new System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<ArrowShooter, bool>>(arrowTraps))
         {
             if (trap.Key == null)
@@ -433,7 +453,7 @@ internal static class A17_Traps
                 arrowTraps.Remove(trap.Key);
                 continue;
             }
-            if (on)
+            if (!whole)
             {
                 arrowTraps[trap.Key] = Shorten(trap.Key);
             }
@@ -443,6 +463,21 @@ internal static class A17_Traps
                 arrowTraps[trap.Key] = false;
             }
         }
+    }
+
+    /// <summary>The game's mimic chests look like the ordinary small chest (each player's game dresses its own, once the level is there).</summary>
+    internal static void Tick()
+    {
+        if (!Map.Ready)
+        {
+            return;
+        }
+        Lines();
+        if (Time.time < nextDisguise)
+        {
+            return;
+        }
+        nextDisguise = Time.time + 2f;
         if (!On)
         {
             return;

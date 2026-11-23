@@ -2263,27 +2263,69 @@ internal sealed partial class Runner
         }
         Check("an arrow trap fires at a loose body in its line, but not at a swinging spike ball (9)", fired[false] > 0 && fired[true] == 0,
             $"a loose body: {fired[false]} shots, the same body as part of a spike ball: {fired[true]}");
-        // The green warning line: 1 m out of the opening from 17 (past the trap's mouth, where the line leaves its housing), the game's whole line with the rule off.
-        float mouth = GameFixes.Bore(shooter).mouth;
-        float OutOfTheMouth() => Vector3.Dot(LineEnds(shooter).end - shooter.pos, shooter.forward) - mouth;
+        // The green warning line (17): 5 m out of the opening (past the trap's mouth, where the line leaves its housing),
+        // but all the way for the first 3 s of every 20 by the room's clock; the game's whole line with the rule off.
         if (Rules.Enabled(Lvl.Hazards))
         {
-            yield return new WaitForSeconds(2.5f);
+            float WholeLine(ArrowShooter s) => (Physics.Raycast(s.pos, s.forward, out RaycastHit hit, s.range, HelperFunctions.terrainMapMask, QueryTriggerInteraction.Ignore) ? hit.distance : s.range) - GameFixes.Bore(s).mouth;
+            // The trap with the longest line, so the whole line and the 5 m one differ.
+            ArrowShooter lineTrap = FindObjectsByType<ArrowShooter>(FindObjectsSortMode.None).Where(s => s != null && s.isActiveAndEnabled && !s.empty && s.lineRenderer != null && s.lineRenderer.enabled)
+                .OrderByDescending(WholeLine).FirstOrDefault() ?? shooter;
+            float mouth = GameFixes.Bore(lineTrap).mouth;
+            float whole = WholeLine(lineTrap);
+            float OutOfTheMouth() => Vector3.Dot(LineEnds(lineTrap).end - lineTrap.pos, lineTrap.forward) - mouth;
+            IEnumerator Until(Func<float, bool> phase, float limit = 25f)
+            {
+                for (float until = Time.realtimeSinceStartup + limit; Time.realtimeSinceStartup < until && !phase(A17_Traps.LinePhase);)
+                {
+                    yield return null;
+                }
+            }
+            // Cut short, between the stretches.
+            yield return Until(p => p > A17_Traps.FullLineSeconds + 1f && p < A17_Traps.FullLineEvery - 2f);
+            yield return new WaitForSeconds(0.5f);
             float shortLine = OutOfTheMouth();
-            bool shown = shooter.lineRenderer != null && shooter.lineRenderer.enabled;
+            bool shown = lineTrap.lineRenderer != null && lineTrap.lineRenderer.enabled;
+            // Just before a stretch: watched frame by frame through it, how long the line reaches all the way.
+            yield return Until(p => p > A17_Traps.FullLineEvery - 1.5f);
+            float firstWhole = -1f, lastWhole = -1f, phaseAtStart = -1f, longest = 0f;
+            for (float until = Time.realtimeSinceStartup + 6f; Time.realtimeSinceStartup < until;)
+            {
+                float now = OutOfTheMouth();
+                longest = Mathf.Max(longest, now);
+                if (now > A17_Traps.WarningLineReach + 0.5f)
+                {
+                    if (firstWhole < 0f)
+                    {
+                        firstWhole = Time.realtimeSinceStartup;
+                        phaseAtStart = A17_Traps.LinePhase;
+                    }
+                    lastWhole = Time.realtimeSinceStartup;
+                }
+                yield return null;
+            }
+            float stretch = firstWhole < 0f ? 0f : lastWhole - firstWhole;
+            yield return new WaitForSeconds(0.5f);
+            float afterLine = OutOfTheMouth();
+            // The rule off: the game's whole line; on again: cut short.
             ConfigEntry<bool> hazards = UltimateAscent.Plugin.AscentSwitches[Lvl.Hazards];
             hazards.Value = false;
             HostOptions.Invalidate();
-            yield return new WaitForSeconds(2.5f);
+            yield return new WaitForSeconds(1f);
             float gameLine = OutOfTheMouth();
             hazards.Value = true;
             HostOptions.Invalidate();
-            yield return new WaitForSeconds(2.5f);
+            yield return Until(p => p > A17_Traps.FullLineSeconds + 1f && p < A17_Traps.FullLineEvery - 2f);
+            yield return new WaitForSeconds(0.5f);
             float againLine = OutOfTheMouth();
-            yield return ArrowLinePicture(shooter, mouth, "arrow-trap-warning-line");
-            Check("an arrow trap's green warning line reaches 1 m out of its opening (17); with the rule off the game's whole line",
-                shown && Mathf.Abs(shortLine - A17_Traps.WarningLineReach) < 0.02f && gameLine > A17_Traps.WarningLineReach + 0.5f && Mathf.Abs(againLine - shortLine) < 0.01f,
-                $"{shortLine:0.00} m out of the mouth ({mouth:0.00} m past the muzzle), shown {shown}; with the rule off {gameLine:0.00} m, on again {againLine:0.00} m");
+            yield return ArrowLinePicture(lineTrap, mouth, "arrow-trap-warning-line");
+            float cut = Mathf.Min(A17_Traps.WarningLineReach, whole);
+            Check("an arrow trap's green warning line reaches 5 m out of its opening, and all the way for 3 s in every 20 by the room's clock (17); with the rule off the game's whole line",
+                shown && whole > A17_Traps.WarningLineReach + 0.5f && Mathf.Abs(shortLine - cut) < 0.02f && Mathf.Abs(longest - whole) < 0.05f
+                && Mathf.Abs(stretch - A17_Traps.FullLineSeconds) < 0.4f && (phaseAtStart < 0.35f || phaseAtStart > A17_Traps.FullLineEvery - 0.05f)
+                && Mathf.Abs(afterLine - cut) < 0.02f && Mathf.Abs(gameLine - whole) < 0.05f && Mathf.Abs(againLine - cut) < 0.02f,
+                $"the longest-lined trap's whole line {whole:0.00} m out of the mouth ({mouth:0.00} m past the muzzle), shown {shown}: cut {shortLine:0.00} m; all the way ({longest:0.00} m) for {stretch:0.00} s, from {phaseAtStart:0.00} s into the 20 s; "
+                + $"after it {afterLine:0.00} m; with the rule off {gameLine:0.00} m, on again {againLine:0.00} m");
         }
     }
 
